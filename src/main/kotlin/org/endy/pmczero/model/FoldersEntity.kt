@@ -26,7 +26,7 @@ FoldersEntity {
     var lfolder: String? = null
 
     @JsonBackReference
-    @OneToMany(mappedBy = "folder",fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "folder",fetch = FetchType.LAZY)
     var mfiles: List<MfilesEntity> =  mutableListOf()
 
     

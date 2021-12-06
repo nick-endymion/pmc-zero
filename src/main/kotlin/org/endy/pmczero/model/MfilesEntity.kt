@@ -10,11 +10,11 @@ import javax.persistence.*
 @Table(name = "mfiles", catalog = "")
 class MfilesEntity {
     @Id
-    @GeneratedValue(strategy= GenerationType.AUTO)
+    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
-    
+
 //    @Column(name = "folder_id", nullable = true)
 //    var folderId: Int? = null
 
@@ -26,15 +26,15 @@ class MfilesEntity {
     @Column(name = "filename", nullable = true)
     var filename: String? = null
 
-    
+
     @Column(name = "modified", nullable = true)
     var modified: Timestamp? = null
 
-    
+
     @Column(name = "mod_date", nullable = true)
     var modDate: Date? = null
 
-    
+
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
@@ -68,6 +68,10 @@ class MfilesEntity {
         this.modified = modified
         this.modDate = modDate
         this.mtype = mtype
+    }
+
+    fun getURI(): String {
+        return "TODO"
     }
 
 }
