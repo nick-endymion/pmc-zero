@@ -4,8 +4,8 @@ import com.fasterxml.jackson.annotation.JsonBackReference
 import javax.persistence.*
 
 @Entity
-@Table(name = "folders", catalog = "")
-open class
+@Table(name = "folders")
+ class
 FoldersEntity {
     @Id
     @GeneratedValue(strategy=GenerationType.IDENTITY)
@@ -13,15 +13,17 @@ FoldersEntity {
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
-    
-    @Column(name = "storage_id", nullable = true)
-    var storageId: Int? = null
+//    @Column(name = "storage_id", nullable = true)
+//    var storageId: Int? = null
 
-    
+    @ManyToOne(fetch = FetchType.LAZY)
+//    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "storage_id")
+    var storage: StoragesEntity? = null
+
     @Column(name = "mpath", nullable = true)
     var mpath: String? = null
 
-    
     @Column(name = "lfolder", nullable = true)
     var lfolder: String? = null
 
@@ -36,14 +38,14 @@ FoldersEntity {
     constructor()
     constructor(
         id: Int?,
-        storageId: Int?,
+        storage: StoragesEntity?,
         mpath: String?,
         lfolder: String?,
         mfiles: List<MfilesEntity>,
-        title: String?
+        title: String?,
     ) {
         this.id = id
-        this.storageId = storageId
+        this.storage = storage
         this.mpath = mpath
         this.lfolder = lfolder
         this.mfiles = mfiles

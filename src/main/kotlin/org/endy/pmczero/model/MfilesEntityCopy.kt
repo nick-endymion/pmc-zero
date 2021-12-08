@@ -7,8 +7,8 @@ import javax.persistence.*
 
 
 @Entity
-@Table(name = "mfiles")
-class MfilesEntity {
+@Table(name = "mfiles_copy2", catalog = "")
+class MfilesEntityCopy {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "id", nullable = false)
@@ -19,7 +19,6 @@ class MfilesEntity {
 
     @JsonManagedReference
     @ManyToOne(fetch = FetchType.LAZY)
-//    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "folder_id")
     val folder: FoldersEntity? = null
 
@@ -45,7 +44,7 @@ class MfilesEntity {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as MfilesEntity
+        other as MfilesEntityCopy
 
         if (id != other.id) return false
         if (folder != other.folder) return false
