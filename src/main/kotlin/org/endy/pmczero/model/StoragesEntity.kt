@@ -7,49 +7,47 @@ import javax.persistence.*
 class StoragesEntity {
 
     @Id
-    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
-    
+
     @Column(name = "name", nullable = true)
     var name: String? = null
 
-    
+
     @Column(name = "no", nullable = true)
     var no: Int? = null
 
-    
+
     @Column(name = "filepath", nullable = true)
     var filepath: String? = null
 
-    
+
     @Column(name = "webpath", nullable = true)
     var webpath: String? = null
 
-    
+
     @Column(name = "filepath_tn", nullable = true)
     var filepathTn: String? = null
 
-    
+
     @Column(name = "webpath_tn", nullable = true)
     var webpathTn: String? = null
 
-    
+
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
-    
+
     @Column(name = "fit_id", nullable = true)
     var fitId: Int? = null
 
-    @OneToMany(mappedBy = "storage",fetch = FetchType.LAZY)
-    var locations: List<LocationsEntity> =  mutableListOf()
+    @OneToMany(mappedBy = "storage", fetch = FetchType.LAZY)
+    var locations: List<LocationsEntity> = mutableListOf()
 
-//    @Transient
-//    var locationsEntity: LocationsEntity {
-//        return locationsEntity
-//    }
+    @Transient
+    var locationsInuse: List<LocationsEntity> = locations.filter { loc -> loc.inuse == 1.toByte() }
 
     override fun toString(): String =
         "Entity of type: ${javaClass.name} ( " +

@@ -22,10 +22,10 @@ FoldersEntity {
     var storage: StoragesEntity? = null
 
     @Column(name = "mpath", nullable = true)
-    var mpath: String? = null
+    var mpath: String = ""
 
     @Column(name = "lfolder", nullable = true)
-    var lfolder: String? = null
+    var lfolder: String = ""
 
     @JsonBackReference
     @OneToMany(mappedBy = "folder",fetch = FetchType.LAZY)
@@ -39,8 +39,8 @@ FoldersEntity {
     constructor(
         id: Int?,
         storage: StoragesEntity?,
-        mpath: String?,
-        lfolder: String?,
+        mpath: String,
+        lfolder: String,
         mfiles: List<MfilesEntity>,
         title: String?,
     ) {

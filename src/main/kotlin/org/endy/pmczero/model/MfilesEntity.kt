@@ -14,12 +14,14 @@ class MfilesEntity {
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
-//    @Column(name = "folder_id", nullable = true)
-//    var folderId: Int? = null
+    @Column(name = "folder_id", nullable = true,  insertable=false, updatable = false)
+    var folderId: Int? = null
+
+    @Column(name = "medium_id", nullable = true,  insertable=false, updatable = false)
+    var mediumId: Int? = null
 
     @JsonManagedReference
     @ManyToOne(fetch = FetchType.LAZY)
-//    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "folder_id")
     val folder: FoldersEntity? = null
 

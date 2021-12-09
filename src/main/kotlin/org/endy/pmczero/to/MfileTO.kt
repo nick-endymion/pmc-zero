@@ -1,5 +1,6 @@
-package org.endy.pmczero.model
+package org.endy.pmczero.to
 
+import org.endy.pmczero.model.FoldersEntity
 import java.sql.Date
 
 data class MfileTO (

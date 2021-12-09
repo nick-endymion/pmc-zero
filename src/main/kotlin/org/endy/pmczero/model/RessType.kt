@@ -1,6 +1,6 @@
 package org.endy.pmczero.model
 
-enum class RType {
+enum class RessType {
 
     VIDEO,
     PIC,

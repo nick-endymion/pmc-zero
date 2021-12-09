@@ -1,19 +1,19 @@
 package org.endy.pmczero.mapper
 
-import org.endy.pmczero.model.FolderTO
-import org.endy.pmczero.model.FoldersEntity
-import org.endy.pmczero.model.MfileTO
-import org.endy.pmczero.model.MfilesEntity
+import org.endy.pmczero.model.*
+import org.endy.pmczero.to.FolderTO
+import org.endy.pmczero.to.MfileTO
+import org.endy.pmczero.to.StorageTO
 
 //fun FoldersEntity.map(f: FolderTO) = FoldersEntity(id, storageId,mpath,lfolder,null,title)
 fun FolderTO.map(): FoldersEntity {
-    return FoldersEntity(id, storage , mpath, lfolder, mfiles.map { mfile -> mfile.map() }, title)
+    return FoldersEntity(id, null , mpath, lfolder, mfiles.map { mfile -> mfile.map() }, title)
 }
 
 fun FoldersEntity.toTO(includeMfiles: Boolean = false): FolderTO {
     return FolderTO(
         id = id,
-        storage = storage,
+        storage = storage?.toTO(),
         mpath = mpath,
         lfolder = lfolder,
         title = title,
@@ -27,5 +27,9 @@ fun MfileTO.map(): MfilesEntity {
 }
 
 fun MfilesEntity.toTO(): MfileTO {
-    return MfileTO(filename = filename, id = id, folder =  folder, modDate = modDate, mtype =  mtype)
+    return MfileTO(filename = filename, id = id, folder =  FoldersEntity(), modDate = modDate, mtype =  mtype)
+}
+
+fun StoragesEntity.toTO() : StorageTO {
+    return StorageTO(id = id, name = name)
 }
