@@ -26,5 +26,8 @@ class Medium {
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
+    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY)
+    var mfiles: List<MfilesEntity> =  mutableListOf()
+
 }
 

@@ -17,7 +17,6 @@ FoldersEntity {
 //    var storageId: Int? = null
 
     @ManyToOne(fetch = FetchType.LAZY)
-//    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "storage_id")
     var storage: StoragesEntity? = null
 

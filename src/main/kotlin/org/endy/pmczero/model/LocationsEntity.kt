@@ -1,5 +1,6 @@
 package org.endy.pmczero.model
 
+import java.io.File
 import javax.persistence.*
 
 @Entity
@@ -81,6 +82,10 @@ class LocationsEntity {
         if (origin != other.origin) return false
 
         return true
+    }
+
+    fun withFolderPath(folder: String) : String{
+        return uri?: "" + File.separator + folder;
     }
 
 }

@@ -36,4 +36,8 @@ class MfileRessource(
         return mfileService.url(id,RessType.PIC)
     }
 
+    @GetMapping("/medium/{id}/image")
+    fun getMediumPic(@PathVariable id: Int): String {
+        return mfileService.urlByMediumId(id,RessType.PIC)
+    }
 }
