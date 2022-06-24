@@ -5,7 +5,7 @@ import org.springframework.stereotype.Service
 import java.io.File
 
 @Service
-class FileSytemScanner {
+class FileSystemScanner {
 
     fun scan(folder: String, scanconfig: ScanConfiguration) {
         ls(folder, scanconfig)
@@ -33,8 +33,9 @@ class FileSytemScanner {
     //    fun group(fileList: List<String>): List<Pair<String, String>> {
 //      return fileList.associateWith { determineFolder(it) }.toList()
 //    }
-    fun group(fileList: List<String>, level: Int): Map<String, List<Pair<String, String>>> {
+    fun group(fileList: List<String>, level: Int): Map<String, List<String>> {
         return fileList.associateWith { determineFolder(it, level) }.toList().groupBy { it.second }
+            .mapValues { it.value.map {it.first} }
     }
 
     fun determineFolder(fileName: String, level: Int): String {
