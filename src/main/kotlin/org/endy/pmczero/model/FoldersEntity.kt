@@ -1,6 +1,7 @@
 package org.endy.pmczero.model
 
 import com.fasterxml.jackson.annotation.JsonBackReference
+import org.endy.pmczero.model.legacy.MfilesEntity
 import javax.persistence.*
 
 @Entity

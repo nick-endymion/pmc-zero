@@ -1,7 +1,6 @@
 package org.endy.pmczero.ressource
 
-import org.endy.pmczero.model.FoldersEntity
-import org.endy.pmczero.model.ScanConfiguration
+import org.endy.pmczero.model.modern.ScanConfiguration
 import org.endy.pmczero.service.FileSystemScanner
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestParam

@@ -1,6 +1,7 @@
 package org.endy.pmczero.service
 
-import org.endy.pmczero.model.ScanConfiguration
+import org.endy.pmczero.model.Mtype
+import org.endy.pmczero.model.modern.ScanConfiguration
 import org.springframework.stereotype.Service
 import java.io.File
 
@@ -54,6 +55,7 @@ class FileSystemScanner {
     }
 
     fun determineFolder(fileName: String): String {
+
         val separator = "\\" + File.separator
         val name = separator + "[^" + separator + "]+$"
         val regex = Regex(name)

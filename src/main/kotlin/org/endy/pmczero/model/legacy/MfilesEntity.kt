@@ -1,6 +1,8 @@
-package org.endy.pmczero.model
+package org.endy.pmczero.model.legacy
 
 import com.fasterxml.jackson.annotation.JsonManagedReference
+import org.endy.pmczero.model.FoldersEntity
+import org.endy.pmczero.model.LegacyMedium
 import java.sql.Date
 import java.sql.Timestamp
 import javax.persistence.*
@@ -25,10 +27,9 @@ class MfilesEntity {
     @Column(name = "medium_id", nullable = true,  insertable=false, updatable = false)
     var mediumId: Int? = null
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medium_id")
-    val medium: Medium? = null
-
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "medium_id", nullable = true)
+//    val legacyMedium: LegacyMedium? = null
 
     @Column(name = "filename", nullable = true)
     var filename: String? = null
@@ -44,6 +45,18 @@ class MfilesEntity {
 
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
+
+//    MFILE_UNDEFINED = 0
+//    MFILE_LOCATION = 1
+//    MFILE_PHOTO = 2 # Fotos und Videos selbst gedreht
+//    MFILE_MOVIE = 3 # Filme aus Kino und Fernsehen
+//    MFILE_BOOK = 4 # Ebooks
+//    MFILE_IMEDIUM = 5
+//    MFILE_BOOKMARK = 6 # Bookmarks
+//    MFILE_YOUTUBE = 7 # Youtube
+//    MFILE_FOLDER = 8 # Folder
+
+
 
 
     // constant value returned to avoid entity inequality to itself before and after it's update/merge

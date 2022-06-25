@@ -1,6 +1,6 @@
 package org.endy.pmczero.model
 
-import com.fasterxml.jackson.annotation.JsonManagedReference
+import org.endy.pmczero.model.legacy.MfilesEntity
 import java.sql.Date
 import java.sql.Timestamp
 import javax.persistence.*
@@ -8,7 +8,7 @@ import javax.persistence.*
 
 @Entity
 @Table(name = "media")
-class Medium {
+class LegacyMedium {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "id", nullable = false)
@@ -26,8 +26,8 @@ class Medium {
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
-    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY)
-    var mfiles: List<MfilesEntity> =  mutableListOf()
+//    @OneToMany(mappedBy = "legacyMedium",fetch = FetchType.LAZY)
+//    var mfiles: List<MfilesEntity> =  mutableListOf()
 
 }
 

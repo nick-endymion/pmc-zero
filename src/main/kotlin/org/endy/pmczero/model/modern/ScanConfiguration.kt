@@ -1,4 +1,4 @@
-package org.endy.pmczero.model
+package org.endy.pmczero.model.modern
 
 import java.util.regex.Pattern
 

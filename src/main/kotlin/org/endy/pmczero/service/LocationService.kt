@@ -1,7 +1,7 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.model.LocationsEntity
-import org.endy.pmczero.model.MfilesEntity
+import org.endy.pmczero.model.legacy.MfilesEntity
 import org.endy.pmczero.repository.MfilesRepository
 import org.springframework.stereotype.Service
 
