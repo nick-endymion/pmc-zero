@@ -1,12 +1,12 @@
 package org.endy.pmczero.service
 
-import org.endy.pmczero.model.LocationsEntity
+import org.endy.pmczero.model.modern.Location
 import org.springframework.stereotype.Service
 
 @Service
 class MediaCreator(val fileSystemScanner: FileSystemScanner) {
 
-    fun av(location: LocationsEntity, folder: String) {
+    fun av(location: Location, folder: String) {
         val path = location.withFolderPath(folder)
 //        fileSytemScanner.ls(path)
     }

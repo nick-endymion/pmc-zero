@@ -1,10 +1,7 @@
 package org.endy.pmczero.model.modern
 
-import com.fasterxml.jackson.annotation.JsonManagedReference
 import java.sql.Date
-import java.sql.Timestamp
 import javax.persistence.*
-
 
 @Entity
 @Table(name = "a.sets")

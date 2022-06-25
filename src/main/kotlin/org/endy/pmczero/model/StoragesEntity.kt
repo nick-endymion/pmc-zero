@@ -1,5 +1,6 @@
 package org.endy.pmczero.model
 
+import org.endy.pmczero.model.modern.Location
 import javax.persistence.*
 
 @Entity
@@ -44,10 +45,10 @@ class StoragesEntity {
     var fitId: Int? = null
 
     @OneToMany(mappedBy = "storage", fetch = FetchType.LAZY)
-    var locations: List<LocationsEntity> = mutableListOf()
+    var locations: List<Location> = mutableListOf()
 
     @Transient
-    var locationsInuse: List<LocationsEntity> = locations.filter { loc -> loc.inuse == 1.toByte() }
+    var locationsInuse: List<Location> = locations.filter { loc -> loc.inuse == 1.toByte() }
 
     override fun toString(): String =
         "Entity of type: ${javaClass.name} ( " +

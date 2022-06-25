@@ -1,11 +1,13 @@
-package org.endy.pmczero.model
+package org.endy.pmczero.model.modern
 
+import org.endy.pmczero.model.StoragesEntity
 import java.io.File
+import java.sql.Date
 import javax.persistence.*
 
 @Entity
-@Table(name = "locations")
-class LocationsEntity {
+@Table(name = "a.locations")
+class Location {
 
     @Id
     @GeneratedValue(strategy=GenerationType.IDENTITY)
@@ -32,14 +34,14 @@ class LocationsEntity {
     var inuse: Byte? = null
 
     @Column(name = "created_at", nullable = true)
-    var createdAt: java.sql.Timestamp? = null
+    var createdAt: Date? = null
 
     @Column(name = "updated_at", nullable = true)
-    var updatedAt: java.sql.Timestamp? = null
+    var updatedAt: Date? = null
 
-    @Column(name = "prefix", nullable = true)
-    var prefix: String? = null
-
+//    @Column(name = "prefix", nullable = true)
+//    var prefix: String? = null
+//
     @Column(name = "mfile_id", nullable = true)
     var mfileId: Int? = null
 
@@ -56,7 +58,6 @@ class LocationsEntity {
                 "inuse = $inuse " +
                 "createdAt = $createdAt " +
                 "updatedAt = $updatedAt " +
-                "prefix = $prefix " +
                 "mfileId = $mfileId " +
                 "origin = $origin " +
                 ")"
@@ -67,7 +68,7 @@ class LocationsEntity {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
-        other as LocationsEntity
+        other as Location
 
         if (id != other.id) return false
         if (name != other.name) return false
@@ -77,7 +78,7 @@ class LocationsEntity {
         if (inuse != other.inuse) return false
         if (createdAt != other.createdAt) return false
         if (updatedAt != other.updatedAt) return false
-        if (prefix != other.prefix) return false
+//        if (prefix != other.prefix) return false
         if (mfileId != other.mfileId) return false
         if (origin != other.origin) return false
 
@@ -85,7 +86,7 @@ class LocationsEntity {
     }
 
     fun withFolderPath(folder: String) : String{
-        return uri?: "" + File.separator + folder;
+        return uri?: "" + File.separator + folder
     }
 
 }
