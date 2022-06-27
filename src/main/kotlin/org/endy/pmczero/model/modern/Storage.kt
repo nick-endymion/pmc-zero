@@ -21,6 +21,9 @@ class Storage {
     @Column(name = "updated_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" )
     var updatedAt: Date? = null
 
+    @OneToMany(mappedBy = "storage",fetch = FetchType.LAZY)
+    var locations: List<Location> =  mutableListOf()
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

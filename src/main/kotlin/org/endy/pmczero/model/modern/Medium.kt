@@ -1,5 +1,6 @@
 package org.endy.pmczero.model.modern
 
+import org.endy.pmczero.model.legacy.MfilesEntity
 import java.sql.Date
 import javax.persistence.*
 
@@ -25,6 +26,9 @@ class Medium {
 
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
+
+    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY)
+    var bessources: List<Bessource> =  mutableListOf()
 
 }
 

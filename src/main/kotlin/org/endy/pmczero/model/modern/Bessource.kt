@@ -11,8 +11,11 @@ class Bessource {
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
-    @Column(name = "medium_id", nullable = true)
-    var mediumId: Int? = null
+//    @Column(name = "medium_id", nullable = true)
+//    var mediumId: Int? = null
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "medium_id", nullable = true)
+    val medium: Medium? = null
 
     @Column(name = "name", nullable = true)
     var name: String? = null
@@ -24,9 +27,15 @@ class Bessource {
     var updated_at: Date? = null
 
     @Column(name = "btype", nullable = true)
-    var mtype: Int? = null
+    var btype: Int? = null
 
-    @Column(name = "storage_id", nullable = true)
-    var storageId: Int? = null
+//    @Column(name = "storage_id", nullable = true)
+//    var storageId: Int? = null
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "storage_id", nullable = true)
+    lateinit var storage: Storage
+
+
+
 }
 

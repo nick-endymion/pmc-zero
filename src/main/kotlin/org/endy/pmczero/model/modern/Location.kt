@@ -26,9 +26,9 @@ class Location {
     @Column(name = "typ", nullable = true)
     var typ: Int? = null
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "storage_id")
-    var storage: StoragesEntity? = null
+    lateinit var storage: Storage
 
     @Column(name = "inuse", nullable = true)
     var inuse: Byte? = null
