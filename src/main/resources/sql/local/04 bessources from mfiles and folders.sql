@@ -11,7 +11,6 @@ where m.folder_id = f.id and m.filename like '---%';
 # 545089
 # 609281 > total
 
-delete from a_bessources  where id in (select id from mfiles);
 insert into a_bessources(id,name,storage_id, medium_id)
 select m.id, concat(f.mpath, f.lfolder, m.filename), f.storage_id, m.id
 from mfiles m, folders f where m.folder_id = f.id and not m.filename like '---%';
