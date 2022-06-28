@@ -29,15 +29,23 @@ class MediaService(
 
     fun url(id: Int, type: RessType): String {
         val medium = findById(id)
-        val bessource =  medium.bessources.first { it.btype == null } //TODO
+        val rt = if (type == RessType.TN)
+            RessType.PRIMARY
+        else
+            type
 
+        val bessource = medium.bessources.first { it.btype == rt.i }
         val storage = bessource.storage
-        if (storage != null) {
-            println(storage.id)
-//            println(storage.locationsInuse)
-            val locations = storage.locations.filter { loc -> loc.inuse == 1.toByte() }
-            val location = locations.first { loc -> loc.typ == 1 }
+        val location = storage.locationInUse(if (type == RessType.TN) 3 else 1)
+        if (location != null)
             return locationService.url(bessource, location)
+
+        if (type == RessType.TN) {
+            val bessource = medium.bessources.first { type == RessType.TN }
+            val storage = bessource.storage
+            val location = storage.locationInUse(1)
+            if (location != null)
+                return locationService.url(bessource, location)
         }
         return "N/A"
     }
@@ -47,7 +55,7 @@ class MediaService(
     }
 
     fun mediumById(id: Int): Medium {
-        return  mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
+        return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
     fun urlByMediumId(id: Int, type: RessType): String {

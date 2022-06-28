@@ -28,19 +28,26 @@ class BessourceRessource(
 //        return mfilesRepository.findByIdOrNull(id)
 //    }
 
-    @GetMapping("/medium/{id}/pic")
+    @GetMapping("/medium/{id}/url")
     fun getMfilePic(@PathVariable id: Int): String {
-        return mediaService.url(id,RessType.PIC)
+        return mediaService.url(id,RessType.PRIMARY)
     }
 
-    @GetMapping("/show/{id}/pic")
+    @GetMapping("/medium/{id}/binary")
     fun showMfilePic(@PathVariable id: Int): RedirectView
     {
-        return RedirectView( mediaService.url(id,RessType.PIC))
+        return RedirectView( mediaService.url(id,RessType.PRIMARY))
     }
 
-    @GetMapping("/medium/{id}/image")
-    fun getMediumPic(@PathVariable id: Int): String {
-        return mediaService.urlByMediumId(id,RessType.PIC)
+    @GetMapping("/medium/{id}/tn/url")
+    fun afa(@PathVariable id: Int): String {
+        return mediaService.url(id,RessType.TN)
     }
+
+
+
+//    @GetMapping("/medium/{id}/image")
+//    fun getMediumPic(@PathVariable id: Int): String {
+//        return mediaService.urlByMediumId(id,RessType.PIC)
+//    }
 }

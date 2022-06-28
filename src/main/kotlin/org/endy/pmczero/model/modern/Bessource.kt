@@ -28,6 +28,9 @@ class Bessource {
 
     @Column(name = "btype", nullable = true)
     var btype: Int? = null
+     // null oder 0 > primary
+     // 1 > pic presentation
+     // 2 > tn presentation
 
 //    @Column(name = "storage_id", nullable = true)
 //    var storageId: Int? = null

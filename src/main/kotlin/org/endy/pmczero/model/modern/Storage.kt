@@ -1,5 +1,6 @@
 package org.endy.pmczero.model.modern
 
+import org.endy.pmczero.model.RessType
 import java.sql.Date
 import javax.persistence.*
 
@@ -8,21 +9,30 @@ import javax.persistence.*
 class Storage {
 
     @Id
-    @GeneratedValue(strategy=GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
     @Column(name = "name", nullable = true)
     var name: String? = null
 
-    @Column(name = "created_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP" )
+    @Column(name = "created_at", nullable = true, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     var createdAt: Date? = null
 
-    @Column(name = "updated_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" )
+    @Column(
+        name = "updated_at",
+        nullable = true,
+        columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    )
     var updatedAt: Date? = null
 
-    @OneToMany(mappedBy = "storage",fetch = FetchType.LAZY)
-    var locations: List<Location> =  mutableListOf()
+    @OneToMany(mappedBy = "storage", fetch = FetchType.LAZY)
+    var locations: List<Location> = mutableListOf()
+
+
+    fun locationInUse(typ: Int): Location? {
+        return locations.filter { it.inuse == 1.toByte() }.firstOrNull { it.typ == typ }
+    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
