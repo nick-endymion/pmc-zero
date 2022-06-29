@@ -1,12 +1,12 @@
 package org.endy.pmczero.model
 
-class Match {
+import org.endy.pmczero.model.scraper.Scanner
 
-    val urlRegex: Regex = Regex("")
+class Match(val urlRegex: Regex) {
 
     val workers: List<Scanner> = listOf()
 
-    fun match(url: String) : Boolean {
+    fun match(url: String): Boolean {
         return urlRegex.matches(url)
     }
 

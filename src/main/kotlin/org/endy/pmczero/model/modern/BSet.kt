@@ -5,7 +5,7 @@ import javax.persistence.*
 
 @Entity
 @Table(name = "a.sets")
-class Set {
+class BSet {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -23,8 +23,8 @@ class Set {
     @Column(name = "updated_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" )
     var updated_at: Date? = null
 
-    @OneToMany(mappedBy = "set",fetch = FetchType.LAZY)
-    var media: List<Medium> =  mutableListOf()
+    @OneToMany(mappedBy = "BSet",fetch = FetchType.LAZY)
+    var media: MutableList<Medium> =  mutableListOf()
 
 }
 

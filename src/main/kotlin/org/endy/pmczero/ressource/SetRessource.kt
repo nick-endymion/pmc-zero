@@ -1,16 +1,11 @@
 package org.endy.pmczero.ressource
 
-import org.endy.pmczero.mapper.toTO
-import org.endy.pmczero.to.MfileTO
 import org.endy.pmczero.model.RessType
-import org.endy.pmczero.repository.MfilesRepository
 import org.endy.pmczero.service.MediaService
-import org.endy.pmczero.service.MfileService
 import org.endy.pmczero.service.SetService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.servlet.view.RedirectView
 
 @RestController("/api")
 class SetRessource(

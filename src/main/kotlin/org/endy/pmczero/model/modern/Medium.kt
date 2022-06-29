@@ -1,6 +1,5 @@
 package org.endy.pmczero.model.modern
 
-import org.endy.pmczero.model.legacy.MfilesEntity
 import java.sql.Date
 import javax.persistence.*
 
@@ -14,7 +13,7 @@ class Medium {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "set_id", nullable = true)
-    val set: Set? = null
+    val BSet: BSet? = null
 //    @Column(name = "set_id", nullable = true)
 //    var setId: Int? = null
 
@@ -31,7 +30,7 @@ class Medium {
     var mtype: Int? = null
 
     @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY)
-    var bessources: List<Bessource> =  mutableListOf()
+    var bessources: MutableList<Bessource> =  mutableListOf()
 
 }
 

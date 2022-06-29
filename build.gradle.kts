@@ -6,6 +6,7 @@ plugins {
     kotlin("jvm") version "1.5.31"
     kotlin("plugin.spring") version "1.5.31"
     kotlin("plugin.jpa") version "1.5.31"
+    kotlin("plugin.serialization") version "1.5.31"
 }
 
 group = "org.endy"
@@ -31,6 +32,8 @@ dependencies {
     runtimeOnly("mysql:mysql-connector-java")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(kotlin("test"))
+    testImplementation("io.mockk:mockk:1.12.4")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
 }
 
 tasks.withType<KotlinCompile> {
@@ -47,3 +50,4 @@ tasks.withType<Test> {
 tasks.test {
     useJUnitPlatform()
 }
+

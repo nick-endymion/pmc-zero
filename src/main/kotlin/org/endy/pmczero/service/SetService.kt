@@ -7,7 +7,7 @@ import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.SetRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
-import org.endy.pmczero.model.modern.Set
+import org.endy.pmczero.model.modern.BSet
 
 @Service
 class SetService(
@@ -16,7 +16,7 @@ class SetService(
     private val mediaService: MediaService
 ) {
 
-    fun findById(id: Int): Set {
+    fun findById(id: Int): BSet {
         return setRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 

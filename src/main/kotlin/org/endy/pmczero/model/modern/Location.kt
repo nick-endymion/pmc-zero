@@ -4,6 +4,7 @@ import org.endy.pmczero.model.StoragesEntity
 import java.io.File
 import java.sql.Date
 import javax.persistence.*
+import kotlin.jvm.Transient
 
 @Entity
 @Table(name = "a.locations")
@@ -87,6 +88,13 @@ class Location {
 
     fun withFolderPath(folder: String) : String{
         return uri?: "" + File.separator + folder
+    }
+
+    fun getRightPart(uri: String) : String {
+        val length = name?.length ?: throw Exception()
+        if (name != uri.substring(0, length))
+            throw Exception()  //todo
+        return uri.substring(length)
     }
 
 }

@@ -28,7 +28,7 @@ class Bessource {
 
     @Column(name = "btype", nullable = true)
     var btype: Int? = null
-     // null oder 0 > primary
+     // 0 > primary
      // 1 > pic presentation
      // 2 > tn presentation
 
@@ -38,7 +38,7 @@ class Bessource {
     @JoinColumn(name = "storage_id", nullable = true)
     lateinit var storage: Storage
 
-
+    var encrypted: Boolean = false
 
 }
 

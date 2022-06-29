@@ -1,14 +1,11 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotFoundException
-import org.endy.pmczero.model.LegacyMedium
-import org.endy.pmczero.model.legacy.MfilesEntity
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.MediaRepository
-import org.endy.pmczero.repository.MfilesRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 

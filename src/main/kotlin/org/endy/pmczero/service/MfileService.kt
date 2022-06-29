@@ -1,19 +1,19 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotFoundException
-import org.endy.pmczero.model.LegacyMedium
 import org.endy.pmczero.model.legacy.MfilesEntity
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.repository.MediaRepository
-import org.endy.pmczero.repository.MfilesRepository
+import org.endy.pmczero.repository.LocationRepository
+import org.endy.pmczero.repository.MfileRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 
 @Service
 class MfileService(
     private val mediaRepository: MediaRepository,
-    private val mfilesRepository: MfilesRepository,
+    private val mfilesRepository: MfileRepository,
     private val locationService: LocationService
 ) {
 
