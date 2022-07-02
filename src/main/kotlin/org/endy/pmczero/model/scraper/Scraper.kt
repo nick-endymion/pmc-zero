@@ -6,11 +6,12 @@ import kotlinx.serialization.json.*
 import org.endy.pmczero.model.ScanningKontext
 import org.endy.pmczero.model.modern.BSet
 import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.service.Downloader
 import org.endy.pmczero.service.LocationService
 import org.springframework.stereotype.Service
 
 @Service
-class Scraper(val locationService: LocationService) {
+class Scraper(val locationService: LocationService, val downloader: Downloader) {
 
     lateinit var scanner: Scanner
 
@@ -22,9 +23,9 @@ class Scraper(val locationService: LocationService) {
             StructuredWorker(
                 true,
                 listOf(
-                    Scanner(DomParser("(.*)".toRegex(), "", ""), SetCreator()),
+                    Scanner(DomParser("(.*)", "", ""), SetCreator()),
                     Scanner(
-                        DomParser("(.*)".toRegex(), "", ""), MediaAdder()
+                        DomParser("(.*)", "", ""), MediaAdder()
                     )
                 )
             )
@@ -52,7 +53,7 @@ class Scraper(val locationService: LocationService) {
     }
 
     fun getNewScanningContext(location: Location) : ScanningKontext {
-        return ScanningKontext(location, BSet(), arrayListOf() )
+        return ScanningKontext(location, BSet(), arrayListOf(), downloader )
     }
 
     fun serialize() {

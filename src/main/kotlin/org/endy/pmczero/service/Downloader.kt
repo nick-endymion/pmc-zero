@@ -13,6 +13,8 @@ import java.nio.file.StandardCopyOption
 @Service
 class Downloader {
 
+    companion object Default: Downloader()
+
     public fun getAsString(url: String, withProxy: Boolean = false): String{
 
         val url = URL(url)

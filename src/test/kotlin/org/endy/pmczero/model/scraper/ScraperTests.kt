@@ -42,8 +42,8 @@ class ScraperTests {
 
 //        val mdomParser = mockkClass(DomParser::class)
 //        every { mdomParser.getElements("downloadedStuff") } returns  listOf("http://cdn.com")
-        var scraper = Scraper(locationService)
-        scraper.serialize()
+        var scraper = Scraper(locationService, downloader)
+
         var structuredWorker = scraper.scanner.worker as StructuredWorker
 
 //        var x = object : HtmlParser() {
@@ -59,7 +59,6 @@ class ScraperTests {
 //        structuredWorker.scanners[0].htmlParser = x
 //        structuredWorker.scanners[1].htmlParser = y
 
-        structuredWorker.downloader = downloader
 
 //        var x = scraper.scanner.worker as StructuredWorker
 //        var parser = spyk( x.scanners[1].htmlParser as DomParser)

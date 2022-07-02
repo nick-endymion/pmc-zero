@@ -1,6 +1,5 @@
 package org.endy.pmczero.model.scraper
 
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
