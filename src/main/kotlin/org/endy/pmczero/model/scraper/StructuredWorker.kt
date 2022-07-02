@@ -5,7 +5,7 @@ import org.endy.pmczero.model.modern.BSet
 import org.endy.pmczero.service.Downloader
 import org.springframework.beans.factory.annotation.Autowired
 
-class StructuredWorker(val download: Boolean, val scanners: List<Scanner>) : Worker() {
+class StructuredWorker(val download: Boolean, val scanners: List<Scanner>) : Worker {
 
     lateinit var downloader: Downloader
 

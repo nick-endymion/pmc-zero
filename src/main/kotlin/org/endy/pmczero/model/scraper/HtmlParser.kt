@@ -2,9 +2,8 @@ package org.endy.pmczero.model.scraper
 
 import kotlinx.serialization.Serializable
 
-@Serializable
-sealed abstract class HtmlParser {
+interface HtmlParser {
 
-    abstract fun getElements(text: String) : List<String>
+    fun getElements(text: String) : List<String>
 
 }

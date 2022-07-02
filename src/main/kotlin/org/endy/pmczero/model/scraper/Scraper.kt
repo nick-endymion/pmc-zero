@@ -18,7 +18,7 @@ class Scraper(val locationService: LocationService) {
 
         // Scannergroup
         scanner = Scanner(
-            SimpleParser("(.*fa.*)".toRegex()),
+            SimpleParser("(.*fa.*)"),
             StructuredWorker(
                 true,
                 listOf(

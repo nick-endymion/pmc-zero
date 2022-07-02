@@ -3,10 +3,12 @@ package org.endy.pmczero.model.scraper
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
-import io.mockk.mockkClass
-import io.mockk.spyk
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
+import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
@@ -14,8 +16,6 @@ import org.endy.pmczero.service.Downloader
 import org.endy.pmczero.service.LocationService
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.anyString
-import kotlin.test.assertEquals
 
 class SerializationTests {
 
@@ -43,11 +43,26 @@ class SerializationTests {
 
 
         val scanner = Scanner(
-            SimpleParser("(.*fa.*)".toRegex()),
+            SimpleParser("(.*fa.*)"),
             SetCreator()
         )
+        val module = SerializersModule {
+            polymorphic(HtmlParser::class) {
+                subclass(SimpleParser::class)
+            }
+            polymorphic(Worker::class) {
+                subclass(SetCreator::class)
+            }
+        }
 
-        println(Json.encodeToString(scanner))
+        val format = Json { serializersModule = module }
+
+        var scannerSerialized = format.encodeToString(scanner)
+        println(format.encodeToString(scannerSerialized))
+
+        val scannerDesialized = format.decodeFromString<Scanner>(scannerSerialized)
+        scannerSerialized = format.encodeToString(scannerDesialized)
+        println(format.encodeToString(scannerSerialized))
 
     }
 }
