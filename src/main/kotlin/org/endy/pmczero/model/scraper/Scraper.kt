@@ -29,6 +29,18 @@ class Scraper(val locationService: LocationService) {
                 )
             )
         )
+//        scanner:
+//          simpleparser: (.Üafa*)
+//          structuredWorker:
+//                download: true
+//                Scanner:
+//                  - Domparser:
+//                          regex: ..
+//                          tag: ...
+//                          attribute: ...
+//                    SetCreator
+//                  - DomParser
+//                    MediaCreator
 
     }
 
