@@ -6,7 +6,7 @@ import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.service.getNameInUrl
 
-class MediaAdder : Worker {
+class MediaAdder : Worker() {
 
     override fun applya(element: String, sc: ScanningKontext) {
         check(sc.set != null)

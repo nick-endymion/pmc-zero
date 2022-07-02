@@ -6,9 +6,6 @@ import io.mockk.impl.annotations.MockK
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.polymorphic
-import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
@@ -46,16 +43,17 @@ class SerializationTests {
             SimpleParser("(.*fa.*)"),
             SetCreator()
         )
-        val module = SerializersModule {
-            polymorphic(HtmlParser::class) {
-                subclass(SimpleParser::class)
-            }
-            polymorphic(Worker::class) {
-                subclass(SetCreator::class)
-            }
-        }
-
-        val format = Json { serializersModule = module }
+//        val module = SerializersModule {
+//            polymorphic(HtmlParser::class) {
+//                subclass(SimpleParser::class)
+//            }
+//            polymorphic(Worker::class) {
+//                subclass(SetCreator::class)
+//            }
+//        }
+//
+//        val format = Json { serializersModule = module }
+        val format = Json
 
         var scannerSerialized = format.encodeToString(scanner)
         println(format.encodeToString(scannerSerialized))

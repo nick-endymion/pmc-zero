@@ -7,7 +7,7 @@ import org.endy.pmczero.model.modern.BSet
 
 @Serializable
 @SerialName("setCreator")
-class SetCreator : Worker {
+class SetCreator : Worker() {
 
     override fun applya(element: String, scanningKontext: ScanningKontext) {
         var bset = BSet().also { it.name = element }
