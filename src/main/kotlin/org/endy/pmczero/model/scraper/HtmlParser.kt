@@ -5,6 +5,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed class HtmlParser {
 
-    abstract fun getElements(text: String) : List<String>
+    abstract fun getElements(text: String, baseUri: String) : List<String>
 
 }

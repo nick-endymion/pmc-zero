@@ -12,7 +12,7 @@ import org.endy.pmczero.service.getNameInUrl
 @SerialName("MediaAdder")
 class MediaAdder : Worker() {
 
-    override fun applya(element: String, sc: ScanningKontext) {
+    override fun applya(element: String,  sc: ScanningKontext) {
         check(sc.set != null)
         var medium = Medium().also {
             it.name = element.getNameInUrl()

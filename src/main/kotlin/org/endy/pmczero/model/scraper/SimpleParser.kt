@@ -7,10 +7,11 @@ import kotlinx.serialization.Serializable
 @SerialName("SimpleParser")
 class SimpleParser(val regex: String) : HtmlParser() {
 
-    override fun getElements(text: String): List<String> {
-        val regex = regex.toRegex()
-        val result = regex.findAll(text)
-        return result.map { it.value }.toList()
+    override fun getElements(text: String, baseUri: String): List<String> {
+        val result = regex.toRegex().findAll(text)
+        return result.map {
+            it.groupValues[1]
+        }.filter { it != "" }.toList()
     }
 
 }

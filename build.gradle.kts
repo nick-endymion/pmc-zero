@@ -30,10 +30,12 @@ dependencies {
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
     runtimeOnly("mysql:mysql-connector-java")
+    runtimeOnly ("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation(kotlin("test"))
     testImplementation("io.mockk:mockk:1.12.4")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
+    implementation("org.jsoup:jsoup:1.15.1")
 }
 
 tasks.withType<KotlinCompile> {

@@ -23,32 +23,19 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
             StructuredWorker(
                 true,
                 listOf(
-                    Scanner(DomParser("(.*)", "", ""), SetCreator()),
+                    Scanner(DomParser("(.*)", "title", ""), SetCreator()),
                     Scanner(
                         DomParser("(.*)", "", ""), MediaAdder()
                     )
                 )
             )
         )
-//        scanner:
-//          simpleparser: (.Üafa*)
-//          structuredWorker:
-//                download: true
-//                Scanner:
-//                  - Domparser:
-//                          regex: ..
-//                          tag: ...
-//                          attribute: ...
-//                    SetCreator
-//                  - DomParser
-//                    MediaCreator
-
     }
 
     fun scan (url: String): ScanningKontext{
         val location = locationService.getLocationStartingWith(url)
         val sc =  getNewScanningContext(location)
-        scanner.doWork(url, sc)
+        scanner.doWork(url, "", sc)
         return sc
     }
 
@@ -61,4 +48,17 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
     }
 }
 
+
+//        scanner:
+//          simpleparser: (.Üafa*)
+//          structuredWorker:
+//                download: true
+//                Scanner:
+//                  - Domparser:
+//                          regex: ..
+//                          tag: ...
+//                          attribute: ...
+//                    SetCreator
+//                  - DomParser
+//                    MediaCreator
 

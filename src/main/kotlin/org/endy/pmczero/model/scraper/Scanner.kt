@@ -11,9 +11,9 @@ class Scanner(
     val worker: Worker
 ) {
 
-    fun doWork(text: String, scanningKontext: ScanningKontext) {
-        for (element in htmlParser.getElements(text)) {
-                worker.applya(element, scanningKontext)
+    fun doWork(text: String, baseUri: String, scanningKontext: ScanningKontext) {
+        for (element in htmlParser.getElements(text, baseUri)) {
+            worker.applya(element, scanningKontext)
         }
     }
 

@@ -12,27 +12,23 @@ import org.springframework.beans.factory.annotation.Autowired
 @Serializable
 @SerialName("StructuredWorker")
 class StructuredWorker(
-//    @SerialName(
-//        "download"
-//    )
     val download: Boolean,
     val scanners: List<Scanner>
 ) : Worker() {
 
-//    @Transient
-//    lateinit var downloader: Downloader
-//
-//    @Autowired
-//    fun getDownloader(downloader: Downloader){
-//        this.downloader = downloader
-//    }
-
     override fun applya(element: String, scanningKontext: ScanningKontext) {
-        val downloadedHtml = ""; // from element todo
 
-        val text = if (true) scanningKontext.downloader.getAsString(element) else element
+        var baseUri = ""
+        val text = if (download) {
+            baseUri = getBusUri(element)
+            scanningKontext.downloader.getAsString(element)
+        } else element
         for (scanner in scanners)
-            scanner.doWork(text, scanningKontext)
+            scanner.doWork(text, baseUri, scanningKontext)
+    }
+
+    fun getBusUri(url: String): String {
+        return "(.*/).*".toRegex().find(url)?.groupValues?.get(1) ?: throw Exception()
     }
 
 }

@@ -28,7 +28,7 @@ class ScraperTests {
 
     @Test
     fun test() {
-        var mediuam = Medium()
+
         var location = Location().also { it.name = "http://"; it.storage = Storage() }
 
         every {
@@ -44,27 +44,6 @@ class ScraperTests {
 //        every { mdomParser.getElements("downloadedStuff") } returns  listOf("http://cdn.com")
         var scraper = Scraper(locationService, downloader)
 
-        var structuredWorker = scraper.scanner.worker as StructuredWorker
-
-//        var x = object : HtmlParser() {
-//            override fun getElements(text: String): List<String> {
-//                return listOf("Der Titel")
-//            }
-//        }
-//        var y = object : HtmlParser() {
-//            override fun getElements(text: String): List<String> {
-//                return listOf("http://cdn.de/a.txt")
-//            }
-//        }
-//        structuredWorker.scanners[0].htmlParser = x
-//        structuredWorker.scanners[1].htmlParser = y
-
-
-//        var x = scraper.scanner.worker as StructuredWorker
-//        var parser = spyk( x.scanners[1].htmlParser as DomParser)
-//        every {
-//            parser.getElements(anyString())
-//        } returns listOf("http://cdn.com")
         var sc = scraper.scan("http://testfatest.com")
 
         assertEquals("Der Titel", sc.set?.name)
