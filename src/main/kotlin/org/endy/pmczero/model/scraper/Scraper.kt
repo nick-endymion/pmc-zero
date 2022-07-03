@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 import org.endy.pmczero.model.ScanningKontext
 import org.endy.pmczero.model.modern.BSet
 import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.service.Downloader
 import org.endy.pmczero.service.LocationService
 import org.springframework.stereotype.Service
@@ -23,7 +24,7 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
     fun scan(url: String, locationId: Int? = null): ScanningKontext {
 //        val location = locationService.getLocationStartingWith(url)
         val location = if (locationId == null)
-            Location().also { it.name = "Catchup Location"; it.uri = "" }
+            Location().also { it.name = "Catchup Location"; it.uri = ""; it.storage = Storage() }
         else
             locationService.findById(locationId)
         val sc = getNewScanningContext(location)
@@ -33,6 +34,11 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
 
     fun getNewScanningContext(location: Location): ScanningKontext {
         return ScanningKontext(location, BSet(), arrayListOf(), downloader)
+    }
+
+    fun findPossibleLocations(sc: ScanningKontext): List<Location> {
+        val aaa = sc.set!!.media.map { it.bessources }.flatten().map { it.name ?: "" }
+        return locationService.getLocationStartingWith(aaa)
     }
 
     fun serialize() {

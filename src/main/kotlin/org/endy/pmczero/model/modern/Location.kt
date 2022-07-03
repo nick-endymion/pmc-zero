@@ -90,11 +90,11 @@ class Location {
         return uri?: "" + File.separator + folder
     }
 
-    fun getRightPart(uri: String) : String {
-        val length = name?.length ?: throw Exception()
-        if (name != uri.substring(0, length))
+    fun getRightPart(elementUri: String) : String {
+        val length = uri?.length ?: throw Exception()
+        if (uri != elementUri.substring(0, length))
             throw Exception()  //todo
-        return uri.substring(length)
+        return elementUri.substring(length)
     }
 
 }
