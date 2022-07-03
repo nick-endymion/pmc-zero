@@ -37,21 +37,37 @@ class ScraperTests {
 
         every {
             downloader.getAsString(any())
-        } returns "<html><title>TEST</title></html>"
+        } returns "<html><title>Der Titel</title><a>http://aaa.de/link</a></html>"
 
-
-//        val mdomParser = mockkClass(DomParser::class)
-//        every { mdomParser.getElements("downloadedStuff") } returns  listOf("http://cdn.com")
         var scraper = Scraper(locationService, downloader)
+
+        setScanner(scraper)
 
         var sc = scraper.scan("http://testfatest.com")
 
         assertEquals("Der Titel", sc.set?.name)
         val media = sc.set?.media
         assertEquals(1, media?.size)
-        assertEquals("a.txt", media!![0].name)
+        assertEquals("link", media!![0].name)
         val bessources = media!![0].bessources
-        assertEquals("cdn.de/a.txt", bessources!![0].name)
+        assertEquals("aaa.de/link", bessources!![0].name)
+
+    }
+
+    fun setScanner(scraper: Scraper) {
+
+        scraper.scanner = Scanner(
+            SimpleParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(
+                    Scanner(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scanner(
+                        DomParser("(.*)", "a", ""), MediaAdder()
+                    )
+                )
+            )
+        )
 
     }
 

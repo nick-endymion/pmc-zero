@@ -26,9 +26,7 @@ class ParserTests {
 
         val elements = domParser.getElements(text, "http://test.com")
 
-//        var sc = scraper.scan("http://testfatest.com")
         assertEquals(1, elements?.size)
-
         assertEquals("TEST", elements[0])
 
     }
@@ -42,9 +40,7 @@ class ParserTests {
 
         val elements = domParser.getElements(text, "http://test.com/afad/aaa/")
 
-//        var sc = scraper.scan("http://testfatest.com")
         assertEquals(1, elements?.size)
-
         assertEquals("http://test.com/afad/aaa/where", elements[0])
 
     }

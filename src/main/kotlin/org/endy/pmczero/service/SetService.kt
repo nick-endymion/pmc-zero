@@ -20,6 +20,10 @@ class SetService(
         return setRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
+    fun save(bset: BSet): BSet {
+        return setRepository.save(bset)
+    }
+
     fun htmlImagePage(id: Int, rtype: RessType): String {
         val media = findById(id).media
 

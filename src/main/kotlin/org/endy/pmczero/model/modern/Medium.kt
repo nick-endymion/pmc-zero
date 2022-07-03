@@ -29,7 +29,7 @@ class Medium {
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
-    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
     var bessources: MutableList<Bessource> =  mutableListOf()
 
 }

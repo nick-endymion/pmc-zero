@@ -16,20 +16,8 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
     lateinit var scanner: Scanner
 
     init {
-
         // Scannergroup
-        scanner = Scanner(
-            SimpleParser("(.*fa.*)"),
-            StructuredWorker(
-                true,
-                listOf(
-                    Scanner(DomParser("(.*)", "title", ""), SetCreator()),
-                    Scanner(
-                        DomParser("(.*)", "", ""), MediaAdder()
-                    )
-                )
-            )
-        )
+        loadScanners()
     }
 
     fun scan (url: String): ScanningKontext{
@@ -45,6 +33,23 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
 
     fun serialize() {
         println(Json.encodeToString(scanner))
+
+    }
+
+    fun loadScanners() {
+
+        scanner = Scanner(
+            SimpleParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(
+                    Scanner(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scanner(
+                        DomParser("(.*)", "a", ""), MediaAdder()
+                    )
+                )
+            )
+        )
     }
 }
 
