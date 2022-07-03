@@ -2,35 +2,41 @@ package org.endy.pmczero.mapper
 
 import org.endy.pmczero.model.*
 import org.endy.pmczero.model.legacy.MfilesEntity
-import org.endy.pmczero.to.FolderTO
-import org.endy.pmczero.to.MfileTO
-import org.endy.pmczero.to.StorageTO
+import org.endy.pmczero.model.modern.BSet
+import org.endy.pmczero.model.modern.Bessource
+import org.endy.pmczero.model.modern.Medium
+import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.to.*
+import java.sql.Date
 
-//fun FoldersEntity.map(f: FolderTO) = FoldersEntity(id, storageId,mpath,lfolder,null,title)
-fun FolderTO.map(): FoldersEntity {
-    return FoldersEntity(id, null , mpath, lfolder, mfiles.map { mfile -> mfile.map() }, title)
-}
 
-fun FoldersEntity.toTO(includeMfiles: Boolean = false): FolderTO {
-    return FolderTO(
+fun BSet.toTO(): BsetTO {
+    return BsetTO(
         id = id,
-//        storage = storage?.toTO(),
-        mpath = mpath,
-        lfolder = lfolder,
-        title = title,
-        mfiles = if (includeMfiles) mfiles.map { m -> m.toTO() } else listOf()
+        name = name,
+        created_at = created_at,
+        updated_at = updated_at,
+        media = media.map { it.toTO() })
+}
+
+fun Medium.toTO(): MediumTO {
+    return MediumTO(
+        id = id,
+        name = name,
+        created_at = created_at,
+        updated_at = updated_at,
+        bessources = bessources.map { it.toTO() })
+}
+
+fun Bessource.toTO(): BessourceTO {
+    return BessourceTO(
+        id = id,
+        name = name,
+        btype = btype,
+        mediumId = medium?.id,
+        storageId = storage.id,
+        encrypted = encrypted,
+        created_at = created_at,
+        updated_at = updated_at,
     )
-
-}
-
-fun MfileTO.map(): MfilesEntity {
-    return MfilesEntity()
-}
-
-fun MfilesEntity.toTO(): MfileTO {
-    return MfileTO(filename = filename, id = id, modDate = modDate, mtype =  mtype)
-}
-
-fun StoragesEntity.toTO() : StorageTO {
-    return StorageTO(id = id, name = name)
 }

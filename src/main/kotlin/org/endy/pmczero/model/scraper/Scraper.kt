@@ -20,15 +20,19 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
         loadScanners()
     }
 
-    fun scan (url: String): ScanningKontext{
-        val location = locationService.getLocationStartingWith(url)
-        val sc =  getNewScanningContext(location)
+    fun scan(url: String, locationId: Int? = null): ScanningKontext {
+//        val location = locationService.getLocationStartingWith(url)
+        val location = if (locationId == null)
+            Location().also { it.name = "Catchup Location"; it.uri = "" }
+        else
+            locationService.findById(locationId)
+        val sc = getNewScanningContext(location)
         scanner.doWork(url, "", sc)
         return sc
     }
 
-    fun getNewScanningContext(location: Location) : ScanningKontext {
-        return ScanningKontext(location, BSet(), arrayListOf(), downloader )
+    fun getNewScanningContext(location: Location): ScanningKontext {
+        return ScanningKontext(location, BSet(), arrayListOf(), downloader)
     }
 
     fun serialize() {
