@@ -6,13 +6,15 @@ import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.service.SetService
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
 import org.springframework.boot.test.context.SpringBootTest
 
 
 //Attention:
 //Run only with H2
 @SpringBootTest
-class persistenceTests {
+//@DataJpaTest
+class persistenceIntegrationTest {
 
 
     @Autowired

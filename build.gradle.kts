@@ -32,8 +32,13 @@ dependencies {
     runtimeOnly("mysql:mysql-connector-java")
     runtimeOnly ("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+//    {
+//        exclude("org.junit.vintage", "junit-vintage-engine")
+//    }
     testImplementation(kotlin("test"))
     testImplementation("io.mockk:mockk:1.12.4")
+//    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.8.1")
+//    testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.3")
     implementation("org.jsoup:jsoup:1.15.1")
 }

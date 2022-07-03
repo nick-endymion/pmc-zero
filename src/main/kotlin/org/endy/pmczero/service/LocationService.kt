@@ -16,19 +16,15 @@ class LocationService(private val locationRepository: LocationRepository) {
     }
 
     fun url(bessource: Bessource, location: Location): String {
-
         return location.uri + "/" + bessource.name
-//        val folder = mfile.folder ?: throw Exception()
-//        return location.uri + "/" + folder.lfolder+ "/"+folder.mpath+"/"+mfile.filename
-
     }
 
-    fun getLocationStartingWith(url: String): Location {
-        val locations = locationRepository.findLocationsByNameStartingWith(url)
-        if (locations.size != 1)
-            throw Exception()
-        return locations[0]
-    }
+//    fun getLocationStartingWith(url: String): Location {
+//        val locations = locationRepository.findLocationsByNameStartingWith(url)
+//        if (locations.size != 1)
+//            throw Exception()
+//        return locations[0]
+//    }
 
     fun getLocationStartingWith(urls: List<String>): List<Location> {
         val url = getCommonStart(urls)

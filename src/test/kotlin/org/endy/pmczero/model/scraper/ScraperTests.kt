@@ -31,9 +31,9 @@ class ScraperTests {
 
         var location = Location().also { it.name = "http://"; it.storage = Storage() }
 
-        every {
-            locationService.getLocationStartingWith(any())
-        } returns location
+//        every {
+//            locationService.getLocationStartingWith(any())
+//        } returns location
 
         every {
             downloader.getAsString(any())
