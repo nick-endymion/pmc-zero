@@ -22,8 +22,8 @@ class MfileService(
     }
 
     fun url(id: Int, type: RessType): String {
-        val mfile = findById(id)
-        val storage = mfile.folder?.storage
+//        val mfile = findById(id)
+//        val storage = mfile.folder?.storage
 //        if (storage != null) {
 //            println(storage.id)
 //            println(storage.locationsInuse)
@@ -45,7 +45,7 @@ class MfileService(
     }
 
     fun urlByMediumId(id: Int, type: RessType): String {
-        val medium = mediumById(id)
+//        val medium = mediumById(id)
 //        val mfile =  medium.mfiles.first() // Todo > filter logic by resstype
 //        val storage = mfile.folder?.storage
 //        if (storage != null) {

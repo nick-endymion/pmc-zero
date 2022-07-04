@@ -6,12 +6,10 @@ import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.service.MediaService
 import org.endy.pmczero.service.SetService
 import org.endy.pmczero.to.BsetTO
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 
-@RestController("/api/scrape")
+@RestController
+@RequestMapping("/api/scrape")
 class ScraperRessource(
     val scraper: Scraper,
     val setService: SetService,

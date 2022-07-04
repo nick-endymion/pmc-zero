@@ -15,9 +15,9 @@ class Downloader {
 
     companion object Default: Downloader()
 
-    public fun getAsString(url: String, withProxy: Boolean = false): String{
+    fun getAsString(urlString: String, withProxy: Boolean = false): String{
 
-        val url = URL(url)
+        val url = URL(urlString)
         val con: HttpURLConnection =
             if (withProxy) {
                 val proxyHost = "127.0.0.1"
@@ -34,11 +34,11 @@ class Downloader {
         return content
     }
 
-    public fun downLoadToFile(url: String, directory: String, withProxy: Boolean = false) {
+    fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean = false) {
 
-        Files.createDirectories(Paths.get(directory));
-        val filename = getFilename(url)
-        val url = URL(url)
+        Files.createDirectories(Paths.get(directory))
+        val filename = getFilename(urlString)
+        val url = URL(urlString)
         val con: HttpURLConnection =
             if (withProxy) {
                 val proxyHost = "127.0.0.1"

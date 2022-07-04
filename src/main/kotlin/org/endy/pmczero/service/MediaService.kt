@@ -20,6 +20,10 @@ class MediaService(
         return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
+    fun save(medium: Medium): Medium {
+        return mediaRepository.save(medium)
+    }
+
     fun findBesById(id: Int): Bessource {
         return bessourceRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }

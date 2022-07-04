@@ -2,10 +2,7 @@ package org.endy.pmczero.mapper
 
 import org.endy.pmczero.model.*
 import org.endy.pmczero.model.legacy.MfilesEntity
-import org.endy.pmczero.model.modern.BSet
-import org.endy.pmczero.model.modern.Bessource
-import org.endy.pmczero.model.modern.Medium
-import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.model.modern.*
 import org.endy.pmczero.to.*
 import java.sql.Date
 
@@ -39,4 +36,22 @@ fun Bessource.toTO(): BessourceTO {
         created_at = created_at,
         updated_at = updated_at,
     )
+}
+
+fun Bookmark.toTO(): BookmarkTO {
+    return BookmarkTO(
+        id = id,
+        name = name,
+        url = url,
+        mediumId = medium?.id,
+        created_at = created_at,
+        updated_at = updated_at,
+    )
+}
+
+fun BookmarkTO.toEntity(): Bookmark {
+    return Bookmark().also {
+        it.name = name
+        it.url = url
+    }
 }

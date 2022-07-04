@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service
 @Service
 class MediaCreator(val fileSystemScanner: FileSystemScanner) {
 
+    // Big todo
+
     fun av(location: Location, folder: String) {
         val path = location.withFolderPath(folder)
 //        fileSytemScanner.ls(path)
