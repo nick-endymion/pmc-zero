@@ -9,7 +9,7 @@ data class BessourceTO (
     var btype: Int? = null,
     var mediumId: Int? = null,
     var storageId: Int? = null,
-    var encrypted: Boolean = false,
+    var encrypted: Boolean? = false,
     var created_at: Date? = null,
     var updated_at: Date? = null,
 )

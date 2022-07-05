@@ -1,6 +1,7 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotFoundException
+import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Medium
@@ -28,27 +29,43 @@ class MediaService(
         return bessourceRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
-    fun url(id: Int, type: RessType): String {
+    fun url(id: Int, ressType: RessType): String {
         val medium = findById(id)
-        val rt = if (type == RessType.TN)
-            RessType.PRIMARY
-        else
-            type
+        var ressTypeFirstAttempt = ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY
 
-        val bessource = medium.bessources.first { it.btype == rt.i }
+        val url = getUrlFor(medium,
+            ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY,
+            LocationType.MAIN_HTTP.takeUnless { ressType == RessType.TN } ?: LocationType.TN_HTTP)
+
+        if (url != null) return url
+//        val bessource = medium.bessources.first { it.ressType == ressTypeFirstAttempt.i }
+//        val storage = bessource.storage
+//        val location = storage.locationInUse(if (ressType == RessType.TN) 3 else 1)
+//        if (location != null)
+//            return locationService.url(bessource, location)
+
+        return if (ressType == RessType.TN) {
+            getUrlFor(
+                medium,
+                ressType,
+                LocationType.MAIN_HTTP
+            )
+        } else {
+            null
+        } ?: throw Exception()
+//            val bessource = medium.bessources.first { ressType == RessType.TN }
+//            val storage = bessource.storage
+//            val location = storage.locationInUse(1)
+//            if (location != null)
+//                return locationService.url(bessource, location)
+    }
+
+    fun getUrlFor(medium: Medium, ressType: RessType, locationType: LocationType): String? {
+        val bessource = medium.bessources.first { it.ressType == ressType.i }
         val storage = bessource.storage
-        val location = storage.locationInUse(if (type == RessType.TN) 3 else 1)
-        if (location != null)
-            return locationService.url(bessource, location)
-
-        if (type == RessType.TN) {
-            val bessource = medium.bessources.first { type == RessType.TN }
-            val storage = bessource.storage
-            val location = storage.locationInUse(1)
-            if (location != null)
-                return locationService.url(bessource, location)
-        }
-        return "N/A"
+        val location = storage.locationInUse(locationType.i)
+        if (location == null) return null
+        return locationService.url(bessource, location)
     }
 
     fun file(id: Int, type: RessType) {

@@ -1,10 +1,7 @@
 package org.endy.pmczero.mapper
 
-import org.endy.pmczero.model.*
-import org.endy.pmczero.model.legacy.MfilesEntity
 import org.endy.pmczero.model.modern.*
 import org.endy.pmczero.to.*
-import java.sql.Date
 
 
 fun BSet.toTO(): BsetTO {
@@ -29,7 +26,7 @@ fun Bessource.toTO(): BessourceTO {
     return BessourceTO(
         id = id,
         name = name,
-        btype = btype,
+        btype = ressType,
         mediumId = medium?.id,
         storageId = storage.id,
         encrypted = encrypted,

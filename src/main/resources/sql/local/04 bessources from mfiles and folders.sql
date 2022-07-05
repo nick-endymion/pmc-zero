@@ -18,4 +18,4 @@ insert into a_bessources(id,name,storage_id, medium_id)
 select m.id, concat(f.mpath, f.lfolder, substring(filename,5,length(filename)-9)), f.storage_id, m.id
 from mfiles m, folders f where m.folder_id = f.id and m.filename like '---%';
 update a_bessources set name = substring_index(name, '?',1);
-update a_bessources set btype = 0;
+update a_bessources set ress_type = 0;

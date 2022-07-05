@@ -1,6 +1,5 @@
 package org.endy.pmczero.model.modern
 
-import org.endy.pmczero.model.RessType
 import java.sql.Date
 import javax.persistence.*
 
@@ -30,8 +29,8 @@ class Storage {
     var locations: List<Location> = mutableListOf()
 
 
-    fun locationInUse(typ: Int): Location? {
-        return locations.filter { it.inuse == 1.toByte() }.firstOrNull { it.typ == typ }
+    fun locationInUse(locationType: Int): Location? {
+        return locations.filter { it.inuse == 1.toByte() }.firstOrNull { it.locationType == locationType }
     }
 
     override fun equals(other: Any?): Boolean {

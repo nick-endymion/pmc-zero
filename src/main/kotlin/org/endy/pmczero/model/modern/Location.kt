@@ -1,10 +1,8 @@
 package org.endy.pmczero.model.modern
 
-import org.endy.pmczero.model.StoragesEntity
 import java.io.File
 import java.sql.Date
 import javax.persistence.*
-import kotlin.jvm.Transient
 
 @Entity
 @Table(name = "a.locations")
@@ -24,8 +22,12 @@ class Location {
     @Column(name = "description", nullable = true)
     var description: String? = null
 
-    @Column(name = "typ", nullable = true)
-    var typ: Int? = null
+    @Column(name = "location_typ", nullable = true)
+    var locationType: Int? = null
+    // 1  http main
+    // 2  file main
+    // 3  http tn
+    // 4 file tn
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "storage_id")
@@ -55,7 +57,7 @@ class Location {
                 "name = $name " +
                 "uri = $uri " +
                 "description = $description " +
-                "typ = $typ " +
+                "typ = $locationType " +
                 "inuse = $inuse " +
                 "createdAt = $createdAt " +
                 "updatedAt = $updatedAt " +
@@ -75,7 +77,7 @@ class Location {
         if (name != other.name) return false
         if (uri != other.uri) return false
         if (description != other.description) return false
-        if (typ != other.typ) return false
+        if (locationType != other.locationType) return false
         if (inuse != other.inuse) return false
         if (createdAt != other.createdAt) return false
         if (updatedAt != other.updatedAt) return false

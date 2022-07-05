@@ -20,7 +20,7 @@ class MediaAdder : Worker() {
         }
         val b = Bessource().also {
             it.name = scanningKontext.location.getRightPart(element)
-            it.btype = 0
+            it.ressType = 0
             it.storage = scanningKontext.location.storage
         }
         medium.bessources.add(b)

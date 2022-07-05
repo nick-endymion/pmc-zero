@@ -26,19 +26,23 @@ class Bessource {
     @Column(name = "updated_at", nullable = true )
     var updated_at: Date? = null
 
-    @Column(name = "btype", nullable = true)
-    var btype: Int? = null
-     // 0 > primary
-     // 1 > pic presentation
-     // 2 > tn presentation
+    @Column(name = "ress_type", nullable = true)
+    var ressType: Int? = null
+// RessType:
+//     PRIMARY(0),
+//     TN(1),
+//     PIC(2),
+//     URL(3),
+//     FOLDER(4)
 
-//    @Column(name = "storage_id", nullable = true)
+    //    @Column(name = "storage_id", nullable = true)
 //    var storageId: Int? = null
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "storage_id", nullable = true)
     lateinit var storage: Storage
 
-    var encrypted: Boolean = false
+    @Column(name = "encrypted", nullable = true)
+    var encrypted: Boolean? = false
 
 }
 
