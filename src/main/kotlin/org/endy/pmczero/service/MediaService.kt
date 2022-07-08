@@ -38,26 +38,15 @@ class MediaService(
             LocationType.MAIN_HTTP.takeUnless { ressType == RessType.TN } ?: LocationType.TN_HTTP)
 
         if (url != null) return url
-//        val bessource = medium.bessources.first { it.ressType == ressTypeFirstAttempt.i }
-//        val storage = bessource.storage
-//        val location = storage.locationInUse(if (ressType == RessType.TN) 3 else 1)
-//        if (location != null)
-//            return locationService.url(bessource, location)
 
-        return if (ressType == RessType.TN) {
-            getUrlFor(
-                medium,
-                ressType,
-                LocationType.MAIN_HTTP
-            )
-        } else {
-            null
-        } ?: throw Exception()
-//            val bessource = medium.bessources.first { ressType == RessType.TN }
-//            val storage = bessource.storage
-//            val location = storage.locationInUse(1)
-//            if (location != null)
-//                return locationService.url(bessource, location)
+        if (ressType != RessType.TN) {
+            throw Exception()
+        }
+        return getUrlFor(
+            medium,
+            ressType,
+            LocationType.MAIN_HTTP
+        ) ?: throw Exception()
     }
 
     fun getUrlFor(medium: Medium, ressType: RessType, locationType: LocationType): String? {

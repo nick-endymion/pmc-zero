@@ -32,6 +32,20 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
         return sc
     }
 
+    fun changeToRealLocation(sc: ScanningKontext, location: Location) {
+        check(location.id != null)
+        check(sc.location.name == "")
+        check(sc.location.id == null)
+        check(sc.set != null)
+
+        for (media in sc.set!!.media) {
+            for (b in media.bessources) {
+                b.name = location.getRightPart(b.name!!)
+                b.storage = location.storage
+            }
+        }
+    }
+
     fun getNewScanningContext(location: Location): ScanningKontext {
         return ScanningKontext(location, BSet(), arrayListOf(), downloader)
     }
