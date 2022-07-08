@@ -1,6 +1,7 @@
 package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
+import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bookmark
 import org.endy.pmczero.service.BookmarkService
@@ -17,19 +18,19 @@ class BookmarkRessource(
 ) {
 
     @GetMapping("/{id}")
-    fun getBookmark(@PathVariable id: Int): Bookmark {
-        return bookmarkService.findById(id)
+    fun getBookmark(@PathVariable id: Int): BookmarkTO {
+        return bookmarkService.findById(id).toTO()
     }
 
     @PostMapping("/")
-    fun createBookmark(@RequestBody bookmarkTO: BookmarkTO): Bookmark {
+    fun createBookmark(@RequestBody bookmarkTO: BookmarkTO): BookmarkTO {
         if (bookmarkTO.id != null) throw Exception()
-        return bookmarkService.save(bookmarkTO.toEntity())
+        return bookmarkService.save(bookmarkTO.toEntity()).toTO()
     }
 
     @PutMapping("/{id}")
-    fun saveBookmark(@PathVariable id: Int, @RequestBody bookmarkTO: BookmarkTO): Bookmark {
+    fun saveBookmark(@PathVariable id: Int, @RequestBody bookmarkTO: BookmarkTO): BookmarkTO {
         if (id != bookmarkTO.id) throw Exception()
-        return bookmarkService.save(bookmarkTO.toEntity())
+        return bookmarkService.save(bookmarkTO.toEntity()).toTO()
     }
 }

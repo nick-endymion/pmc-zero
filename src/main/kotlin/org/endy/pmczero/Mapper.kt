@@ -48,6 +48,7 @@ fun Bookmark.toTO(): BookmarkTO {
 
 fun BookmarkTO.toEntity(): Bookmark {
     return Bookmark().also {
+        it.id = id
         it.name = name
         it.url = url
     }
