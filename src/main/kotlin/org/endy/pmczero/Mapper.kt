@@ -1,5 +1,6 @@
 package org.endy.pmczero.mapper
 
+import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.modern.*
 import org.endy.pmczero.to.*
 
@@ -51,5 +52,11 @@ fun BookmarkTO.toEntity(): Bookmark {
         it.id = id
         it.name = name
         it.url = url
+        if (mediumId != null)
+            it.medium = Medium().also { it.id = mediumId; it.name = name; it.mtype = Mtype.BOOKMARK.i }
+        println("mediumId "+mediumId)
+        println("name "+name)
+        println("url "+url)
+        println("id "+id)
     }
 }

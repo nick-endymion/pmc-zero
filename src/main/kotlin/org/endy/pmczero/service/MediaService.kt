@@ -25,6 +25,12 @@ class MediaService(
         return mediaRepository.save(medium)
     }
 
+    fun delete(id: Int) {
+        mediaRepository.delete(findById(id))
+    }
+
+//    -------------
+
     fun findBesById(id: Int): Bessource {
         return bessourceRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }

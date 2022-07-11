@@ -9,6 +9,6 @@ import org.springframework.data.repository.CrudRepository
 
 interface BookmarkRepository : CrudRepository<Bookmark, Int> {
 
-
+  fun findAllByNameContaining(searchTerm: String) : List<Bookmark>
 }
 

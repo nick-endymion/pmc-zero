@@ -20,20 +20,27 @@ class Medium {
     @Column(name = "name", nullable = true)
     var name: String? = null
 
-    @Column(name = "created_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP" )
+    @Column(name = "created_at", nullable = true, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     var created_at: Date? = null
 
-    @Column(name = "updated_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" )
+    @Column(
+        name = "updated_at",
+        nullable = true,
+        columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
+    )
     var updated_at: Date? = null
 
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
-    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
-    var bessources: MutableList<Bessource> =  mutableListOf()
+    @OneToMany(mappedBy = "medium", fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
+    var bessources: MutableList<Bessource> = mutableListOf()
 
-    @OneToMany(mappedBy = "medium",fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
-    var bookmarks: MutableList<Bookmark> =  mutableListOf()
+    @OneToMany(
+        mappedBy = "medium", fetch = FetchType.LAZY,
+//       cascade = [CascadeType.PERSIST]
+    )
+    var bookmarks: MutableList<Bookmark> = mutableListOf()
 
 }
 

@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*
 import java.awt.print.Book
 
 @RestController
-@RequestMapping("/api/bookmark")
+@RequestMapping("/api/bookmarks")
 class BookmarkRessource(
     val bookmarkService: BookmarkService
 ) {
@@ -20,6 +20,11 @@ class BookmarkRessource(
     @GetMapping("/{id}")
     fun getBookmark(@PathVariable id: Int): BookmarkTO {
         return bookmarkService.findById(id).toTO()
+    }
+
+    @GetMapping("/")
+    fun getBookmarks(@RequestParam searchTerm: String): List<BookmarkTO> {
+        return bookmarkService.search(searchTerm).map { it.toTO() }
     }
 
     @PostMapping("/")
@@ -33,4 +38,10 @@ class BookmarkRessource(
         if (id != bookmarkTO.id) throw Exception()
         return bookmarkService.save(bookmarkTO.toEntity()).toTO()
     }
+
+    @DeleteMapping("/{id}")
+    fun deleteBookmark(@PathVariable id: Int) {
+        return bookmarkService.delete(id)
+    }
+
 }

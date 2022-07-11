@@ -34,8 +34,11 @@ class Bookmark {
     )
     var updated_at: Date? = null
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medium_id", nullable = true)
+    @ManyToOne(
+        fetch = FetchType.LAZY,
+//        cascade = [CascadeType.PERSIST]
+    )
+    @JoinColumn(name = "medium_id", nullable = true,  updatable = false)
     var medium: Medium? = null
 
 }
