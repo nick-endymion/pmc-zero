@@ -36,7 +36,10 @@ class BookmarkRessource(
     @PutMapping("/{id}")
     fun saveBookmark(@PathVariable id: Int, @RequestBody bookmarkTO: BookmarkTO): BookmarkTO {
         if (id != bookmarkTO.id) throw Exception()
-        return bookmarkService.save(bookmarkTO.toEntity()).toTO()
+        bookmarkService.save(bookmarkTO.toEntity())
+
+        return bookmarkService.findById(id).toTO()
+//        return bookmarkService.save(bookmarkTO.toEntity()).toTO()
     }
 
     @DeleteMapping("/{id}")

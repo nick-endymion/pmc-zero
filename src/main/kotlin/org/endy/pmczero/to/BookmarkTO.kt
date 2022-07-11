@@ -8,8 +8,8 @@ data class BookmarkTO(
     var id: Int? = null,
     var name: String? = null,
     var url: String? = null,
-    var created_at: Date? = null,
-    var updated_at: Date? = null,
+    var created_at: java.util.Date? = null,
+    var updated_at: java.util.Date? = null,
     val mediumId: Int? = null
 )
 

@@ -24,7 +24,7 @@ class Bookmark {
         updatable = false, insertable = false,
         columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP"
     )
-    var created_at: Date? = null
+    var created_at: java.util.Date? = null
 
     @Column(
         name = "updated_at",
@@ -32,7 +32,7 @@ class Bookmark {
         updatable = false, insertable = false,
         columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
     )
-    var updated_at: Date? = null
+    var updated_at: java.util.Date? = null
 
     @ManyToOne(
         fetch = FetchType.LAZY,
