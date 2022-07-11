@@ -8,6 +8,8 @@ import org.endy.pmczero.repository.SetRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.endy.pmczero.model.modern.BSet
+import org.endy.pmczero.model.modern.Bookmark
+import org.springframework.transaction.annotation.Transactional
 
 @Service
 class SetService(
@@ -20,8 +22,19 @@ class SetService(
         return setRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
+    fun search(searchTerm: String): List<BSet> {
+        return setRepository.findAllByNameContaining(searchTerm)
+    }
+
+
     fun save(bset: BSet): BSet {
         return setRepository.save(bset)
+    }
+
+    @Transactional
+    fun delete(id: Int) {
+        setRepository.delete(findById(id))
+        // TODO > what about media an their ressources ? This wont work
     }
 
     fun htmlImagePage(id: Int, rtype: RessType): String {

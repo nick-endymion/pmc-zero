@@ -27,7 +27,6 @@ class BookmarkService(
 
     fun search(searchTerm: String): List<Bookmark> {
         return bookmarkRepository.findAllByNameContaining(searchTerm)
-//        return bookmarkRepository.findAll().toList()
     }
 
     @Transactional

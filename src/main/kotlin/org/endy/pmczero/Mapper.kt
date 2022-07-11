@@ -13,6 +13,14 @@ fun BSet.toTO(): BsetTO {
         updated_at = updated_at,
         media = media.map { it.toTO() })
 }
+fun BsetTO.toEntity(): BSet {
+    return BSet().also {
+        it.id = id
+        it.name = name
+    }
+}
+
+
 
 fun Medium.toTO(): MediumTO {
     return MediumTO(
