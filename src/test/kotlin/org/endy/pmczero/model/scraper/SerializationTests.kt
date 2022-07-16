@@ -3,6 +3,7 @@ package org.endy.pmczero.model.scraper
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.modules.*
 import org.junit.jupiter.api.Test
 
 class SerializationTests {
@@ -30,7 +31,7 @@ class SerializationTests {
         val scanner = Scanner(
             SimpleParser("(.*fa.*)"),
             StructuredWorker(
-               true,
+                true,
                 listOf(
                     Scanner(DomParser("(.*)", "", ""), SetCreator()),
                     Scanner(
@@ -55,12 +56,12 @@ class SerializationTests {
             StructuredWorker(
                 true,
                 listOf(
-                    Scanner(DomParser("(.*)", "", ""), SetCreator()),
                     Scanner(
-                        DomParser("(.*)", "", ""), MediaAdder()
-                    )
+                        DomParser("(.*)", "", ""), MediaAdder() as Worker
+                    ),
+                    Scanner(DomParser("(.*)", "", ""), SetCreator()),
 
-                )
+                    )
             )
 
         var scannerSerialized = Json.encodeToString(scanner)
@@ -71,5 +72,33 @@ class SerializationTests {
 //        println(Json.encodeToString(scannerSerialized))
     }
 
+    @Test
+    fun `serialization and deserializtion work 4`() {
+
+        val obj =
+            Scanner(DomParser("(.*)", "", ""), SetCreator() )
+
+        //            DomParser("(.*)", "", "")
+//        SetCreator()
+
+        val module = SerializersModule {
+            polymorphic(HtmlParser::class) {
+                subclass(DomParser::class)
+            }
+            polymorphic(Worker::class) {
+                subclass(SetCreator::class)
+            }
+
+        }
+        val format = Json { serializersModule = module
+            prettyPrint = true }
+
+        var scannerSerialized = format.encodeToString(obj)
+        println(Json.encodeToString(scannerSerialized))
+
+        val scannerDesialized = format.decodeFromString<Scanner>(scannerSerialized)
+        scannerSerialized = format.encodeToString(scannerDesialized)
+        println(format.encodeToString(scannerSerialized))
+    }
 
 }

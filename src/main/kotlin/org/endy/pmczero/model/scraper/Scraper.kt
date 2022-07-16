@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service
 class Scraper(val locationService: LocationService, val downloader: Downloader) {
 
     lateinit var scanner: Scanner
+    lateinit var scanners: List<Scanner>
 
     init {
         // Scannergroup
@@ -55,6 +56,10 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
         return locationService.getLocationStartingWith(aaa)
     }
 
+
+//    fun findScanner(text: String) : List<Scanner> {
+//    }
+
     fun serialize() {
         println(Json.encodeToString(scanner))
 
@@ -62,6 +67,8 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
 
     fun loadScanners() {
 
+        // load all from DB
+         // todo
         scanner = Scanner(
             SimpleParser("(.*fa.*)"),
             StructuredWorker(

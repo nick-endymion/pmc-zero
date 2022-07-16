@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import org.endy.pmczero.model.ScanningKontext
 
 @Serializable
-@SerialName("Scanner")
+//@SerialName("Scanner")
 class Scanner(
     var htmlParser: HtmlParser,
     val worker: Worker
