@@ -4,8 +4,8 @@ import java.sql.Date
 import javax.persistence.*
 
 @Entity
-@Table(name = "a.scanner-serialization")
-class ScannerSerialization {
+@Table(name = "a.serialized.scanner")
+class SerializedScanner {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -20,8 +20,8 @@ class ScannerSerialization {
     @Column(name = "example", nullable = true)
     var example: String? = null
 
-    @Column(name = "serializtion", nullable = true)
-    var serializtion: String? = null
+    @Column(name = "serialization", nullable = true)
+    var serialization: String? = null
 
 }
 

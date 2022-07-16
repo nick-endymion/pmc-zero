@@ -88,7 +88,6 @@ class SerializationTests {
             polymorphic(Worker::class) {
                 subclass(SetCreator::class)
             }
-
         }
         val format = Json { serializersModule = module
             prettyPrint = true }

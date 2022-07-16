@@ -10,8 +10,10 @@ fun Mset.toTO(): MsetTO {
         id = id,
         name = name,
         created_at = created_at,
-        updated_at = updated_at)
+        updated_at = updated_at
+    )
 }
+
 fun Mset.toTOwithMedia(): MsetTO {
     return MsetTO(
         id = id,
@@ -20,13 +22,13 @@ fun Mset.toTOwithMedia(): MsetTO {
         updated_at = updated_at,
         media = media.map { it.toTO() })
 }
+
 fun MsetTO.toEntity(): Mset {
     return Mset().also {
         it.id = id
         it.name = name
     }
 }
-
 
 
 fun Medium.toTO(): MediumTO {
@@ -37,7 +39,7 @@ fun Medium.toTO(): MediumTO {
         updated_at = updated_at,
         bessources = arrayListOf(),
 //        bessources = bessources.map { it.toTO() }
-        )
+    )
 }
 
 fun Bessource.toTO(): BessourceTO {
@@ -71,9 +73,30 @@ fun BookmarkTO.toEntity(): Bookmark {
         it.url = url
         if (mediumId != null)
             it.medium = Medium().also { it.id = mediumId; it.name = name; it.mtype = Mtype.BOOKMARK.i }
-        println("mediumId "+mediumId)
-        println("name "+name)
-        println("url "+url)
-        println("id "+id)
+        println("mediumId " + mediumId)
+        println("name " + name)
+        println("url " + url)
+        println("id " + id)
     }
 }
+
+fun SerializedScannerTO.toEntity(): SerializedScanner {
+    return SerializedScanner().also {
+        it.id = id
+        it.name = name
+        it.example = example
+        it.regex = regex
+        it.serialization = serialization
+    }
+}
+fun SerializedScanner.toTO(): SerializedScannerTO {
+    return SerializedScannerTO(
+        id = id,
+        name = name,
+        regex = regex,
+        example = example,
+        serialization = serialization
+    )
+}
+
+
