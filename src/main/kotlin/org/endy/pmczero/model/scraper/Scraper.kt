@@ -4,7 +4,7 @@ import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
 import org.endy.pmczero.model.ScanningKontext
-import org.endy.pmczero.model.modern.BSet
+import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.service.Downloader
@@ -47,7 +47,7 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
     }
 
     fun getNewScanningContext(location: Location): ScanningKontext {
-        return ScanningKontext(location, BSet(), arrayListOf(), downloader)
+        return ScanningKontext(location, Mset(), arrayListOf(), downloader)
     }
 
     fun findPossibleLocations(sc: ScanningKontext): List<Location> {

@@ -1,9 +1,9 @@
 package org.endy.pmczero.model.scraper
 
-import org.endy.pmczero.model.modern.BSet
+import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Medium
-import org.endy.pmczero.service.SetService
+import org.endy.pmczero.service.MsetService
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -17,13 +17,13 @@ class persistenceIntegrationTest {
 
 
     @Autowired
-    lateinit var setService: SetService
+    lateinit var msetService: MsetService
 
     @Test
     fun test1() {
 
-        val set = BSet().also {it.name = "test name"}
-        setService.save(bset = set)
+        val set = Mset().also {it.name = "test name"}
+        msetService.save(bset = set)
         println(set.id)
         println(set.created_at)
 
@@ -32,13 +32,13 @@ class persistenceIntegrationTest {
     @Test
     fun test2() {
 
-        val set = BSet().also {it.name = "test name"}
+        val set = Mset().also {it.name = "test name"}
         val medium = Medium().also {it.name = "test medium"}
         set.media = mutableListOf(medium)
         val bessource1 = Bessource().also {it.name = "test bessource 1"}
         val bessource2 = Bessource().also {it.name = "test bessource 2"}
         medium.bessources = mutableListOf(bessource1, bessource2)
-        setService.save(bset = set)
+        msetService.save(bset = set)
         println(set.id)
         println(set.name)
         println(medium.id)

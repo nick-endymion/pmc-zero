@@ -4,37 +4,58 @@ import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.repository.MediaRepository
-import org.endy.pmczero.repository.SetRepository
+import org.endy.pmczero.repository.MsetRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
-import org.endy.pmczero.model.modern.BSet
-import org.endy.pmczero.model.modern.Bookmark
+import org.endy.pmczero.model.modern.Mset
+import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.transaction.annotation.Transactional
 
 @Service
-class SetService(
+class MsetService(
     private val mediaRepository: MediaRepository,
-    private val setRepository: SetRepository,
+    private val msetRepository: MsetRepository,
     private val mediaService: MediaService
 ) {
 
-    fun findById(id: Int): BSet {
-        return setRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    fun findById(id: Int, withMedia: Boolean = false): Mset {
+        if (withMedia)
+            return msetRepository.findByIdOrNullWithMedia(id) ?: throw NotFoundException()
+        else
+            return msetRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
-    fun search(searchTerm: String): List<BSet> {
-        return setRepository.findAllByNameContaining(searchTerm)
+    fun search(searchTerm: String): List<Mset> {
+        return msetRepository.findAllByNameContaining(searchTerm)
     }
 
 
-    fun save(bset: BSet): BSet {
-        return setRepository.save(bset)
+    fun save(bset: Mset): Mset {
+        return msetRepository.save(bset)
     }
 
     @Transactional
     fun delete(id: Int) {
-        setRepository.delete(findById(id))
+        msetRepository.delete(findById(id))
         // TODO > what about media an their ressources ? This wont work
+    }
+
+    fun ressourcesInUse(id: Int): List<RessourceUrlsTO> {
+        val media = findById(id).media
+        val mips: MutableList<RessourceUrlsTO> = mutableListOf()
+        for (medium in media) {
+            try {  // important, since there are migrated media of type (legacy) folder, which have no ressources
+                mips.add(
+                    RessourceUrlsTO(
+                        medium.id, medium.name,
+                        mediaService.url(medium, RessType.PRIMARY),
+                        mediaService.url(medium, RessType.TN)
+                    ))
+            } catch (e: Exception) {
+                println("no ressource found for medium: " + id)
+            }
+        }
+        return mips
     }
 
     fun htmlImagePage(id: Int, rtype: RessType): String {
@@ -42,8 +63,13 @@ class SetService(
 
         var html = "<html><body>"
         for (medium in media) {
-            val url = mediaService.url(medium.id!!, rtype)
-            html += "<img src=\"" + url + "\">"
+            try {  // important, since there are migrated media of type (legacy) folder, which have no ressources
+                val url = mediaService.url(medium, rtype)
+                val urlPrimary = mediaService.url(medium, RessType.PRIMARY)
+                html += "<a href=\"" + urlPrimary + "\">   <img src=\"" + url + "\"></a>"
+            } catch (e: Exception) {
+                println("no ressource found for medium: " + id)
+            }
         }
         return html + "</body></html>"
 

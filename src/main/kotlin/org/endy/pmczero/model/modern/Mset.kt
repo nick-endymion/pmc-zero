@@ -5,7 +5,7 @@ import javax.persistence.*
 
 @Entity
 @Table(name = "a.sets")
-class BSet {
+class Mset {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -23,7 +23,7 @@ class BSet {
     @Column(name = "updated_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" )
     var updated_at: Date? = null
 
-    @OneToMany(mappedBy = "BSet",fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
+    @OneToMany(mappedBy = "Mset",fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
     var media: MutableList<Medium> =  mutableListOf()
 
 }

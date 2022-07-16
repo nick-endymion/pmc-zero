@@ -13,7 +13,7 @@ class Medium {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "set_id", nullable = true)
-    val BSet: BSet? = null
+    val Mset: Mset? = null
 //    @Column(name = "set_id", nullable = true)
 //    var setId: Int? = null
 

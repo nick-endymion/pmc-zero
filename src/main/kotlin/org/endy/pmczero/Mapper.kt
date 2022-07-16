@@ -5,16 +5,23 @@ import org.endy.pmczero.model.modern.*
 import org.endy.pmczero.to.*
 
 
-fun BSet.toTO(): BsetTO {
-    return BsetTO(
+fun Mset.toTO(): MsetTO {
+    return MsetTO(
+        id = id,
+        name = name,
+        created_at = created_at,
+        updated_at = updated_at)
+}
+fun Mset.toTOwithMedia(): MsetTO {
+    return MsetTO(
         id = id,
         name = name,
         created_at = created_at,
         updated_at = updated_at,
         media = media.map { it.toTO() })
 }
-fun BsetTO.toEntity(): BSet {
-    return BSet().also {
+fun MsetTO.toEntity(): Mset {
+    return Mset().also {
         it.id = id
         it.name = name
     }
@@ -28,7 +35,9 @@ fun Medium.toTO(): MediumTO {
         name = name,
         created_at = created_at,
         updated_at = updated_at,
-        bessources = bessources.map { it.toTO() })
+        bessources = arrayListOf(),
+//        bessources = bessources.map { it.toTO() }
+        )
 }
 
 fun Bessource.toTO(): BessourceTO {

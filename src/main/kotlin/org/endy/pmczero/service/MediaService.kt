@@ -35,8 +35,14 @@ class MediaService(
         return bessourceRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
+
     fun url(id: Int, ressType: RessType): String {
         val medium = findById(id)
+        return url(medium, ressType)
+    }
+
+    fun url(medium: Medium, ressType: RessType): String {
+
         var ressTypeFirstAttempt = ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY
 
         val url = getUrlFor(medium,
