@@ -15,20 +15,18 @@ import org.endy.pmczero.model.scraper.HtmlParser
 import org.endy.pmczero.model.scraper.Scanner
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.Worker
+import org.endy.pmczero.repository.SerializedScannerRepository
+import org.springframework.data.repository.findByIdOrNull
 
 @Service
 class SerializedScannerService(
-    private val mediaRepository: MediaRepository,
-    private val msetRepository: MsetRepository,
-    private val mediaService: MediaService
+    private val serializedScannerRepository: SerializedScannerRepository
 ) {
 
-    fun deserialize(serializedScanner: SerializedScanner) : SerializedScanner{
-        println(serializedScanner.serialization)
+    lateinit var format: Json
+//        {"htmlParser": {"type": "Domparser","regex": "(.*)","tag": "","attribute":""},"worker":{"type":"setCreator"}}
 
-//        val obj =
-//            Scanner(DomParser("(.*)", "", ""), SetCreator())
-
+    init {
         val module = SerializersModule {
             polymorphic(HtmlParser::class) {
                 subclass(DomParser::class)
@@ -37,23 +35,31 @@ class SerializedScannerService(
                 subclass(SetCreator::class)
             }
         }
-        val format = Json {
+        format = Json {
             serializersModule = module
             prettyPrint = true
         }
+    }
 
-
-//        val x = "{\"htmlParser\": {\"type\": \"Domparser\",\"regex\": \"(.*)\",\"tag\": \"\",\"attribute\":\"\"},\"worker\":{\"type\":\"setCreator\"}}\n"
-////        val x =
-////            "\"{\\\"htmlParser\\\":{\\\"type\\\":\\\"Domparser\\\",\\\"regex\\\":\\\"(.*)\\\",\\\"tag\\\":\\\"\\\",\\\"attribute\\\":\\\"\\\"},\\\"worker\\\":{\\\"type\\\":\\\"setCreator\\\"}}\""
-//        println(x)
-//        val scannerDesialized = format.decodeFromString<Scanner>(x)
-        val scannerDesialized = format.decodeFromString<Scanner>(serializedScanner.serialization!!)
-
-        serializedScanner.serialization = format.encodeToString(scannerDesialized)
+    fun deserialize(serializedScanner: SerializedScanner): SerializedScanner {
+        println(serializedScanner.serialization)
+        val scanner = deserialize(serializedScanner.serialization!!)
+        serializedScanner.serialization = serialize(scanner)
         println(serializedScanner.serialization)
         return serializedScanner
+    }
 
+    fun getScanner(id: Int): Scanner {
+        val serializedScanner = serializedScannerRepository.findByIdOrNull(id) ?: throw Exception()
+        return deserialize(serializedScanner.serialization!!)
+    }
+
+    fun deserialize(serialization: String): Scanner {
+        return format.decodeFromString<Scanner>(serialization)
+    }
+
+    fun serialize(scanner: Scanner): String {
+        return format.encodeToString(scanner)
     }
 
 }
