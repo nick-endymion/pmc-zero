@@ -87,6 +87,7 @@ fun SerializedScannerTO.toEntity(): SerializedScanner {
         it.example = example
         it.regex = regex
         it.serialization = serialization
+        it.valid = valid
     }
 }
 fun SerializedScanner.toTO(): SerializedScannerTO {
@@ -95,7 +96,8 @@ fun SerializedScanner.toTO(): SerializedScannerTO {
         name = name,
         regex = regex,
         example = example,
-        serialization = serialization
+        serialization = serialization,
+        valid = valid
     )
 }
 

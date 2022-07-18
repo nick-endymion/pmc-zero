@@ -20,8 +20,15 @@ class SerializedScanner {
     @Column(name = "example", nullable = true)
     var example: String? = null
 
-    @Column(name = "serialization", nullable = true)
+    @Column(
+        name = "serialization",
+        columnDefinition = "TEXT",
+        nullable = true
+    )
     var serialization: String? = null
+
+    @Column(name = "valid", nullable = true)
+    var valid: Boolean = false
 
 }
 
