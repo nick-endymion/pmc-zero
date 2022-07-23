@@ -18,8 +18,14 @@ class BookmarkRessource(
     }
 
     @GetMapping("/")
-    fun getBookmarks(@RequestParam searchTerm: String): List<BookmarkTO> {
-        return bookmarkService.search(searchTerm).map { it.toTO() }
+    fun getBookmarks(@RequestParam searchTerm: String?, @RequestParam url: String?): List<BookmarkTO> {
+        if (searchTerm != null) {
+            return bookmarkService.search(searchTerm).map { it.toTO() }
+        }
+        if (url != null) {
+            return bookmarkService.searchByUrl(url).map { it.toTO() }
+        }
+        throw Exception()
     }
 
     @PostMapping("/")

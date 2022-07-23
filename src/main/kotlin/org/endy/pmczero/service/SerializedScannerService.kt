@@ -9,11 +9,8 @@ import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.modern.ScannerShort
 import org.endy.pmczero.model.modern.SerializedScanner
-import org.endy.pmczero.model.scraper.DomParser
-import org.endy.pmczero.model.scraper.HtmlParser
-import org.endy.pmczero.model.scraper.Scanner
+import org.endy.pmczero.model.scraper.*
 import org.endy.pmczero.model.scraper.SetCreator
-import org.endy.pmczero.model.scraper.Worker
 import org.endy.pmczero.repository.SerializedScannerRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
@@ -29,8 +26,14 @@ class SerializedScannerService(
 
     init {
         val module = SerializersModule {
-            polymorphic(HtmlParser::class) {
+            polymorphic(Parser::class) {
                 subclass(DomParser::class)
+            }
+            polymorphic(Parser::class) {
+                subclass(PassThroughParser::class)
+            }
+            polymorphic(Parser::class) {
+                subclass(RegexParser::class)
             }
             polymorphic(Worker::class) {
                 subclass(SetCreator::class)

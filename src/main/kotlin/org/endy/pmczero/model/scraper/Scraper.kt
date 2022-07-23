@@ -70,7 +70,7 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
         // load all from DB
          // todo
         scanner = Scanner(
-            SimpleParser("(.*fa.*)"),
+            RegexParser("(.*fa.*)"),
             StructuredWorker(
                 true,
                 listOf(

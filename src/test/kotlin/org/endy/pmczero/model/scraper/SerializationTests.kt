@@ -29,7 +29,7 @@ class SerializationTests {
     fun `serialization and deserializtion work 2`() {
 
         val scanner = Scanner(
-            SimpleParser("(.*fa.*)"),
+            RegexParser("(.*fa.*)"),
             StructuredWorker(
                 true,
                 listOf(
@@ -82,7 +82,7 @@ class SerializationTests {
 //        SetCreator()
 
         val module = SerializersModule {
-            polymorphic(HtmlParser::class) {
+            polymorphic(Parser::class) {
                 subclass(DomParser::class)
             }
             polymorphic(Worker::class) {

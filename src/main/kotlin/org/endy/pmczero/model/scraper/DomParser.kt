@@ -6,8 +6,8 @@ import org.jsoup.Jsoup
 import org.jsoup.select.Elements
 
 @Serializable
-@SerialName("Domparser")
-class DomParser(val regex: String, val tag: String, val attribute: String) : HtmlParser() {
+@SerialName("dom")
+class DomParser(val regex: String, val tag: String, val attribute: String) : Parser() {
 
     override fun getElements(text: String, baseUri: String): List<String> { //TODO via Jsoup
 

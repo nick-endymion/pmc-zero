@@ -3,10 +3,7 @@ package org.endy.pmczero.model.scraper
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
-import io.mockk.mockkClass
-import io.mockk.spyk
 import org.endy.pmczero.model.modern.Location
-import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.service.Downloader
@@ -14,7 +11,6 @@ import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.getBaseUrl
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.anyString
 import kotlin.test.assertEquals
 
 class ScraperTests {
@@ -79,7 +75,7 @@ class ScraperTests {
     fun setScanner(scraper: Scraper) {
 
         scraper.scanner = Scanner(
-            SimpleParser("(.*fa.*)"),
+            RegexParser("(.*fa.*)"),
             StructuredWorker(
                 true,
                 listOf(

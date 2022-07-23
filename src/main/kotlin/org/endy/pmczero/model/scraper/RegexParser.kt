@@ -4,8 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-@SerialName("SimpleParser")
-class SimpleParser(val regex: String) : HtmlParser() {
+@SerialName("regex")
+class RegexParser(val regex: String) : Parser() {
 
     override fun getElements(text: String, baseUri: String): List<String> {
         val result = regex.toRegex().findAll(text)

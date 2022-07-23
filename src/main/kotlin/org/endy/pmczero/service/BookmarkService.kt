@@ -28,6 +28,10 @@ class BookmarkService(
     fun search(searchTerm: String): List<Bookmark> {
         return bookmarkRepository.findAllByNameContaining(searchTerm)
     }
+    fun searchByUrl(url: String): List<Bookmark> {
+        return bookmarkRepository.findAllByUrlEquals(url)
+    }
+
 
     @Transactional
     fun delete(id: Int) {
