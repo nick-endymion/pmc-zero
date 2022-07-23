@@ -51,6 +51,9 @@ class Location {
     @Column(name = "origin", nullable = true)
     var origin: Byte? = null
 
+    @Column(name = "filetype", nullable = true)
+    var extension: String? = null
+
     override fun toString(): String =
         "Entity of type: ${javaClass.name} ( " +
                 "id = $id " +

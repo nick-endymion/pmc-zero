@@ -10,12 +10,15 @@ import org.springframework.stereotype.Service
 @Service
 class LocationService(private val locationRepository: LocationRepository) {
 
+    val extension = ".jpg"
     fun findById(id: Int): Location {
         return locationRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
     fun url(bessource: Bessource, location: Location): String {
-        return location.uri + "/" + bessource.name
+        return location.uri + "/" +
+                (bessource.name.takeIf { location.extension == null }
+                    ?: bessource.name!!.replaceFirst("[.][^.]+$".toRegex(), "") + extension)
     }
 
 //    fun getLocationStartingWith(url: String): Location {

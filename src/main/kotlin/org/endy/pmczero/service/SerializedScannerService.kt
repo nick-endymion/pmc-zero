@@ -47,6 +47,12 @@ class SerializedScannerService(
         return serializedScannerRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
+    fun findByUrl(url: String): List<ScannerShort> {
+        scannerShorts = serializedScannerRepository.findAllByValid(true) //todo
+        return scannerShorts.filter { it.getRegex().toRegex().matches(url) }
+    }
+
+
 //    fun search(searchTerm: String): List<Mset> {
 //        return msetRepository.findAllByNameContaining(searchTerm)
 //    }

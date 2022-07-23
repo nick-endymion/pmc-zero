@@ -101,4 +101,11 @@ fun SerializedScanner.toTO(): SerializedScannerTO {
     )
 }
 
+fun ScannerShort.toTO(): ScannerShortTO {
+    return ScannerShortTO(
+        id = getId(),
+        name = getName(),
+        regex = getRegex()
+    )
+}
 

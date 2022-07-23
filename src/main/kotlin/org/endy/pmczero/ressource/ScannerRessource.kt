@@ -3,6 +3,7 @@ package org.endy.pmczero.ressource
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.service.SerializedScannerService
+import org.endy.pmczero.to.ScannerShortTO
 import org.endy.pmczero.to.SerializedScannerTO
 import org.springframework.web.bind.annotation.*
 
@@ -39,4 +40,11 @@ class ScannerRessource(
 //        if (serializedScannerTO.id != null) throw Exception()
         return serializedScannerService.deserialize(serializedScanner.toEntity()).toTO()
     }
+
+    @GetMapping("/")
+    fun getserializedScanner(@RequestParam searchTerm: String, @RequestParam id: Int?): List<ScannerShortTO> {
+        return serializedScannerService.findByUrl(searchTerm).map { it.toTO() }
+    }
+
+
 }

@@ -43,7 +43,7 @@ class MediaService(
 
     fun url(medium: Medium, ressType: RessType): String {
 
-        var ressTypeFirstAttempt = ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY
+//        var ressTypeFirstAttempt = ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY
 
         val url = getUrlFor(medium,
             ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY,
