@@ -11,7 +11,7 @@ import org.endy.pmczero.model.modern.Mset
 
     override fun applya(element: String, scanningKontext: ScanningKontext) {
         var bset = Mset().also { it.name = element }
-        scanningKontext.set = bset
+        scanningKontext.mset = bset
     }
 
 }

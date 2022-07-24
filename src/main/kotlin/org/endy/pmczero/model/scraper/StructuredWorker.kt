@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 import org.endy.pmczero.model.ScanningKontext
 
 @Serializable
-@SerialName("StructuredWorker")
+@SerialName("structured")
 class StructuredWorker(
     val download: Boolean,
     val scanners: List<Scanner>
@@ -16,6 +16,7 @@ class StructuredWorker(
         var baseUri = ""
         val text = if (download) {
             baseUri = getBusUri(element)
+            println(baseUri)
             scanningKontext.downloader.getAsString(element)
         } else element
         for (scanner in scanners)

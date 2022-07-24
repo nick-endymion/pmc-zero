@@ -42,16 +42,16 @@ class ScraperTests {
 
         var scraper = Scraper(locationService, downloader)
 
-        setScanner(scraper)
+        val scanner: Scanner = setScanner()
 
-        var sc = scraper.scan("http://testfatest.com")
+        var sc = scraper.scan(scanner,"http://testfatest.com")
 
-        assertEquals("Der Titel", sc.set?.name)
-        val media = sc.set?.media
+        assertEquals("Der Titel", sc.mset?.name)
+        val media = sc.mset?.media
         assertEquals(1, media?.size)
         assertEquals("link", media!![0].name)
         val bessources = media!![0].bessources
-        assertEquals("aaa.de/link", bessources!![0].name)
+        assertEquals("http://aaa.de/link", bessources!![0].name)
 
     }
 
@@ -72,9 +72,9 @@ class ScraperTests {
         println(commonUrl.getBaseUrl())
     }
 
-    fun setScanner(scraper: Scraper) {
+    fun setScanner() : Scanner {
 
-        scraper.scanner = Scanner(
+        return Scanner(
             RegexParser("(.*fa.*)"),
             StructuredWorker(
                 true,

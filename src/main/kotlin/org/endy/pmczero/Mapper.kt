@@ -14,13 +14,13 @@ fun Mset.toTO(): MsetTO {
     )
 }
 
-fun Mset.toTOwithMedia(): MsetTO {
+fun Mset.toTOwithMedia(withBessources: Boolean = false): MsetTO {
     return MsetTO(
         id = id,
         name = name,
         created_at = created_at,
         updated_at = updated_at,
-        media = media.map { it.toTO() })
+        media = media.map { it.toTO(withBessources) })
 }
 
 fun MsetTO.toEntity(): Mset {
@@ -31,14 +31,17 @@ fun MsetTO.toEntity(): Mset {
 }
 
 
-fun Medium.toTO(): MediumTO {
+fun Medium.toTO(withBessources: Boolean = false): MediumTO {
     return MediumTO(
         id = id,
         name = name,
         created_at = created_at,
         updated_at = updated_at,
-        bessources = arrayListOf(),
-//        bessources = bessources.map { it.toTO() }
+        bessources = if (withBessources) {
+            bessources.map { it.toTO() }
+        } else {
+            arrayListOf()
+        }
     )
 }
 
@@ -90,6 +93,7 @@ fun SerializedScannerTO.toEntity(): SerializedScanner {
         it.valid = valid
     }
 }
+
 fun SerializedScanner.toTO(): SerializedScannerTO {
     return SerializedScannerTO(
         id = id,

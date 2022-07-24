@@ -13,11 +13,18 @@ import java.nio.file.StandardCopyOption
 @Service
 class Downloader {
 
-    companion object Default: Downloader()
+    val map: MutableMap<String, String> = HashMap()
 
-    fun getAsString(urlString: String, withProxy: Boolean = false): String{
+    companion object Default : Downloader()
+
+    fun getAsString(urlString: String, withProxy: Boolean = true): String {
+
+        if (map[urlString] != null) {
+            return map[urlString]!!
+        }
 
         val url = URL(urlString)
+        println(url)
         val con: HttpURLConnection =
             if (withProxy) {
                 val proxyHost = "127.0.0.1"
@@ -31,6 +38,7 @@ class Downloader {
         con.setRequestMethod("GET")
         val inputStream = con.inputStream
         val content = inputStream.bufferedReader().use(BufferedReader::readText)
+        map [urlString] = content
         return content
     }
 

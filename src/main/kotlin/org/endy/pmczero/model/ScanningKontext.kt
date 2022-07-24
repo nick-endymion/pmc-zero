@@ -7,7 +7,7 @@ import org.endy.pmczero.service.Downloader
 data class ScanningKontext(
     var location: Location,
 //    var storage: Storage,
-    var set: Mset?,
+    var mset: Mset?,
     var attributes: MutableList<String>,
     val downloader: Downloader
 )

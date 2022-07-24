@@ -7,20 +7,24 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.exception.NotFoundException
+import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.modern.ScannerShort
 import org.endy.pmczero.model.modern.SerializedScanner
 import org.endy.pmczero.model.scraper.*
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.repository.SerializedScannerRepository
+import org.endy.pmczero.to.MsetTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 
 @Service
 class SerializedScannerService(
-    private val serializedScannerRepository: SerializedScannerRepository
+    private val serializedScannerRepository: SerializedScannerRepository,
+    private val scraper: Scraper
 ) {
 
-    lateinit var  scannerShorts : List<ScannerShort>
+    lateinit var scannerShorts: List<ScannerShort>
     lateinit var format: Json
 //        {"htmlParser": {"type": "Domparser","regex": "(.*)","tag": "","attribute":""},"worker":{"type":"setCreator"}}
 
@@ -37,6 +41,12 @@ class SerializedScannerService(
             }
             polymorphic(Worker::class) {
                 subclass(SetCreator::class)
+            }
+            polymorphic(Worker::class) {
+                subclass(StructuredWorker::class)
+            }
+            polymorphic(Worker::class) {
+                subclass(MediaAdder::class)
             }
         }
         format = Json {
@@ -63,7 +73,7 @@ class SerializedScannerService(
     fun save(serializedScanner: SerializedScanner): SerializedScanner {
         serializedScanner.valid = false
         val s1 = serializedScannerRepository.save(serializedScanner)
-        val s2 = deserialize(s1)
+        val s2 = deserializeAndSerialize(s1)
         serializedScannerRepository.save(s2)
         return s2
     }
@@ -73,7 +83,7 @@ class SerializedScannerService(
     }
 //----------------
 
-    fun deserialize(serializedScanner: SerializedScanner): SerializedScanner {
+    fun deserializeAndSerialize(serializedScanner: SerializedScanner): SerializedScanner {
         println(serializedScanner.serialization)
         val scanner = deserialize(serializedScanner.serialization!!)
         serializedScanner.serialization = serialize(scanner)
@@ -93,6 +103,13 @@ class SerializedScannerService(
 
     fun serialize(scanner: Scanner): String {
         return format.encodeToString(scanner)
+    }
+
+    fun scan(scannerId: Int, url: String): MsetTO {
+        val serializedScanner = findById(scannerId)
+        val scanner = deserialize(serializedScanner.serialization!!)
+        val sc = scraper.scan(scanner, url)
+        return sc.mset?.toTOwithMedia(true) ?: throw Exception()
     }
 
 }

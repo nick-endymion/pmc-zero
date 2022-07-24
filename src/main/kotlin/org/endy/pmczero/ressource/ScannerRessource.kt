@@ -3,6 +3,7 @@ package org.endy.pmczero.ressource
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.service.SerializedScannerService
+import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.ScannerShortTO
 import org.endy.pmczero.to.SerializedScannerTO
 import org.springframework.web.bind.annotation.*
@@ -16,6 +17,11 @@ class ScannerRessource(
     @GetMapping("/{id}")
     fun getserializedScanner(@PathVariable id: Int): SerializedScannerTO {
         return serializedScannerService.findById(id).toTO()
+    }
+
+    @GetMapping("/{id}/scan")
+    fun scan(@PathVariable id: Int, @RequestParam url: String): MsetTO {
+        return serializedScannerService.scan(id, url)
     }
 
     @PostMapping("/") //todo
@@ -35,11 +41,11 @@ class ScannerRessource(
         return serializedScannerService.delete(id)
     }
 
-    @PostMapping("/bla")
-    fun XcreateserializedScanner(@RequestBody serializedScanner: SerializedScannerTO) : SerializedScannerTO {
-//        if (serializedScannerTO.id != null) throw Exception()
-        return serializedScannerService.deserialize(serializedScanner.toEntity()).toTO()
-    }
+//    @PostMapping("/bla")
+//    fun XcreateserializedScanner(@RequestBody serializedScanner: SerializedScannerTO) : SerializedScannerTO {
+////        if (serializedScannerTO.id != null) throw Exception()
+//        return serializedScannerService.DeserializeAndSerialize(serializedScanner.toEntity()).toTO()
+//    }
 
     @GetMapping("/")
     fun getserializedScanner(@RequestParam searchTerm: String, @RequestParam id: Int?): List<ScannerShortTO> {

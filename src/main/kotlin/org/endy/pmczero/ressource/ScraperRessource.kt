@@ -15,22 +15,22 @@ class ScraperRessource(
     private val mediaService: MediaService
 ) {
 
-    @GetMapping("/")
-    fun adf(@RequestParam(required = true) url: String): MsetTO {
-        val sc = scraper.scan(url)
-        return sc.set?.toTO() ?: throw  Exception()
-    }
-
-    @GetMapping("/location/{id}")  // TODO should be post
-    fun ear(
-        @PathVariable id: Int,
-        @RequestParam(required = true) url: String
-    ): String {
-        scraper.scan(url)
-        return url
-    }
-
+//    @GetMapping("/")
+//    fun adf(@RequestParam(required = true) url: String): MsetTO {
+//        val sc = scraper.scan(url)
+//        return sc.mset?.toTO() ?: throw  Exception()
+//    }
 //
+//    @GetMapping("/location/{id}")  // TODO should be post
+//    fun ear(
+//        @PathVariable id: Int,
+//        @RequestParam(required = true) url: String
+//    ): String {
+//        scraper.scan(url)
+//        return url
+//    }
+//
+////
 //    @GetMapping("/set/{id}/images/html")
 //    fun getImagesHtmlPage(@PathVariable id: Int): String {
 //        return setService.htmlImagePage(id, RessType.PRIMARY)
