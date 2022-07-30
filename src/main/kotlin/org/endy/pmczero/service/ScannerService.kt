@@ -9,6 +9,7 @@ import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.mapper.toTOwithMedia
+import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.ScannerShort
 import org.endy.pmczero.model.modern.SerializedScanner
 import org.endy.pmczero.model.scraper.*
@@ -19,9 +20,10 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 
 @Service
-class SerializedScannerService(
+class ScannerService(
     private val serializedScannerRepository: SerializedScannerRepository,
-    private val scraper: Scraper
+    private val scraper: Scraper,
+    private val locationService: LocationService
 ) {
 
     lateinit var scannerShorts: List<ScannerShort>
@@ -105,11 +107,11 @@ class SerializedScannerService(
         return format.encodeToString(scanner)
     }
 
-    fun scan(scannerId: Int, url: String): MsetTO {
+    fun scan(scannerId: Int, url: String): Mset {
         val serializedScanner = findById(scannerId)
         val scanner = deserialize(serializedScanner.serialization!!)
         val sc = scraper.scan(scanner, url)
-        return sc.mset?.toTOwithMedia(true) ?: throw Exception()
+        return sc.mset ?: throw Exception()
     }
 
 }

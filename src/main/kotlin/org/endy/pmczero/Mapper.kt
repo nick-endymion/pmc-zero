@@ -124,3 +124,13 @@ fun ScannerShort.toTO(): ScannerShortTO {
     )
 }
 
+fun Location.toTO(): LocationTO {
+    return LocationTO(
+        id = id,
+        name = name,
+        uri = uri,
+        description = description,
+        locationType = locationType,
+        storageTO = StorageTO() // todo
+    )
+}

@@ -2,43 +2,52 @@ package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
-import org.endy.pmczero.service.SerializedScannerService
-import org.endy.pmczero.to.MsetTO
+import org.endy.pmczero.mapper.toTOwithMedia
+import org.endy.pmczero.service.LocationService
+import org.endy.pmczero.service.ScannerService
 import org.endy.pmczero.to.ScannerShortTO
+import org.endy.pmczero.to.ScanningResultTO
 import org.endy.pmczero.to.SerializedScannerTO
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/serializedscanners")
 class ScannerRessource(
-    val serializedScannerService: SerializedScannerService
+    val scannerService: ScannerService,
+    val locationService: LocationService
 ) {
 
     @GetMapping("/{id}")
     fun getserializedScanner(@PathVariable id: Int): SerializedScannerTO {
-        return serializedScannerService.findById(id).toTO()
+        return scannerService.findById(id).toTO()
     }
 
     @GetMapping("/{id}/scan")
-    fun scan(@PathVariable id: Int, @RequestParam url: String): MsetTO {
-        return serializedScannerService.scan(id, url)
+    fun scan(@PathVariable id: Int, @RequestParam url: String): ScanningResultTO {
+        val mset = scannerService.scan(id, url)
+        val urls = mset.media.flatMap { it.bessources.map { it.name ?: "" } }
+        val locations = locationService.getLocationStartingWith(urls)
+        return ScanningResultTO(mset.toTOwithMedia(true), locations.map { it.toTO() })
     }
 
     @PostMapping("/") //todo
     fun createserializedScanner(@RequestBody serializedScannerTO: SerializedScannerTO): SerializedScannerTO {
         if (serializedScannerTO.id != null) throw Exception()
-        return serializedScannerService.save(serializedScannerTO.toEntity()).toTO()
+        return scannerService.save(serializedScannerTO.toEntity()).toTO()
     }
 
     @PutMapping("/{id}")
-    fun saveserializedScanner(@PathVariable id: Int, @RequestBody serializedScannerTO: SerializedScannerTO): SerializedScannerTO {
+    fun saveserializedScanner(
+        @PathVariable id: Int,
+        @RequestBody serializedScannerTO: SerializedScannerTO
+    ): SerializedScannerTO {
         if (id != serializedScannerTO.id) throw Exception()
-        return serializedScannerService.save(serializedScannerTO.toEntity()).toTO()
+        return scannerService.save(serializedScannerTO.toEntity()).toTO()
     }
 
     @DeleteMapping("/{id}")
     fun deleteserializedScanner(@PathVariable id: Int) {
-        return serializedScannerService.delete(id)
+        return scannerService.delete(id)
     }
 
 //    @PostMapping("/bla")
@@ -49,7 +58,7 @@ class ScannerRessource(
 
     @GetMapping("/")
     fun getserializedScanner(@RequestParam searchTerm: String, @RequestParam id: Int?): List<ScannerShortTO> {
-        return serializedScannerService.findByUrl(searchTerm).map { it.toTO() }
+        return scannerService.findByUrl(searchTerm).map { it.toTO() }
     }
 
 

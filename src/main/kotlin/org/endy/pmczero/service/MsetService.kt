@@ -29,7 +29,6 @@ class MsetService(
         return msetRepository.findAllByNameContaining(searchTerm)
     }
 
-
     fun save(bset: Mset): Mset {
         return msetRepository.save(bset)
     }
