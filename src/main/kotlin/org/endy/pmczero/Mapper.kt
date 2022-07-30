@@ -27,7 +27,8 @@ fun MsetTO.toEntity(): Mset {
     return Mset().also { mset ->
         mset.id = id
         mset.name = name
-        mset.media = media.map { it.toEntity(mset)}.toMutableList()
+        if (media != null)
+            mset.media = media.map { it.toEntity(mset) }.toMutableList()
     }
 }
 
@@ -46,7 +47,7 @@ fun Medium.toTO(withBessources: Boolean = false): MediumTO {
     )
 }
 
-fun MediumTO.toEntity(mset: Mset? = null) : Medium {
+fun MediumTO.toEntity(mset: Mset? = null): Medium {
     return Medium().also {
         it.id = id
         it.name = name
@@ -54,7 +55,6 @@ fun MediumTO.toEntity(mset: Mset? = null) : Medium {
         it.mset = mset
     }
 }
-
 
 fun Bessource.toTO(): BessourceTO {
     return BessourceTO(

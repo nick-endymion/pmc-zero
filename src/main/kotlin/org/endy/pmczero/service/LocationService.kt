@@ -28,9 +28,9 @@ class LocationService(private val locationRepository: LocationRepository) {
 //        return locations[0]
 //    }
 
-    fun getLocationStartingWith(urls: List<String>): List<Location> {
+    fun getLocationStartingWith(urls: List<String>): Pair<String, List<Location>> {
         val url = getCommonUrlStart(urls)
-        return locationRepository.findLocationsByNameStartingWith(url)
+        return Pair(url, locationRepository.findLocationsByNameStartingWith(url))
     }
 
     fun getCommonUrlStart(urls: List<String>): String {
@@ -39,7 +39,7 @@ class LocationService(private val locationRepository: LocationRepository) {
     }
 
     fun getCommonStart(urls: List<String>): String {
-        if (urls.isEmpty()) throw Exception()
+        if (urls.isEmpty()) return ""
         if (urls.size == 1) return urls.get(0)
         var min = (urls.map { it.length }).minOrNull() ?: throw Exception()
         var result = ""

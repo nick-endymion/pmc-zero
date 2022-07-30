@@ -14,13 +14,14 @@ class DomParser(val regex: String, val tag: String, val attribute: String) : Par
         val doc = Jsoup.parse(text)
         doc.setBaseUri(baseUri)
         val elements: Elements = doc.select(tag)
+        val rx = regex.toRegex()
 
         return elements.map {
             if (attribute.trim() == "") {
                 it.text()
             } else
-              it.attr(attribute)
-        }
+                it.attr(attribute)
+        }.filter { rx.matches(it) }
 
 //        for (element in elements) {
 //            element.text()

@@ -26,8 +26,8 @@ class ScannerRessource(
     fun scan(@PathVariable id: Int, @RequestParam url: String): ScanningResultTO {
         val mset = scannerService.scan(id, url)
         val urls = mset.media.flatMap { it.bessources.map { it.name ?: "" } }
-        val locations = locationService.getLocationStartingWith(urls)
-        return ScanningResultTO(mset.toTOwithMedia(true), locations.map { it.toTO() })
+        val (commonUrlStart, locations) = locationService.getLocationStartingWith(urls)
+        return ScanningResultTO(mset.toTOwithMedia(true), commonUrlStart, locations.map { it.toTO() })
     }
 
     @PostMapping("/") //todo

@@ -50,7 +50,7 @@ class Scraper(val locationService: LocationService, val downloader: Downloader) 
 
     fun findPossibleLocations(sc: ScanningKontext): List<Location> {
         val aaa = sc.mset!!.media.map { it.bessources }.flatten().map { it.name ?: "" }
-        return locationService.getLocationStartingWith(aaa)
+        return locationService.getLocationStartingWith(aaa).second
     }
 
 
