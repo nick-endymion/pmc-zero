@@ -13,7 +13,7 @@ class Medium {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "set_id", nullable = true)
-    val Mset: Mset? = null
+    var mset: Mset? = null
 //    @Column(name = "set_id", nullable = true)
 //    var setId: Int? = null
 
@@ -38,7 +38,7 @@ class Medium {
 
     @OneToMany(
         mappedBy = "medium", fetch = FetchType.LAZY,
-//       cascade = [CascadeType.PERSIST]
+//        cascade = [CascadeType.PERSIST]
     )
     var bookmarks: MutableList<Bookmark> = mutableListOf()
 

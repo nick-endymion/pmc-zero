@@ -23,7 +23,7 @@ class Mset {
     @Column(name = "updated_at", nullable = true,columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" )
     var updated_at: Date? = null
 
-    @OneToMany(mappedBy = "Mset",fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
+    @OneToMany(mappedBy = "mset",fetch = FetchType.LAZY, cascade = [CascadeType.ALL])
     var media: MutableList<Medium> =  mutableListOf()
 
 }

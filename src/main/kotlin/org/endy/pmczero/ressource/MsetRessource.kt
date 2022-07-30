@@ -24,7 +24,7 @@ class MsetRessource(
 
     @GetMapping("/{id}/media")
     fun getMsetWithMedia(@PathVariable id: Int): MsetTO {
-        return msetService.findById(id, true).toTOwithMedia()
+        return msetService.findById(id).toTOwithMedia()
     }
 
     @GetMapping("/{id}/ressources-urls")

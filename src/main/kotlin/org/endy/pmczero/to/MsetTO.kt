@@ -7,5 +7,5 @@ data class MsetTO (
     var name: String? = null,
     var created_at: Date? = null,
     var updated_at: Date? = null,
-    var media: List<MediumTO> =  listOf()
+    var media: List<MediumTO> =  mutableListOf<MediumTO>()
 )
