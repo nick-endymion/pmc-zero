@@ -1,18 +1,36 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotFoundException
-import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Bessource
+import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
+import java.net.URI
 
 @Service
-class LocationService(private val locationRepository: LocationRepository) {
+class LocationService(
+    private val locationRepository: LocationRepository,
+    private val storageService: StorageService
+) {
 
     val extension = ".jpg"
+
     fun findById(id: Int): Location {
         return locationRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    }
+
+    fun findAll(): List<Location> {
+        return locationRepository.findAll().toList()
+    }
+
+    fun save(location: Location): Location {
+        return locationRepository.save(location)
+    }
+
+    fun delete(id: Int) {
+        locationRepository.delete(findById(id))
     }
 
     fun url(bessource: Bessource, location: Location): String {
@@ -35,7 +53,9 @@ class LocationService(private val locationRepository: LocationRepository) {
 
     fun getCommonUrlStart(urls: List<String>): String {
         val commonStart = getCommonStart(urls)
-        return commonStart.getBaseUrl()
+        val uri = URI(commonStart)
+        return  uri.scheme+ "://"+ uri.getHost()
+//        return commonStart.getBaseUrl() //todo
     }
 
     fun getCommonStart(urls: List<String>): String {
@@ -51,6 +71,23 @@ class LocationService(private val locationRepository: LocationRepository) {
             result += urls.get(0)[i]
         }
         return result
+    }
+
+    fun createDefaultLocationWithStorage(url: String): Location {
+        val location = Location().also {
+            it.uri = url
+            it.name = url
+            it.locationType = 1;
+        }
+        val storage = Storage().also {
+            it.name = url
+        }
+        storageService.save(storage)
+        location.storage = storage
+        save(location)
+        return location
+//        storage.locations = listOf(location)
+
     }
 
 }
