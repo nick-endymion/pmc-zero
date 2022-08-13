@@ -1,10 +1,10 @@
 package org.endy.pmczero.model
 
-import org.endy.pmczero.model.scraper.Scanner
+import org.endy.pmczero.model.scraper.Scraper
 
 class Match(val urlRegex: Regex) {
 
-    val workers: List<Scanner> = listOf()
+    val workers: List<Scraper> = listOf()
 
     fun match(url: String): Boolean {
         return urlRegex.matches(url)

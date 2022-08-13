@@ -5,7 +5,7 @@ import javax.persistence.*
 
 @Entity
 @Table(name = "a.serialized.scanner")
-class SerializedScanner {
+class Scanner {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)

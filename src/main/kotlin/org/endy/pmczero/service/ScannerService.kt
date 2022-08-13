@@ -7,15 +7,12 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
 import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.exception.NotFoundException
-import org.endy.pmczero.mapper.toTO
-import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.ScannerShort
-import org.endy.pmczero.model.modern.SerializedScanner
+import org.endy.pmczero.model.modern.Scanner
 import org.endy.pmczero.model.scraper.*
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.repository.SerializedScannerRepository
-import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.SourceToScanTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
@@ -23,7 +20,7 @@ import org.springframework.stereotype.Service
 @Service
 class ScannerService(
     private val serializedScannerRepository: SerializedScannerRepository,
-    private val scraper: Scraper,
+    private val scraperService: ScraperService,
     private val locationService: LocationService
 ) {
 
@@ -59,7 +56,7 @@ class ScannerService(
         scannerShorts = serializedScannerRepository.findAllByValid(true)
     }
 
-    fun findById(id: Int): SerializedScanner {
+    fun findById(id: Int): Scanner {
         return serializedScannerRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
@@ -73,9 +70,9 @@ class ScannerService(
 //        return msetRepository.findAllByNameContaining(searchTerm)
 //    }
 
-    fun save(serializedScanner: SerializedScanner): SerializedScanner {
-        serializedScanner.valid = false
-        val s1 = serializedScannerRepository.save(serializedScanner)
+    fun save(scanner: Scanner): Scanner {
+        scanner.valid = false
+        val s1 = serializedScannerRepository.save(scanner)
         val s2 = deserializeAndSerialize(s1)
         serializedScannerRepository.save(s2)
         return s2
@@ -86,32 +83,32 @@ class ScannerService(
     }
 //----------------
 
-    fun deserializeAndSerialize(serializedScanner: SerializedScanner): SerializedScanner {
-        println(serializedScanner.serialization)
-        val scanner = deserialize(serializedScanner.serialization!!)
-        serializedScanner.serialization = serialize(scanner)
-        serializedScanner.valid = true
-        println(serializedScanner.serialization)
-        return serializedScanner
+    fun deserializeAndSerialize(scanner: Scanner): Scanner {
+        println(scanner.serialization)
+        val scraper = deserialize(scanner.serialization!!)
+        scanner.serialization = serialize(scraper)
+        scanner.valid = true
+        println(scanner.serialization)
+        return scanner
     }
 
-    fun getScanner(id: Int): Scanner {
+    fun getScanner(id: Int): Scraper {
         val serializedScanner = findById(id)
         return deserialize(serializedScanner.serialization!!)
     }
 
-    fun deserialize(serialization: String): Scanner {
-        return format.decodeFromString<Scanner>(serialization)
+    fun deserialize(serialization: String): Scraper {
+        return format.decodeFromString<Scraper>(serialization)
     }
 
-    fun serialize(scanner: Scanner): String {
-        return format.encodeToString(scanner)
+    fun serialize(scraper: Scraper): String {
+        return format.encodeToString(scraper)
     }
 
     fun scan(scannerId: Int, url: String): Mset {
         val serializedScanner = findById(scannerId)
         val scanner = deserialize(serializedScanner.serialization!!)
-        val sc = scraper.scan(scanner, url)
+        val sc = scraperService.scan(scanner, url)
         return sc.mset ?: throw Exception()
     }
 
@@ -120,9 +117,9 @@ class ScannerService(
         val serializedScanner = findById(sts.scannerId)
         val scanner = deserialize(serializedScanner.serialization!!)
         val url = sts.url ?: locationService.findById(sts.bookmarkId!!).uri
-        val sc = scraper.scan(scanner, url!!, sts.locationId)
+        val sc = scraperService.scan(scanner, url!!, sts.locationId)
         if (sts.locationId != null)
-            scraper.changeToRealLocation(sc, locationService.findById(sts.locationId!!))
+            scraperService.changeToRealLocation(sc, locationService.findById(sts.locationId!!))
         return sc.mset ?: throw Exception()
     }
 

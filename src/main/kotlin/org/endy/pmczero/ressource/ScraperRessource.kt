@@ -1,16 +1,14 @@
 package org.endy.pmczero.ressource
 
-import org.endy.pmczero.mapper.toTO
-import org.endy.pmczero.model.scraper.Scraper
+import org.endy.pmczero.service.ScraperService
 import org.endy.pmczero.service.MediaService
 import org.endy.pmczero.service.MsetService
-import org.endy.pmczero.to.MsetTO
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/scrape")
 class ScraperRessource(
-    val scraper: Scraper,
+    val scraperService: ScraperService,
     val msetService: MsetService,
     private val mediaService: MediaService
 ) {

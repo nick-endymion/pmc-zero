@@ -94,8 +94,8 @@ fun BookmarkTO.toEntity(): Bookmark {
     }
 }
 
-fun SerializedScannerTO.toEntity(): SerializedScanner {
-    return SerializedScanner().also {
+fun SerializedScannerTO.toEntity(): Scanner {
+    return Scanner().also {
         it.id = id
         it.name = name
         it.example = example
@@ -105,7 +105,7 @@ fun SerializedScannerTO.toEntity(): SerializedScanner {
     }
 }
 
-fun SerializedScanner.toTO(): SerializedScannerTO {
+fun Scanner.toTO(): SerializedScannerTO {
     return SerializedScannerTO(
         id = id,
         name = name,

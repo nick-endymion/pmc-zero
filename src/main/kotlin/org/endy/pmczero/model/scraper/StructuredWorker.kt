@@ -8,7 +8,7 @@ import org.endy.pmczero.model.ScanningKontext
 @SerialName("structured")
 class StructuredWorker(
     val download: Boolean,
-    val scanners: List<Scanner>
+    val scrapers: List<Scraper>
 ) : Worker() {
 
     override fun applya(element: String, scanningKontext: ScanningKontext) {
@@ -19,7 +19,7 @@ class StructuredWorker(
             println(baseUri)
             scanningKontext.downloader.getAsString(element)
         } else element
-        for (scanner in scanners)
+        for (scanner in scrapers)
             scanner.doWork(text, baseUri, scanningKontext)
     }
 

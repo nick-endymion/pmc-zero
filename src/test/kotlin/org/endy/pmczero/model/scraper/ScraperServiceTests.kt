@@ -6,14 +6,12 @@ import io.mockk.impl.annotations.MockK
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
-import org.endy.pmczero.service.Downloader
-import org.endy.pmczero.service.LocationService
-import org.endy.pmczero.service.getBaseUrl
+import org.endy.pmczero.service.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
-class ScraperTests {
+class ScraperServiceTests {
 
     @MockK
     public lateinit var locationService: LocationService
@@ -23,6 +21,9 @@ class ScraperTests {
 
     @MockK
     public lateinit var locationRepository: LocationRepository
+
+    @MockK
+    public lateinit var storageService: StorageService
 
     @BeforeEach
     fun setUp() = MockKAnnotations.init(this)
@@ -40,9 +41,9 @@ class ScraperTests {
             downloader.getAsString(any())
         } returns "<html><title>Der Titel</title><a>http://aaa.de/link</a></html>"
 
-        var scraper = Scraper(locationService, downloader)
+        var scraper = ScraperService(locationService, downloader)
 
-        val scanner: Scanner = setScanner()
+        val scanner: Scraper = setScraper()
 
         var sc = scraper.scan(scanner,"http://testfatest.com")
 
@@ -57,7 +58,7 @@ class ScraperTests {
 
     @Test
     fun locationTest() {
-        val locationService2 = LocationService(locationRepository)
+        val locationService2 = LocationService(locationRepository, storageService)
         var urls = listOf("https://abc.de/abde/aaaa.html", "https://abc.de/abde/aaeea.html","https://abc.de/abde/waaa.html")
         var commonUrl = locationService2.getCommonStart(urls)
         println(commonUrl)
@@ -72,15 +73,15 @@ class ScraperTests {
         println(commonUrl.getBaseUrl())
     }
 
-    fun setScanner() : Scanner {
+    fun setScraper() : Scraper {
 
-        return Scanner(
+        return Scraper(
             RegexParser("(.*fa.*)"),
             StructuredWorker(
                 true,
                 listOf(
-                    Scanner(DomParser("(.*)", "title", ""), SetCreator()),
-                    Scanner(
+                    Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scraper(
                         DomParser("(.*)", "a", ""), MediaAdder()
                     )
                 )

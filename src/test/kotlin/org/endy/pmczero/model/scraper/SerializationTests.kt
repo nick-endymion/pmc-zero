@@ -11,16 +11,16 @@ class SerializationTests {
     @Test
     fun `serialization and deserializtion work`() {
 
-        val scanner = Scanner(
+        val scanner = Scraper(
 //           SimpleParser("(.*fa.*)", "a"),
             DomParser("(.*)", "ad", "adfa"),
             SetCreator()
         )
 
-        var scannerSerialized = Json.encodeToString<Scanner>(scanner)
+        var scannerSerialized = Json.encodeToString<Scraper>(scanner)
         println(Json.encodeToString(scannerSerialized))
 
-        val scannerDesialized = Json.decodeFromString<Scanner>(scannerSerialized)
+        val scannerDesialized = Json.decodeFromString<Scraper>(scannerSerialized)
         scannerSerialized = Json.encodeToString(scannerDesialized)
         println(Json.encodeToString(scannerSerialized))
     }
@@ -28,13 +28,13 @@ class SerializationTests {
     @Test
     fun `serialization and deserializtion work 2`() {
 
-        val scanner = Scanner(
+        val scanner = Scraper(
             RegexParser("(.*fa.*)"),
             StructuredWorker(
                 true,
                 listOf(
-                    Scanner(DomParser("(.*)", "", ""), SetCreator()),
-                    Scanner(
+                    Scraper(DomParser("(.*)", "", ""), SetCreator()),
+                    Scraper(
                         DomParser("(.*)", "", ""), MediaAdder()
                     )
                 )
@@ -44,7 +44,7 @@ class SerializationTests {
         var scannerSerialized = Json.encodeToString(scanner)
         println(Json.encodeToString(scannerSerialized))
 
-        val scannerDesialized = Json.decodeFromString<Scanner>(scannerSerialized)
+        val scannerDesialized = Json.decodeFromString<Scraper>(scannerSerialized)
         scannerSerialized = Json.encodeToString(scannerDesialized)
         println(Json.encodeToString(scannerSerialized))
     }
@@ -56,10 +56,10 @@ class SerializationTests {
             StructuredWorker(
                 true,
                 listOf(
-                    Scanner(
+                    Scraper(
                         DomParser("(.*)", "", ""), MediaAdder() as Worker
                     ),
-                    Scanner(DomParser("(.*)", "", ""), SetCreator()),
+                    Scraper(DomParser("(.*)", "", ""), SetCreator()),
 
                     )
             )
@@ -76,7 +76,7 @@ class SerializationTests {
     fun `serialization and deserializtion work 4`() {
 
         val obj =
-            Scanner(DomParser("(.*)", "", ""), SetCreator() )
+            Scraper(DomParser("(.*)", "", ""), SetCreator() )
 
         //            DomParser("(.*)", "", "")
 //        SetCreator()
@@ -95,7 +95,7 @@ class SerializationTests {
         var scannerSerialized = format.encodeToString(obj)
         println(Json.encodeToString(scannerSerialized))
 
-        val scannerDesialized = format.decodeFromString<Scanner>(scannerSerialized)
+        val scannerDesialized = format.decodeFromString<Scraper>(scannerSerialized)
         scannerSerialized = format.encodeToString(scannerDesialized)
         println(format.encodeToString(scannerSerialized))
     }
