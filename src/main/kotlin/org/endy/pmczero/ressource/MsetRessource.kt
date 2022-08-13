@@ -4,17 +4,20 @@ import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.RessType
-import org.endy.pmczero.service.MediaService
+import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
-import org.endy.pmczero.to.RessourceUrlsTO
+import org.endy.pmczero.service.ScannerService
 import org.endy.pmczero.to.MsetTO
+import org.endy.pmczero.to.RessourceUrlsTO
+import org.endy.pmczero.to.SourceToScanTO
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/msets")
 class MsetRessource(
     val msetService: MsetService,
-    private val mediaService: MediaService
+    val scannerService: ScannerService,
+    val locationService: LocationService
 ) {
 
     @GetMapping("/{id}")
@@ -65,4 +68,14 @@ class MsetRessource(
     fun getTnsHtmlPage(@PathVariable id: Int): String {
         return msetService.htmlImagePage(id, RessType.TN)
     }
+
+    @PostMapping("/scan")
+    fun scan(@RequestBody sts: SourceToScanTO): MsetTO {
+        if (sts.scannerId == null) throw Exception()
+        var mset = scannerService.scan(sts)
+        if (sts.persist == true)
+            mset = msetService.save(mset)
+        return msetService.save(mset).toTO()
+    }
+
 }

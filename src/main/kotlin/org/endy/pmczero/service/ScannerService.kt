@@ -16,6 +16,7 @@ import org.endy.pmczero.model.scraper.*
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.repository.SerializedScannerRepository
 import org.endy.pmczero.to.MsetTO
+import org.endy.pmczero.to.SourceToScanTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 
@@ -113,5 +114,22 @@ class ScannerService(
         val sc = scraper.scan(scanner, url)
         return sc.mset ?: throw Exception()
     }
+
+
+    fun scan(sts: SourceToScanTO): Mset {
+        val serializedScanner = findById(sts.scannerId)
+        val scanner = deserialize(serializedScanner.serialization!!)
+        val url = sts.url ?: locationService.findById(sts.bookmarkId!!).uri
+        val sc = scraper.scan(scanner, url!!, sts.locationId)
+        if (sts.locationId != null)
+            scraper.changeToRealLocation(sc, locationService.findById(sts.locationId!!))
+        return sc.mset ?: throw Exception()
+    }
+
+//
+//    val urls = mset.media.flatMap { it.bessources.map { it.name ?: "" } }
+//    val (commonUrlStart, locations) = locationService.getLocationStartingWith(urls)
+//    return ScanningResultTO(mset.toTOwithMedia(true), commonUrlStart, locations.map { it.toTO() })
+
 
 }
