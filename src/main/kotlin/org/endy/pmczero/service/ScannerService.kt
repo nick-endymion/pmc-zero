@@ -118,8 +118,8 @@ class ScannerService(
         val scanner = deserialize(serializedScanner.serialization!!)
         val url = sts.url ?: locationService.findById(sts.bookmarkId!!).uri
         val sc = scraperService.scan(scanner, url!!, sts.locationId)
-        if (sts.locationId != null)
-            scraperService.changeToRealLocation(sc, locationService.findById(sts.locationId!!))
+//        if (sts.locationId != null)
+//            scraperService.changeToRealLocation(sc, locationService.findById(sts.locationId!!))
         return sc.mset ?: throw Exception()
     }
 

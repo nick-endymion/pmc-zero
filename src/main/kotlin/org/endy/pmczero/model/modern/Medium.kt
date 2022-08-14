@@ -38,7 +38,7 @@ class Medium {
 
     @OneToMany(
         mappedBy = "medium", fetch = FetchType.LAZY,
-//        cascade = [CascadeType.PERSIST]
+//        cascade = [CascadeType.ALL]
     )
     var bookmarks: MutableList<Bookmark> = mutableListOf()
 

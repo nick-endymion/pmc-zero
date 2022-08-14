@@ -1,7 +1,7 @@
 package org.endy.pmczero.to
 
 
-data class SerializedScannerTO (
+data class ScannerTO (
     var id: Int? = null,
     var name: String? = null,
     var regex: String? = null,

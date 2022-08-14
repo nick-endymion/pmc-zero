@@ -29,8 +29,14 @@ class MsetService(
         return msetRepository.findAllByNameContaining(searchTerm)
     }
 
-    fun save(bset: Mset): Mset {
-        return msetRepository.save(bset)
+    fun save(mset: Mset): Mset {
+        mset.media.forEach {
+            it.mset = mset
+            it.bessources.forEach { b ->
+                b.medium = it
+            }
+        }
+        return msetRepository.save(mset)
     }
 
     @Transactional

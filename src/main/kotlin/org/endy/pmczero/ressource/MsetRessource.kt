@@ -69,13 +69,13 @@ class MsetRessource(
         return msetService.htmlImagePage(id, RessType.TN)
     }
 
-    @PostMapping("/scan")
-    fun scan(@RequestBody sts: SourceToScanTO): MsetTO {
-        if (sts.scannerId == null) throw Exception()
-        var mset = scannerService.scan(sts)
-        if (sts.persist == true)
-            mset = msetService.save(mset)
-        return msetService.save(mset).toTO()
-    }
+//    @PostMapping("/scan")
+//    fun scan(@RequestBody sts: SourceToScanTO): MsetTO {
+//        if (sts.scannerId == null) throw Exception()
+//        var mset = scannerService.scan(sts)
+//        if (sts.persist == true)
+//            mset = msetService.save(mset)
+//        return msetService.save(mset).toTO()
+//    }
 
 }

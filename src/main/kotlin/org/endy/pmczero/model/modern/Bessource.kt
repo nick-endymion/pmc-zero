@@ -15,7 +15,7 @@ class Bessource {
 //    var mediumId: Int? = null
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "medium_id", nullable = true)
-    val medium: Medium? = null
+    var medium: Medium? = null
 
     @Column(name = "name", nullable = true)
     var name: String? = null
