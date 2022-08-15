@@ -9,7 +9,6 @@ import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.ScannerService
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.RessourceUrlsTO
-import org.endy.pmczero.to.SourceToScanTO
 import org.springframework.web.bind.annotation.*
 
 @RestController

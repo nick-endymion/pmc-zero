@@ -55,7 +55,8 @@ class MsetService(
                         medium.id, medium.name,
                         mediaService.url(medium, RessType.PRIMARY),
                         mediaService.url(medium, RessType.TN)
-                    ))
+                    )
+                )
             } catch (e: Exception) {
                 println("no ressource found for medium: " + id)
             }
@@ -101,6 +102,12 @@ class MsetService(
 
     fun mediumById(id: Int): Medium {
         return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    }
+
+
+    fun addMedium(mset: Mset, medium: Medium) {
+        medium.mset = mset
+        mediaService.save(medium)
     }
 
     fun urlByMediumId(id: Int, type: RessType): String {

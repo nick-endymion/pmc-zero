@@ -10,8 +10,5 @@ import org.springframework.data.repository.CrudRepository
 interface MediaRepository : CrudRepository<Medium, Int> {
 
 
-//    @Query("select m from LegacyMedium m join fetch m.mfiles")
-//    fun getWithMfiles() : List<MfilesEntity>
-
 }
 

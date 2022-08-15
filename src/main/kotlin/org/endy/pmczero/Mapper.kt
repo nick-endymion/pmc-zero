@@ -43,7 +43,8 @@ fun Medium.toTO(withBessources: Boolean = false): MediumTO {
             bessources.map { it.toTO() }
         } else {
             arrayListOf()
-        }
+        },
+        mset = mset
     )
 }
 
@@ -134,3 +135,7 @@ fun Location.toTO(): LocationTO {
         storageTO = StorageTO() // todo
     )
 }
+
+//fun Medium.toTO(): MediumTO {
+//    return MediumTO()
+//}

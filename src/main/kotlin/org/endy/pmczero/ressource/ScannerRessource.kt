@@ -3,6 +3,7 @@ package org.endy.pmczero.ressource
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.mapper.toTOwithMedia
+import org.endy.pmczero.service.BookmarkService
 import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.ScannerService
@@ -14,7 +15,8 @@ import org.springframework.web.bind.annotation.*
 class ScannerRessource(
     val scannerService: ScannerService,
     val locationService: LocationService,
-    val msetService: MsetService
+    val msetService: MsetService,
+    val bookmarkService: BookmarkService
 ) {
 
     @GetMapping("/{id}")
@@ -54,7 +56,6 @@ class ScannerRessource(
     }
 
 
-
     @GetMapping("/{id}/scan")
     fun scan(@PathVariable id: Int, @RequestParam url: String): ScanningResultTO {
         val mset = scannerService.scan(id, url)
@@ -62,13 +63,18 @@ class ScannerRessource(
         val (commonUrlStart, locations) = locationService.getLocationStartingWith(urls)
         return ScanningResultTO(mset.toTOwithMedia(true), commonUrlStart, locations.map { it.toTO() })
     }
+
     @PostMapping("/{id}/scan")
     fun scan(@RequestBody sts: SourceToScanTO): ScanningResultTO {
         if (sts.scannerId == null) throw Exception()
         var mset = scannerService.scan(sts)
-        if (sts.persist == true)
+        if (sts.persist == true) {
             mset = msetService.save(mset)
-        return ScanningResultTO(mset.toTOwithMedia(true), "", listOf( locationService.findById(sts.locationId!!).toTO()))
+            if (sts.bookmarkId != null) {
+                msetService.addMedium(mset, bookmarkService.findById(sts.bookmarkId!!).medium!!)  //todo npe possible
+             }
+        }
+        return ScanningResultTO(mset.toTOwithMedia(true), "", listOf(locationService.findById(sts.locationId!!).toTO()))
     }
 
 }

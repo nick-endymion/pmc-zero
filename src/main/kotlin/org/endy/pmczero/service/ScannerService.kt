@@ -21,7 +21,8 @@ import org.springframework.stereotype.Service
 class ScannerService(
     private val serializedScannerRepository: SerializedScannerRepository,
     private val scraperService: ScraperService,
-    private val locationService: LocationService
+    private val locationService: LocationService,
+    private val bookmarkService: BookmarkService
 ) {
 
     lateinit var scannerShorts: List<ScannerShort>
@@ -116,7 +117,7 @@ class ScannerService(
     fun scan(sts: SourceToScanTO): Mset {
         val serializedScanner = findById(sts.scannerId)
         val scanner = deserialize(serializedScanner.serialization!!)
-        val url = sts.url ?: locationService.findById(sts.bookmarkId!!).uri
+        val url = sts.url ?: bookmarkService.findById(sts.bookmarkId!!).url
         val sc = scraperService.scan(scanner, url!!, sts.locationId)
 //        if (sts.locationId != null)
 //            scraperService.changeToRealLocation(sc, locationService.findById(sts.locationId!!))
