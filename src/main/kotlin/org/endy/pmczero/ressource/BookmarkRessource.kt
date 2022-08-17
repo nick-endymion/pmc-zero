@@ -8,7 +8,7 @@ import org.endy.pmczero.to.BookmarkTO
 import org.springframework.web.bind.annotation.*
 
 @RestController
-@RequestMapping("/api/bookmarkse")
+@RequestMapping("/api/bookmarks")
 class BookmarkRessource(
     val bookmarkService: BookmarkService
 ) {

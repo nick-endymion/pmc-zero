@@ -39,16 +39,10 @@ class LocationService(
                     ?: bessource.name!!.replaceFirst("[.][^.]+$".toRegex(), "") + extension)
     }
 
-//    fun getLocationStartingWith(url: String): Location {
-//        val locations = locationRepository.findLocationsByNameStartingWith(url)
-//        if (locations.size != 1)
-//            throw Exception()
-//        return locations[0]
-//    }
 
     fun getLocationStartingWith(urls: List<String>): Pair<String, List<Location>> {
         val url = getCommonUrlStart(urls)
-        return Pair(url, locationRepository.findLocationsByNameStartingWith(url))
+        return Pair(url, locationRepository.findLocationsByNameStartingWith(url).filter {it.locationType == 1})
     }
 
     fun getCommonUrlStart(urls: List<String>): String {

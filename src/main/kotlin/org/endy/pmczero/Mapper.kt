@@ -44,7 +44,7 @@ fun Medium.toTO(withBessources: Boolean = false, withMset: Boolean = false): Med
         } else {
             arrayListOf()
         },
-        msetTO = if (withMset) {
+        mset = if (withMset) {
             mset?.toTO()
         } else {
             null
@@ -86,7 +86,7 @@ fun Bookmark.toTO(): BookmarkTO {
 }
 
 fun Bookmark.toFatTO(): BookmarkTO {
-    return  this.toTO().also { it.mediumTO = medium?.toTO() }
+    return  this.toTO().also { it.medium = medium?.toTO(withMset = true) }
 }
 
 

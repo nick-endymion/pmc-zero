@@ -8,7 +8,7 @@ data class MediumTO (
     var id: Int? = null,
     var name: String? = null,
     var setId: Int? = null,
-    var msetTO: MsetTO? = null,
+    var mset: MsetTO? = null,
     var created_at: Date? = null,
     var updated_at: Date? = null,
     var mtype: Int? = null,
