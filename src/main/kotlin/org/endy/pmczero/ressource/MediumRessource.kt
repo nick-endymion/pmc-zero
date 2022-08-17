@@ -9,14 +9,14 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api/bookmarks")
+@RequestMapping("/api/mediums")
 class MediumRessource(
     private val mediaService: MediaService
 ) {
 
 
     @GetMapping("/{id}")
-    fun getBookmark(@PathVariable id: Int): MediumTO {
+    fun getMedium(@PathVariable id: Int): MediumTO {
         return mediaService.findById(id).toTO()
     }
 //    TODO

@@ -81,9 +81,14 @@ fun Bookmark.toTO(): BookmarkTO {
         url = url,
         mediumId = medium?.id,
         created_at = created_at,
-        updated_at = updated_at,
+        updated_at = updated_at
     )
 }
+
+fun Bookmark.toFatTO(): BookmarkTO {
+    return  this.toTO().also { it.mediumTO = medium?.toTO() }
+}
+
 
 fun BookmarkTO.toEntity(): Bookmark {
     return Bookmark().also {
