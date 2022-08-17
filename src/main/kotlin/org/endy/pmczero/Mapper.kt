@@ -33,7 +33,7 @@ fun MsetTO.toEntity(): Mset {
 }
 
 
-fun Medium.toTO(withBessources: Boolean = false): MediumTO {
+fun Medium.toTO(withBessources: Boolean = false, withMset: Boolean = false): MediumTO {
     return MediumTO(
         id = id,
         name = name,
@@ -44,7 +44,11 @@ fun Medium.toTO(withBessources: Boolean = false): MediumTO {
         } else {
             arrayListOf()
         },
-        mset = mset
+        msetTO = if (withMset) {
+            mset?.toTO()
+        } else {
+            null
+        }
     )
 }
 
