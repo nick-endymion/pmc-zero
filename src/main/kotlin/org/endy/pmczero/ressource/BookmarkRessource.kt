@@ -1,6 +1,7 @@
 package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
+import org.endy.pmczero.mapper.toFatTO
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.service.BookmarkService
 import org.endy.pmczero.to.BookmarkTO
@@ -14,7 +15,7 @@ class BookmarkRessource(
 
     @GetMapping("/{id}")
     fun getBookmark(@PathVariable id: Int): BookmarkTO {
-        return bookmarkService.findById(id).toTO()
+        return bookmarkService.findById(id).toFatTO()
     }
 
     @GetMapping("/")
