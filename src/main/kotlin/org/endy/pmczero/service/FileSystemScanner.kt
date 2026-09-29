@@ -2,11 +2,19 @@ package org.endy.pmczero.service
 
 import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.modern.ScanConfiguration
+import org.endy.pmczero.model.modern.Medium
+import org.endy.pmczero.model.modern.Mset
+import org.endy.pmczero.repository.MediaRepository
+import org.endy.pmczero.repository.MsetRepository
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.io.File
 
 @Service
-class FileSystemScanner {
+class FileSystemScanner(
+    private val mediaRepository: MediaRepository,
+    private val msetRepository: MsetRepository
+) {
 
     fun scan(folder: String, scanconfig: ScanConfiguration) {
         ls(folder, scanconfig)
@@ -65,4 +73,32 @@ class FileSystemScanner {
         return fileName.dropLast(x.value.toString().length)
     }
 
+    @Transactional
+    fun scanAndCreateMedia(folder: String, scanconfig: ScanConfiguration): List<Medium> {
+        val files = ls(folder, scanconfig)
+        val msetByTopLevel = mutableMapOf<String, Mset>()
+
+        fun topLevelOf(relativePath: String): String {
+            val normalized = relativePath.replace('\\', '/').trim('/')
+            return normalized.substringBefore('/', normalized)
+        }
+
+        fun resolveOrCreateMset(topLevel: String): Mset {
+            return msetByTopLevel.getOrPut(topLevel) {
+                msetRepository.findAllByNameContaining(topLevel)
+                    .firstOrNull { it.name == topLevel }
+                    ?: msetRepository.save(Mset().apply { name = topLevel })
+            }
+        }
+
+        val mediaToSave = files.map { relativePath ->
+            val mset = resolveOrCreateMset(topLevelOf(relativePath))
+            Medium().apply {
+                name = relativePath
+                this.mset = mset
+            }
+        }
+
+        return mediaToSave.map { mediaRepository.save(it) }
+    }
 }

@@ -20,10 +20,8 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-data-rest")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("io.springfox:springfox-boot-starter:3.0.0")
-    implementation("io.springfox:springfox-swagger-ui:2.9.2")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
@@ -36,6 +34,7 @@ dependencies {
 //        exclude("org.junit.vintage", "junit-vintage-engine")
 //    }
     testImplementation(kotlin("test"))
+    testImplementation("org.mockito.kotlin:mockito-kotlin:4.1.0")
     testImplementation("io.mockk:mockk:1.12.4")
 //    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.8.1")
 //    testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.1")
@@ -57,4 +56,3 @@ tasks.withType<Test> {
 tasks.test {
     useJUnitPlatform()
 }
-

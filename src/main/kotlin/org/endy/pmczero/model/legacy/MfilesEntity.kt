@@ -16,13 +16,13 @@ class MfilesEntity {
     @Column(name = "id", nullable = false)
     var id: Int? = null
 
-    @Column(name = "folder_id", nullable = true,  insertable=false, updatable = false)
+    @Column(name = "folder_id", nullable = true)
     var folderId: Int? = null
 
     @JsonManagedReference
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "folder_id")
-    val folder: FoldersEntity? = null
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "folder_id", nullable = true, insertable = false, updatable = false)
+    var folder: FoldersEntity? = null
 
     @Column(name = "medium_id", nullable = true,  insertable=false, updatable = false)
     var mediumId: Int? = null
@@ -95,4 +95,3 @@ class MfilesEntity {
     }
 
 }
-

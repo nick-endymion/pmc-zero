@@ -23,7 +23,7 @@ class persistenceIntegrationTest {
     fun test1() {
 
         val set = Mset().also {it.name = "test name"}
-        msetService.save(bset = set)
+        msetService.save(mset = set)
         println(set.id)
         println(set.created_at)
 
@@ -38,7 +38,7 @@ class persistenceIntegrationTest {
         val bessource1 = Bessource().also {it.name = "test bessource 1"}
         val bessource2 = Bessource().also {it.name = "test bessource 2"}
         medium.bessources = mutableListOf(bessource1, bessource2)
-        msetService.save(bset = set)
+        msetService.save(mset = set)
         println(set.id)
         println(set.name)
         println(medium.id)
