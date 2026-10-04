@@ -38,11 +38,9 @@ class MediaService(
         return bessourceRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
-
     fun url(id: Int, ressType: RessType): String {
         val medium = findById(id)
-        return provideUrl(medium, ressType)
-            ?: throw Exception("no url found for medium ${medium.id} and resource type $ressType")
+        return url(medium, ressType)
     }
 
     fun url(medium: Medium, ressType: RessType): String {
