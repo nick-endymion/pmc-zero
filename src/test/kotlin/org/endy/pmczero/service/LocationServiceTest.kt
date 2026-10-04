@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
@@ -9,17 +10,21 @@ import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.repository.StorageRepository
 import org.endy.pmczero.to.BessourceTO
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
+import java.io.File
 import java.util.Optional
 
 /**
@@ -35,6 +40,12 @@ class LocationServiceTest {
     private val storageRepository: StorageRepository = mock()
 
     private lateinit var service: LocationService
+
+    @TempDir
+    lateinit var tempDir: File
+
+    /** Location ids for the locations registered by [givenLocation] */
+    private var nextLocationId = 100
 
     @BeforeEach
     fun setUp() {
@@ -480,6 +491,493 @@ class LocationServiceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // File system accessibility
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `isFileSystemAccessible is true for an existing readable and writable FS location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertTrue(service.isFileSystemAccessible(location.id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible is false when the folder of the FS location does not exist`() {
+        val existing = givenExistingLocation(LocationType.TN_FS)
+        val missing = File(existing.uri, "does-not-exist")
+
+        assertFalse(service.isFileSystemAccessible(givenLocation(missing.path, LocationType.TN_FS).id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible is false when the folder of the FS location is not readable`() {
+        val existing = givenExistingLocation(LocationType.MAIN_FS)
+        val folder = File(existing.uri)
+        // Windows keeps the owner fully privileged, so the read permission cannot be revoked there
+        assumeTrue(folder.setReadable(false) && !folder.canRead())
+
+        assertFalse(service.isFileSystemAccessible(existing.id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible is false when the folder of the FS location is not writable`() {
+        val existing = givenExistingLocation(LocationType.MAIN_FS)
+        val folder = File(existing.uri)
+        // Windows keeps the owner fully privileged, so the write permission cannot be revoked there
+        assumeTrue(folder.setWritable(false) && !folder.canWrite())
+
+        assertFalse(service.isFileSystemAccessible(existing.id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible only asks for an accessible path, not for a folder`() {
+        val existing = givenExistingLocation(LocationType.MAIN_FS)
+        val file = File(existing.uri, "doc.pdf").apply { createNewFile() }
+
+        assertTrue(service.isFileSystemAccessible(givenLocation(file.path, LocationType.MAIN_FS).id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible is false for an HTTP location`() {
+        givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+        val tn = givenLocation("http://example.org/tn", LocationType.TN_HTTP)
+
+        assertFalse(service.isFileSystemAccessible(tn.id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible is false for an FS location without uri`() {
+        val location = givenLocation("http://example.org/main", LocationType.MAIN_FS).apply { uri = null }
+
+        assertFalse(service.isFileSystemAccessible(location.id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible is false for a location without location type`() {
+        val existing = givenExistingLocation(LocationType.MAIN_FS)
+        existing.locationType = null
+
+        assertFalse(service.isFileSystemAccessible(existing.id!!))
+    }
+
+    @Test
+    fun `isFileSystemAccessible throws NotFoundException for an unknown location id`() {
+        whenever(locationRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.isFileSystemAccessible(99)
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Directory listing
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `lists the direct children of the location folder`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(".", "a.pdf", "b.pdf"), result.map { it.name })
+    }
+
+    @Test
+    fun `marks directories in the listing`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "a.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(true, true, false), result.map { it.isDirectory })
+    }
+
+    @Test
+    fun `lists directories before files`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "z-dir").mkdir()
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(".", "z-dir", "a.pdf"), result.map { it.name })
+    }
+
+    @Test
+    fun `reports size and modification date of an entry`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        val file = File(location.uri, "a.pdf").apply { writeText("hello") }
+
+        val entry = service.listDirectory(location.id!!)[1]
+
+        assertEquals(5L, entry.size)
+        assertEquals(file.lastModified(), entry.lastModified!!.toEpochMilli())
+    }
+
+    @Test
+    fun `returns no child entries for an empty folder`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertEquals(listOf("."), service.listDirectory(location.id!!).map { it.name })
+    }
+
+    @Test
+    fun `lists a subdirectory relative to the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn")
+
+        assertEquals(listOf(".", "..", "thumb.png"), result.map { it.name })
+    }
+
+    @Test
+    fun `lists a nested subdirectory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a/b/c").mkdirs()
+        File(location.uri, "a/b/c/deep.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "a/b/c")
+
+        assertEquals(listOf(".", "..", "deep.pdf"), result.map { it.name })
+    }
+
+    @Test
+    fun `parent entry of a subdirectory points at the location itself`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+
+        val parent = service.listDirectory(location.id!!, subdir = "tn")[1]
+
+        assertEquals(File(location.uri).lastModified(), parent.lastModified!!.toEpochMilli())
+        assertEquals(File(location.uri).length(), parent.size)
+    }
+
+    @Test
+    fun `parent entry of a nested subdirectory points at the intermediate folder`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a/b/c").mkdirs()
+
+        val parent = service.listDirectory(location.id!!, subdir = "a/b/c")[1]
+
+        assertEquals(File(location.uri, "a/b").lastModified(), parent.lastModified!!.toEpochMilli())
+    }
+
+    @Test
+    fun `parent entry is marked as a directory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a-folder").mkdir()
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn")
+
+        assertEquals("..", result[1].name)
+        assertTrue(result[1].isDirectory)
+    }
+
+    @Test
+    fun `does not add a parent entry when the location itself is listed`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(".", "a.pdf"), result.map { it.name })
+    }
+
+    @Test
+    fun `does not add a parent entry when the subdirectory resolves to the location itself`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        assertEquals(listOf(".", "a.pdf"), service.listDirectory(location.id!!, subdir = ".").map { it.name })
+        assertEquals(listOf(".", "a.pdf"), service.listDirectory(location.id!!, subdir = "tn/..").map { it.name })
+    }
+
+    @Test
+    fun `treats a blank subdirectory as the location itself`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "  ")
+
+        assertEquals(listOf(".", "a.pdf"), result.map { it.name })
+    }
+
+    @Test
+    fun `does not descend into subdirectories by default`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(".", "tn"), result.map { it.name })
+    }
+
+    @Test
+    fun `recursive lists the whole tree below the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/thumb.png").createNewFile()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!, recursive = true)
+
+        assertEquals(listOf(".", "tn", "tn/2020", "a.pdf", "tn/2020/jan.pdf", "tn/thumb.png"), result.map { it.name })
+    }
+
+    @Test
+    fun `recursive lists the whole tree below the subdirectory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn", recursive = true)
+
+        assertEquals(listOf(".", "..", "2020", "thumb.png"), result.map { it.name })
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Entry for the listed directory itself
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `adds an entry for the listed directory itself`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn")
+
+        assertEquals(".", result.first().name)
+    }
+
+    @Test
+    fun `entry for the listed directory itself is marked as a directory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+
+        assertTrue(service.listDirectory(location.id!!, subdir = "tn").first().isDirectory)
+    }
+
+    @Test
+    fun `entry for the listed directory itself reports the size and date of that directory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+        val tn = File(location.uri, "tn")
+
+        val self = service.listDirectory(location.id!!, subdir = "tn").first()
+
+        assertEquals(tn.length(), self.size)
+        assertEquals(tn.lastModified(), self.lastModified!!.toEpochMilli())
+    }
+
+    @Test
+    fun `entry for the listed directory itself is added even for the location itself`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(".", "a.pdf"), result.map { it.name })
+        assertEquals("", result.first().path)
+    }
+
+    @Test
+    fun `entry for the listed directory itself is added for a recursive listing`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn", recursive = true)
+
+        assertEquals(".", result.first().name)
+        assertEquals("tn", result.first().path)
+    }
+
+    @Test
+    fun `entry for the listed directory itself comes before the parent entry`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a/b/c").mkdirs()
+        File(location.uri, "a/b/c/deep.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "a/b/c")
+
+        assertEquals(listOf(".", "..", "deep.pdf"), result.map { it.name })
+    }
+
+    @Test
+    fun `path of the entry for the listed directory itself is relative to the location root`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a/b/c").mkdirs()
+        File(location.uri, "a/b/c/deep.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "a/b/c")
+
+        assertEquals("a/b/c", result.first().path)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Path relative to the location root
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `path of an entry of the location itself equals its name`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "tn").mkdir()
+
+        val result = service.listDirectory(location.id!!)
+
+        // the first entry is the location itself, for which path and name both are empty
+        assertEquals(listOf("", "tn", "a.pdf"), result.map { it.path })
+    }
+
+    @Test
+    fun `path of an entry of a subdirectory is relative to the location root`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn")
+
+        assertEquals(listOf("tn", "", "tn/thumb.png"), result.map { it.path })
+        // the name stays relative to the listed directory
+        assertEquals(listOf(".", "..", "thumb.png"), result.map { it.name })
+    }
+
+    @Test
+    fun `path of a nested entry keeps the whole path below the location root`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a/b/c").mkdirs()
+        File(location.uri, "a/b/c/deep.pdf").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "a/b/c")
+
+        assertEquals(listOf("a/b/c", "a/b", "a/b/c/deep.pdf"), result.map { it.path })
+    }
+
+    @Test
+    fun `path of a recursive listing of the location equals its name`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, recursive = true)
+
+        // the '.' entry of the location itself is the only one where the two differ
+        assertEquals(listOf(".", "tn", "tn/2020", "tn/thumb.png"), result.map { it.name })
+        assertEquals(listOf("", "tn", "tn/2020", "tn/thumb.png"), result.map { it.path })
+    }
+
+    @Test
+    fun `path of a recursive listing of a subdirectory is relative to the location root`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        val result = service.listDirectory(location.id!!, subdir = "tn", recursive = true)
+
+        assertEquals(listOf("tn", "", "tn/2020", "tn/thumb.png"), result.map { it.path })
+        assertEquals(listOf(".", "..", "2020", "thumb.png"), result.map { it.name })
+    }
+
+    @Test
+    fun `path of the parent entry of a top level subdirectory is the location root`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+
+        assertEquals("", service.listDirectory(location.id!!, subdir = "tn")[1].path)
+    }
+
+    @Test
+    fun `path of the parent entry points at the intermediate folder`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a/b/c").mkdirs()
+
+        assertEquals("a/b", service.listDirectory(location.id!!, subdir = "a/b/c")[1].path)
+    }
+
+    @Test
+    fun `listDirectory throws NotAccessibleException for an HTTP location`() {
+        val location = givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+
+        assertThrows<NotAccessibleException> {
+            service.listDirectory(location.id!!)
+        }
+    }
+
+    @Test
+    fun `listDirectory throws NotAccessibleException when the folder is missing`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS).apply {
+            uri = File(uri, "gone").path
+        }
+
+        assertThrows<NotAccessibleException> {
+            service.listDirectory(location.id!!)
+        }
+    }
+
+    @Test
+    fun `listDirectory throws NotFoundException when the subdirectory is missing`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertThrows<NotFoundException> {
+            service.listDirectory(location.id!!, subdir = "no-such-dir")
+        }
+    }
+
+    @Test
+    fun `listDirectory throws NotFoundException when the subdirectory is a file`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        assertThrows<NotFoundException> {
+            service.listDirectory(location.id!!, subdir = "a.pdf")
+        }
+    }
+
+    @Test
+    fun `listDirectory throws NotFoundException when the subdirectory escapes the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        val outside = File(tempDir, "outside").apply { mkdir() }
+        File(outside, "secret.pdf").createNewFile()
+
+        assertThrows<NotFoundException> {
+            service.listDirectory(location.id!!, subdir = "../outside")
+        }
+    }
+
+    @Test
+    fun `listDirectory throws NotFoundException when the subdirectory climbs out and back in`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "tn/thumb.png").createNewFile()
+
+        assertThrows<NotFoundException> {
+            service.listDirectory(location.id!!, subdir = "tn/../..")
+        }
+    }
+
+    @Test
+    fun `listDirectory throws NotFoundException for an unknown location id`() {
+        whenever(locationRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.listDirectory(99)
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
 
@@ -517,6 +1015,22 @@ class LocationServiceTest {
     // StorageService.findById goes through CrudRepository.findById, so the Optional is stubbed here
     private fun givenStorage(storage: Storage) {
         whenever(storageRepository.findById(storage.id!!)).thenReturn(Optional.of(storage))
+    }
+
+    // findById goes through CrudRepository.findById as well, so the Optional is stubbed here too
+    private fun givenLocation(uri: String, locationType: LocationType): Location =
+        Location().apply {
+            id = nextLocationId++
+            name = uri
+            this.uri = uri
+            this.locationType = locationType.i
+            inuse = 1
+        }.also { whenever(locationRepository.findById(it.id!!)).thenReturn(Optional.of(it)) }
+
+    /** creates a folder inside [tempDir] and registers a location pointing at it */
+    private fun givenExistingLocation(locationType: LocationType): Location {
+        val dir = File(tempDir, "location-$nextLocationId").apply { mkdir() }
+        return givenLocation(dir.absolutePath, locationType)
     }
 
     private fun bessource(

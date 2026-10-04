@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
@@ -9,9 +10,12 @@ import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.to.BessourceTO
+import org.endy.pmczero.to.FileSystemEntryTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
+import java.io.File
 import java.net.URI
+import java.time.Instant
 
 @Service
 class LocationService(
@@ -113,6 +117,113 @@ class LocationService(
                 (bessource.name.takeIf { location.extension == null }
                     ?: bessource.name!!.replaceFirst("[.][^.]+$".toRegex(), "") + extension)
     }
+
+    /**
+     * Checks that the folder [providePhysicalRessources] generates its file urls into is
+     * accessible on the file system, so an FS location can be validated before it is used.
+     *
+     * A location counts as accessible when its [Location.uri] points to an existing path that can
+     * both be read and written. HTTP locations ([LocationType.MAIN_HTTP], [LocationType.TN_HTTP])
+     * have no file system path, so false is returned for them, as it is for a location without uri.
+     *
+     * @throws NotFoundException when no location with that id exists
+     */
+    fun isFileSystemAccessible(locationId: Int): Boolean {
+        return accessibleFolderOrNull(findById(locationId)) != null
+    }
+
+    /**
+     * Lists the directory of an FS location, so the files behind the urls of
+     * [providePhysicalRessources] can be browsed.
+     *
+     * @param subdir directory to list, relative to the location. Null or blank lists the location
+     * itself. It may not point outside of the location, so browsing cannot escape the location root.
+     * @param recursive when true the whole tree below the listed directory is returned, otherwise
+     * only its direct children
+     * @return the entries of that directory, directories first, each one ordered by name. The
+     * listing starts with a '.' entry for the listed directory itself, followed by a '..' entry for
+     * its parent when that parent lies within the location, so the caller can both stay put and walk
+     * back up without ever leaving the location. The '..' entry is left out on the location itself,
+     * which has no parent to walk up to. Every entry carries [FileSystemEntryTO.name], relative to
+     * the listed directory, and [FileSystemEntryTO.path], relative to the location root.
+     * @throws NotFoundException when no location with that id exists, or when [subdir] does not
+     * exist or points outside of the location
+     * @throws NotAccessibleException when the location is not an FS location or its path is not
+     * accessible on the file system
+     */
+    fun listDirectory(
+        locationId: Int,
+        subdir: String? = null,
+        recursive: Boolean = false
+    ): List<FileSystemEntryTO> {
+        val location = findById(locationId)
+        // canonical, so that the entries and the root can be related to each other by path
+        val root = (accessibleFolderOrNull(location)
+            ?: throw NotAccessibleException("location $locationId is not an accessible file system location")).canonicalFile
+        val folder = subfolderOrNull(root, subdir) ?: throw NotFoundException()
+
+        val entries =
+            if (recursive) folder.walkTopDown().drop(1)
+            else folder.listFiles()?.asSequence() ?: emptySequence()
+
+        val listed = entries
+            .map { entryTO(root, folder, it) }
+            .sortedWith(compareByDescending<FileSystemEntryTO> { it.isDirectory }.thenBy { it.name.lowercase() })
+            .toList()
+
+        return listOf(selfEntry(root, folder)) + listOfNotNull(parentEntryOrNull(root, folder)) + listed
+    }
+
+    /**
+     * the '.' entry for the listed [folder] itself. Its path is the one of [folder] below [root], so
+     * the caller always learns where in the location it currently is.
+     */
+    private fun selfEntry(root: File, folder: File): FileSystemEntryTO =
+        entryTO(root, folder, folder).copy(name = ".")
+
+    /**
+     * the '..' entry for the parent of [folder] within [root], null when [folder] is the location
+     * itself. Walking up therefore never leaves the location. Only the name is faked, the path is
+     * the real one of the parent, so it is empty when the parent is the location root.
+     */
+    private fun parentEntryOrNull(root: File, folder: File): FileSystemEntryTO? {
+        if (folder.canonicalFile == root.canonicalFile) return null
+        val parent = folder.parentFile ?: return null
+        return entryTO(root, folder, parent).copy(name = "..")
+    }
+
+    /** the listing entry of [entry], located in the listed [folder] of the location root [root] */
+    private fun entryTO(root: File, folder: File, entry: File): FileSystemEntryTO =
+        FileSystemEntryTO(
+            name = entry.pathIn(folder),
+            path = entry.pathIn(root),
+            isDirectory = entry.isDirectory,
+            size = entry.length(),
+            lastModified = Instant.ofEpochMilli(entry.lastModified())
+        )
+
+    /** the accessible folder of an FS location, null for an HTTP location or an unusable path */
+    private fun accessibleFolderOrNull(location: Location): File? {
+        if (location.locationType != LocationType.MAIN_FS.i && location.locationType != LocationType.TN_FS.i)
+            return null
+        val folder = location.uri?.let { File(it) } ?: return null
+        return if (folder.exists() && folder.canRead() && folder.canWrite()) folder else null
+    }
+
+    /** resolves [subdir] inside [root], null when it is missing or escapes [root] */
+    private fun subfolderOrNull(root: File, subdir: String?): File? {
+        if (subdir.isNullOrBlank()) return root
+        val folder = File(root, subdir).canonicalFile
+        val rootPath = root.canonicalFile.path
+        // canonicalFile resolves '..' and symlinks, so the comparison rules out escaping the location
+        if (folder.path != rootPath && !folder.path.startsWith(rootPath + File.separator))
+            return null
+        return if (folder.isDirectory) folder else null
+    }
+
+    /** path of this file relative to [folder], always with '/' as separator */
+    private fun File.pathIn(folder: File): String =
+        toRelativeString(folder).replace(File.separatorChar, '/')
 
 
     fun getLocationStartingWith(urls: List<String>): Pair<String, List<Location>> {
