@@ -1,7 +1,9 @@
 package org.endy.pmczero.model.modern
 
+import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.UpdateTimestamp
 import java.io.File
-import java.sql.Date
+import java.time.LocalDateTime
 import javax.persistence.*
 
 @Entity
@@ -36,11 +38,13 @@ class Location {
     @Column(name = "inuse", nullable = true)
     var inuse: Byte? = null
 
-    @Column(name = "created_at", nullable = true)
-    var createdAt: Date? = null
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = true, updatable = false)
+    var createdAt: LocalDateTime? = null
 
+    @UpdateTimestamp
     @Column(name = "updated_at", nullable = true)
-    var updatedAt: Date? = null
+    var updatedAt: LocalDateTime? = null
 
 //    @Column(name = "prefix", nullable = true)
 //    var prefix: String? = null
@@ -53,6 +57,8 @@ class Location {
 
     @Column(name = "filetype", nullable = true)
     var extension: String? = null
+
+    fun storageOrNull(): Storage? = if (this::storage.isInitialized) storage else null
 
     override fun toString(): String =
         "Entity of type: ${javaClass.name} ( " +

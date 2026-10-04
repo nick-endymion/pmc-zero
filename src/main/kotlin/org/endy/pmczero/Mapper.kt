@@ -33,17 +33,13 @@ fun MsetTO.toEntity(): Mset {
 }
 
 
-fun Medium.toTO(withBessources: Boolean = false, withMset: Boolean = false): MediumTO {
+fun Medium.toTO(withBessources: Boolean = true, withMset: Boolean = false): MediumTO {
     return MediumTO(
         id = id,
         name = name,
         created_at = created_at,
         updated_at = updated_at,
-        bessources = if (withBessources) {
-            bessources.map { it.toTO() }
-        } else {
-            arrayListOf()
-        },
+        bessources = bessources.map { it.toTO() },
         mset = if (withMset) {
             mset?.toTO()
         } else {
@@ -61,11 +57,11 @@ fun MediumTO.toEntity(mset: Mset? = null): Medium {
     }
 }
 
-fun Bessource.toTO(): BessourceTO {
+fun Bessource.toTO(withImage: Boolean = false): BessourceTO {
     return BessourceTO(
         id = id,
         name = name,
-        btype = ressType,
+        ressType = ressType,
         mediumId = medium?.id,
         storageId = storage.id,
         encrypted = encrypted,
@@ -86,7 +82,7 @@ fun Bookmark.toTO(): BookmarkTO {
 }
 
 fun Bookmark.toFatTO(): BookmarkTO {
-    return  this.toTO().also { it.medium = medium?.toTO(withMset = true) }
+    return this.toTO().also { it.medium = medium?.toTO(withMset = true) }
 }
 
 
@@ -134,17 +130,57 @@ fun ScannerShort.toTO(): ScannerShortTO {
     )
 }
 
-fun Location.toTO(): LocationTO {
+fun Storage.toTO(withLocations: Boolean = false): StorageTO {
+    return StorageTO(
+        id = id,
+        name = name,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        locations = if (withLocations) locations.map { it.toTO() } else listOf()
+    )
+}
+
+fun StorageTO.toEntity(): Storage {
+    return Storage().also {
+        it.id = id
+        it.name = name
+        it.createdAt = createdAt
+        it.updatedAt = updatedAt
+    }
+}
+
+fun Location.toTO(withStorage: Boolean = true, withStorageLocations: Boolean = false): LocationTO {
     return LocationTO(
         id = id,
         name = name,
         uri = uri,
         description = description,
         locationType = locationType,
-        storageTO = StorageTO() // todo
+        storageTO = if (withStorage) storageOrNull()?.toTO(withStorageLocations) ?: StorageTO() else StorageTO(),
+        inuse = inuse,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        mfileId = mfileId,
+        origin = origin,
+        extension = extension
     )
 }
 
+
+fun LocationTO.toEntity(): Location {
+    return Location().also {
+        it.id = id
+        it.name = name
+        it.uri = uri
+        it.description = description
+        it.locationType = locationType
+        it.inuse = inuse
+        it.mfileId = mfileId
+        it.origin = origin
+        it.extension = extension
+        it.storage = storageTO.toEntity()
+    }
+}
 //fun Medium.toTO(): MediumTO {
 //    return MediumTO()
 //}

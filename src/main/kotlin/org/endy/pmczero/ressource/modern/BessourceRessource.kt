@@ -1,4 +1,4 @@
-package org.endy.pmczero.ressource
+package org.endy.pmczero.ressource.modern
 
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.repository.LocationRepository

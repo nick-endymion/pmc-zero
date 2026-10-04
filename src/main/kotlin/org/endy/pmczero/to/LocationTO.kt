@@ -1,6 +1,6 @@
 package org.endy.pmczero.to
 
-import java.sql.Date
+import java.time.LocalDateTime
 
 data class LocationTO(
     var id: Int? = null,
@@ -10,8 +10,8 @@ data class LocationTO(
     var locationType: Int? = null,
     var storageTO: StorageTO,
     var inuse: Byte? = null,
-    var createdAt: Date? = null,
-    var updatedAt: Date? = null,
+    var createdAt: LocalDateTime? = null,
+    var updatedAt: LocalDateTime? = null,
     var mfileId: Int? = null,
     var origin: Byte? = null,
     var extension: String? = null

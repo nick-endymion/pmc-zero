@@ -26,7 +26,7 @@ class MsetRessource(
 
     @GetMapping("/{id}/media")
     fun getMsetWithMedia(@PathVariable id: Int): MsetTO {
-        return msetService.findById(id).toTOwithMedia()
+        return msetService.findById(id).toTOwithMedia(true)
     }
 
     @GetMapping("/{id}/ressources-urls")
@@ -42,14 +42,17 @@ class MsetRessource(
     @PostMapping("/")
     fun createMset(@RequestBody msetTO: MsetTO): MsetTO {
         if (msetTO.id != null) throw Exception()
-        return msetService.save(msetTO.toEntity()).toTO()
+        val saved = msetService.save(msetTO.toEntity())
+        // re-read so the response reflects the persisted row
+        return msetService.findById(saved.id!!).toTO()
     }
 
     @PutMapping("/{id}")
     fun saveMset(@PathVariable id: Int, @RequestBody msetTO: MsetTO): MsetTO {
         if (id != msetTO.id) throw Exception()
         msetService.save(msetTO.toEntity())
-        return msetService.save(msetTO.toEntity()).toTO()
+        // re-read: created_at is updatable=false, so the merged instance does not carry it back
+        return msetService.findById(id).toTO()
     }
 
     @DeleteMapping("/{id}")

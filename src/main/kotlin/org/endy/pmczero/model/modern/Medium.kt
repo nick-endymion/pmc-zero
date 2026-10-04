@@ -1,6 +1,8 @@
 package org.endy.pmczero.model.modern
 
-import java.sql.Date
+import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.UpdateTimestamp
+import java.time.LocalDateTime
 import javax.persistence.*
 
 @Entity
@@ -20,15 +22,13 @@ class Medium {
     @Column(name = "name", nullable = true)
     var name: String? = null
 
-    @Column(name = "created_at", nullable = true, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
-    var created_at: Date? = null
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = true, updatable = false)
+    var created_at: LocalDateTime? = null
 
-    @Column(
-        name = "updated_at",
-        nullable = true,
-        columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-    )
-    var updated_at: Date? = null
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = true)
+    var updated_at: LocalDateTime? = null
 
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null

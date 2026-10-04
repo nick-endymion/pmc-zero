@@ -1,10 +1,14 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotFoundException
+import org.endy.pmczero.model.LocationType
+import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
+import org.endy.pmczero.to.BessourceTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import java.net.URI
@@ -33,6 +37,78 @@ class LocationService(
         locationRepository.delete(findById(id))
     }
 
+    fun providePhysicalRessources(bessources: List<BessourceTO>, representationTyp: String): List<BessourceTO> {
+
+        val locationType = when (representationTyp) {
+            "HTTP" -> LocationType.MAIN_HTTP
+            "FILE" -> LocationType.MAIN_FS
+            else -> throw NotFoundException()
+        }
+
+        if (bessources.find { it.ressType == RessType.TN.i } == null) {
+            val bessourcesWithTN = bessources.first { it.ressType == RessType.PRIMARY.i }.let { b ->
+                val tnBessource = BessourceTO(
+                    id = -1,
+                    name = b.name,
+                    mediumId = b.mediumId,
+                    ressType = RessType.TN.i,
+                    storageId = b.storageId,
+                    locationType = when (representationTyp) {
+                        "HTTP" -> LocationType.TN_HTTP
+                        "FILE" -> LocationType.TN_FS
+                        else -> throw NotFoundException()
+                    }
+                )
+                tnBessource
+            }
+            bessources.plus(bessourcesWithTN)
+        }
+
+        bessources.forEach { b ->
+            if (b.locationType == null)
+                b.locationType = when (representationTyp) {
+                    "HTTP" -> {
+                        when (b.ressType) {
+                            RessType.PRIMARY.i -> LocationType.MAIN_HTTP
+                            RessType.TN.i -> LocationType.TN_HTTP
+                            else -> throw NotFoundException()
+                        }
+                    }
+                    "FILE" ->   {
+                        when (b.ressType) {
+                            RessType.TN.i -> LocationType.MAIN_FS
+                            RessType.TN.i -> LocationType.TN_FS
+                            else -> throw NotFoundException()
+                        }
+                    }
+                    else -> throw NotFoundException()
+                }
+        }
+
+        return bessources.map { bessource ->
+            val url = getUrlFor(bessource)
+            if (url != null) {
+                bessource.url = url
+                bessource
+            } else {
+                throw NotFoundException()
+            }
+        }
+    }
+
+    fun getUrlFor(bessource: BessourceTO): String? {
+        val storage = storageService.findById(bessource.storageId!!);  //NPE possible, but should not happen
+        val location = storage.locationInUse(bessource.locationType!!.i)
+        if (location == null) return null
+        return url(bessource, location)
+    }
+
+    fun url(bessource: BessourceTO, location: Location): String {
+        return location.uri + "/" +
+                (bessource.name.takeIf { location.extension == null }
+                    ?: bessource.name!!.replaceFirst("[.][^.]+$".toRegex(), "") + extension)  //todo re extension
+    }
+
     fun url(bessource: Bessource, location: Location): String {
         return location.uri + "/" +
                 (bessource.name.takeIf { location.extension == null }
@@ -42,13 +118,13 @@ class LocationService(
 
     fun getLocationStartingWith(urls: List<String>): Pair<String, List<Location>> {
         val url = getCommonUrlStart(urls)
-        return Pair(url, locationRepository.findLocationsByNameStartingWith(url).filter {it.locationType == 1})
+        return Pair(url, locationRepository.findLocationsByNameStartingWith(url).filter { it.locationType == 1 })
     }
 
     fun getCommonUrlStart(urls: List<String>): String {
         val commonStart = getCommonStart(urls)
         val uri = URI(commonStart)
-        return  uri.scheme+ "://"+ uri.getHost()
+        return uri.scheme + "://" + uri.getHost()
 //        return commonStart.getBaseUrl() //todo
     }
 

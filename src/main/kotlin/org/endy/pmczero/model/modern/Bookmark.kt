@@ -1,6 +1,8 @@
 package org.endy.pmczero.model.modern
 
-import java.sql.Date
+import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.UpdateTimestamp
+import java.time.LocalDateTime
 import javax.persistence.*
 
 @Entity
@@ -17,22 +19,13 @@ class Bookmark {
     @Column(name = "url", nullable = true)
     var url: String? = null
 
-    //    @Column(name = "created_at")
-//    var created_at: Date? = null
-    @Column(
-        name = "created_at",
-        updatable = false, insertable = false,
-        columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP"
-    )
-    var created_at: java.util.Date? = null
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = true, updatable = false)
+    var created_at: LocalDateTime? = null
 
-    @Column(
-        name = "updated_at",
-        nullable = true,
-        updatable = false, insertable = false,
-        columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-    )
-    var updated_at: java.util.Date? = null
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = true)
+    var updated_at: LocalDateTime? = null
 
     @ManyToOne(
         fetch = FetchType.LAZY,

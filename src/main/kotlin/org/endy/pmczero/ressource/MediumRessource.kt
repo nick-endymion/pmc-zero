@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/api/mediums")
+@RequestMapping("/api/media")
 class MediumRessource(
     private val mediaService: MediaService
 ) {

@@ -1,6 +1,8 @@
 package org.endy.pmczero.model.modern
 
-import java.sql.Date
+import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.UpdateTimestamp
+import java.time.LocalDateTime
 import javax.persistence.*
 
 @Entity
@@ -15,15 +17,13 @@ class Storage {
     @Column(name = "name", nullable = true)
     var name: String? = null
 
-    @Column(name = "created_at", nullable = true, columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
-    var createdAt: Date? = null
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = true, updatable = false)
+    var createdAt: LocalDateTime? = null
 
-    @Column(
-        name = "updated_at",
-        nullable = true,
-        columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"
-    )
-    var updatedAt: Date? = null
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = true)
+    var updatedAt: LocalDateTime? = null
 
     @OneToMany(mappedBy = "storage", fetch = FetchType.LAZY)
     var locations: List<Location> = mutableListOf()

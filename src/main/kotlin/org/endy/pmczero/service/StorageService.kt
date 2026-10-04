@@ -10,8 +10,15 @@ import org.springframework.stereotype.Service
 @Service
 class StorageService(private val storageRepository: StorageRepository) {
 
-    fun findById(id: Int): Storage {
-        return storageRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    fun findById(id: Int, withLocations: Boolean = false): Storage {
+        if (withLocations)
+            return storageRepository.findByIdOrNullWithLocations(id) ?: throw NotFoundException()
+        else
+            return storageRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    }
+
+    fun findAll(): List<Storage> {
+        return storageRepository.findAll().toList()
     }
 
     fun save(storage: Storage): Storage {
