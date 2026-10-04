@@ -60,16 +60,16 @@ class MsetRessource(
         return msetService.delete(id)
     }
 
-
-    @GetMapping("/{id}/images/html")
-    fun getImagesHtmlPage(@PathVariable id: Int): String {
-        return msetService.htmlImagePage(id, RessType.PRIMARY)
-    }
-
-    @GetMapping("/{id}/tns/html")
-    fun getTnsHtmlPage(@PathVariable id: Int): String {
-        return msetService.htmlImagePage(id, RessType.TN)
-    }
+//
+//    @GetMapping("/{id}/images/html")
+//    fun getImagesHtmlPage(@PathVariable id: Int): String {
+//        return msetService.htmlImagePage(id, RessType.PRIMARY)
+//    }
+//
+//    @GetMapping("/{id}/tns/html")
+//    fun getTnsHtmlPage(@PathVariable id: Int): String {
+//        return msetService.htmlImagePage(id, RessType.TN)
+//    }
 
 //    @PostMapping("/scan")
 //    fun scan(@RequestBody sts: SourceToScanTO): MsetTO {

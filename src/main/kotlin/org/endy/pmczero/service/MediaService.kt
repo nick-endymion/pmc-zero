@@ -1,12 +1,15 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotFoundException
+import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.MediaRepository
+import org.endy.pmczero.to.BessourceTO
+import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 
@@ -38,35 +41,118 @@ class MediaService(
 
     fun url(id: Int, ressType: RessType): String {
         val medium = findById(id)
-        return url(medium, ressType)
+        return provideUrl(medium, ressType)
+            ?: throw Exception("no url found for medium ${medium.id} and resource type $ressType")
     }
 
     fun url(medium: Medium, ressType: RessType): String {
-
-//        var ressTypeFirstAttempt = ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY
-
-        val url = getUrlFor(medium,
-            ressType.takeUnless { ressType == RessType.TN } ?: RessType.PRIMARY,
-            LocationType.MAIN_HTTP.takeUnless { ressType == RessType.TN } ?: LocationType.TN_HTTP)
-
-        if (url != null) return url
-
-        if (ressType != RessType.TN) {
-            throw Exception()
-        }
-        return getUrlFor(
-            medium,
-            ressType,
-            LocationType.MAIN_HTTP
-        ) ?: throw Exception()
+        return provideUrl(medium, ressType)
+            ?: throw Exception("no url found for medium ${medium.id} and resource type $ressType")
     }
 
+    /**
+     * Provides the url of the [ressType] ressource of [medium] via
+     * [LocationService.providePhysicalRessources], which owns the ressource type -> location type
+     * mapping and the url building.
+     *
+     * A thumbnail is not necessarily available in the TN location, so the main location is used as
+     * fallback.
+     *
+     * @return null when [medium] has no such ressource or it cannot be located
+     */
+    private fun provideUrl(medium: Medium, ressType: RessType): String? =
+        if (ressType == RessType.TN) {
+            provideUrl(medium, ressType, forcedLocationType = null)
+                ?: provideUrl(medium, ressType, forcedLocationType = LocationType.MAIN_HTTP)
+        } else {
+            provideUrl(medium, ressType, forcedLocationType = forcedLocationType(ressType))
+        }
+
     fun getUrlFor(medium: Medium, ressType: RessType, locationType: LocationType): String? {
-        val bessource = medium.bessources.first { it.ressType == ressType.i }
-        val storage = bessource.storage
-        val location = storage.locationInUse(locationType.i)
-        if (location == null) return null
-        return locationService.url(bessource, location)
+        return provideUrl(medium, ressType, forcedLocationType = locationType)
+    }
+
+    /**
+     * Provides the url of the [ressType] ressource of [medium] via
+     * [LocationService.providePhysicalRessources], which owns the ressource type -> location type
+     * mapping and the url building.
+     *
+     * For [RessType.TN] the thumbnailed bessource is used, or the primary one when the medium has
+     * none, in which case the thumbnail is derived from it.
+     *
+     * @param forcedLocationType location type to use instead of the derived one
+     * @return null when [medium] has no such ressource or it cannot be located
+     */
+    private fun provideUrl(
+        medium: Medium,
+        ressType: RessType,
+        forcedLocationType: LocationType?
+    ): String? {
+        val allBessources = medium.toTO().bessources
+
+        // for TN the primary bessource is needed as well, providePhysicalRessources derives the
+        // thumbnail from it when the medium has no thumbnailed bessource
+        val bessources = allBessources.filter {
+            it.ressType == ressType.i || (ressType == RessType.TN && it.ressType == RessType.PRIMARY.i)
+        }
+
+        if (bessources.isEmpty()) return null
+
+        if (forcedLocationType != null)
+            bessources.forEach { it.locationType = forcedLocationType }
+
+        // only for TN, where a missing thumbnailed bessource is derived from the primary one
+        val provided = providePhysicalRessources(bessources, generateThumbnail = ressType == RessType.TN)
+            ?: return null
+
+        return provided.firstOrNull { it.ressType == ressType.i }?.url
+    }
+
+    /**
+     * @return the [bessources] with their physical url, or null when a storage or location is missing
+     */
+    private fun providePhysicalRessources(
+        bessources: List<BessourceTO>,
+        generateThumbnail: Boolean
+    ): List<BessourceTO>? = try {
+        locationService.providePhysicalRessources(bessources, "HTTP", generateThumbnail)
+    } catch (e: NotFoundException) {  // missing storage or location
+        null
+    }
+
+    /**
+     * providePhysicalRessources derives the location type for PRIMARY (MAIN_HTTP) and TN (TN_HTTP),
+     * the remaining ressource types (PIC, URL, FOLDER) are stored in the main location.
+     */
+    private fun forcedLocationType(ressType: RessType): LocationType? = when (ressType) {
+        RessType.PRIMARY, RessType.TN -> null
+        else -> LocationType.MAIN_HTTP
+    }
+
+    /**
+     * Provides the physical urls of [medium], the original and the thumbnail, via
+     * [LocationService.providePhysicalRessources].
+     *
+     * A thumbnailed bessource is derived from the primary one when the medium has none.
+     *
+     * @return null when [medium] does not provide both urls, e.g. for migrated media of type
+     * (legacy) folder or when no location is in use.
+     */
+    fun ressourceUrls(medium: Medium): RessourceUrlsTO? {
+        // the remaining bessource types (PIC, URL, FOLDER) have no location assigned by
+        // providePhysicalRessources
+        val bessources = medium.toTO().bessources
+            .filter { it.ressType in listOf(RessType.PRIMARY.i, RessType.TN.i) }
+
+        if (bessources.none { it.ressType == RessType.PRIMARY.i }) return null
+
+        val provided = providePhysicalRessources(bessources, generateThumbnail = true) ?: return null
+
+        val primaryUrl = provided.firstOrNull { it.ressType == RessType.PRIMARY.i }?.url
+        val tnUrl = provided.firstOrNull { it.ressType == RessType.TN.i }?.url
+
+        return if (primaryUrl == null || tnUrl == null) null
+        else RessourceUrlsTO(medium.id, medium.name, primaryUrl, tnUrl)
     }
 
     fun file(id: Int, type: RessType) {

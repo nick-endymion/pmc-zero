@@ -37,55 +37,52 @@ class LocationService(
         locationRepository.delete(findById(id))
     }
 
-    fun providePhysicalRessources(bessources: List<BessourceTO>, representationTyp: String): List<BessourceTO> {
+    /**
+     * Derives the physical location of every given [bessources], assigns the matching
+     * [LocationType] and fills in the url.
+     *
+     * @param generateThumbnail when true (default) and no bessource of [RessType.TN] is given, a
+     * thumbnailed bessource is derived from the [RessType.PRIMARY] one and appended. Callers that
+     * resolve a single bessource pass false, otherwise a missing TN location would fail the whole call.
+     */
+    fun providePhysicalRessources(
+        bessources: List<BessourceTO>,
+        representationTyp: String,
+        generateThumbnail: Boolean = true
+    ): List<BessourceTO> {
 
-        val locationType = when (representationTyp) {
-            "HTTP" -> LocationType.MAIN_HTTP
-            "FILE" -> LocationType.MAIN_FS
+        val (mainLocationType, tnLocationType) = when (representationTyp) {
+            "HTTP" -> LocationType.MAIN_HTTP to LocationType.TN_HTTP
+            "FILE" -> LocationType.MAIN_FS to LocationType.TN_FS
             else -> throw NotFoundException()
         }
 
-        if (bessources.find { it.ressType == RessType.TN.i } == null) {
-            val bessourcesWithTN = bessources.first { it.ressType == RessType.PRIMARY.i }.let { b ->
-                val tnBessource = BessourceTO(
+        var allBessources = bessources
+
+        if (generateThumbnail && allBessources.find { it.ressType == RessType.TN.i } == null) {
+            val primary = allBessources.first { it.ressType == RessType.PRIMARY.i }
+            allBessources = allBessources.plus(
+                BessourceTO(
                     id = -1,
-                    name = b.name,
-                    mediumId = b.mediumId,
+                    name = primary.name,
+                    mediumId = primary.mediumId,
                     ressType = RessType.TN.i,
-                    storageId = b.storageId,
-                    locationType = when (representationTyp) {
-                        "HTTP" -> LocationType.TN_HTTP
-                        "FILE" -> LocationType.TN_FS
-                        else -> throw NotFoundException()
-                    }
+                    storageId = primary.storageId,
+                    locationType = tnLocationType
                 )
-                tnBessource
-            }
-            bessources.plus(bessourcesWithTN)
+            )
         }
 
-        bessources.forEach { b ->
+        allBessources.forEach { b ->
             if (b.locationType == null)
-                b.locationType = when (representationTyp) {
-                    "HTTP" -> {
-                        when (b.ressType) {
-                            RessType.PRIMARY.i -> LocationType.MAIN_HTTP
-                            RessType.TN.i -> LocationType.TN_HTTP
-                            else -> throw NotFoundException()
-                        }
-                    }
-                    "FILE" ->   {
-                        when (b.ressType) {
-                            RessType.TN.i -> LocationType.MAIN_FS
-                            RessType.TN.i -> LocationType.TN_FS
-                            else -> throw NotFoundException()
-                        }
-                    }
+                b.locationType = when (b.ressType) {
+                    RessType.PRIMARY.i -> mainLocationType
+                    RessType.TN.i -> tnLocationType
                     else -> throw NotFoundException()
                 }
         }
 
-        return bessources.map { bessource ->
+        return allBessources.map { bessource ->
             val url = getUrlFor(bessource)
             if (url != null) {
                 bessource.url = url
@@ -97,8 +94,10 @@ class LocationService(
     }
 
     fun getUrlFor(bessource: BessourceTO): String? {
-        val storage = storageService.findById(bessource.storageId!!);  //NPE possible, but should not happen
-        val location = storage.locationInUse(bessource.locationType!!.i)
+        val storageId = bessource.storageId ?: return null
+        val locationType = bessource.locationType ?: return null
+        val storage = storageService.findById(storageId)
+        val location = storage.locationInUse(locationType.i)
         if (location == null) return null
         return url(bessource, location)
     }

@@ -50,13 +50,12 @@ class MsetService(
         val mips: MutableList<RessourceUrlsTO> = mutableListOf()
         for (medium in media) {
             try {  // important, since there are migrated media of type (legacy) folder, which have no ressources
-                mips.add(
-                    RessourceUrlsTO(
-                        medium.id, medium.name,
-                        mediaService.url(medium, RessType.PRIMARY),
-                        mediaService.url(medium, RessType.TN)
-                    )
-                )
+                val ressourceUrls = mediaService.ressourceUrls(medium)
+                if (ressourceUrls == null) {
+                    println("no ressource found for medium: " + medium.id)
+                    continue
+                }
+                mips.add(ressourceUrls)
             } catch (e: Exception) {
                 println("no ressource found for medium: " + id)
             }
@@ -64,22 +63,22 @@ class MsetService(
         return mips
     }
 
-    fun htmlImagePage(id: Int, rtype: RessType): String {
-        val media = findById(id).media
-
-        var html = "<html><body>"
-        for (medium in media) {
-            try {  // important, since there are migrated media of type (legacy) folder, which have no ressources
-                val url = mediaService.url(medium, rtype)
-                val urlPrimary = mediaService.url(medium, RessType.PRIMARY)
-                html += "<a href=\"" + urlPrimary + "\">   <img src=\"" + url + "\"></a>"
-            } catch (e: Exception) {
-                println("no ressource found for medium: " + id)
-            }
-        }
-        return html + "</body></html>"
-
-    }
+//    fun htmlImagePage(id: Int, rtype: RessType): String {
+//        val media = findById(id).media
+//
+//        var html = "<html><body>"
+//        for (medium in media) {
+//            try {  // important, since there are migrated media of type (legacy) folder, which have no ressources
+//                val url = mediaService.url(medium, rtype)
+//                val urlPrimary = mediaService.url(medium, RessType.PRIMARY)
+//                html += "<a href=\"" + urlPrimary + "\">   <img src=\"" + url + "\"></a>"
+//            } catch (e: Exception) {
+//                println("no ressource found for medium: " + id)
+//            }
+//        }
+//        return html + "</body></html>"
+//
+//    }
 
     fun url(id: Int, type: RessType): String {
 //        val mfile = findById(id)
