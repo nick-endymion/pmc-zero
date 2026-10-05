@@ -48,5 +48,15 @@ class Bessource {
     @Column(name = "encrypted", nullable = true)
     var encrypted: Boolean? = false
 
+    /**
+     * The storage of this bessource, null when it has none.
+     *
+     * `storage` is lateinit, so reading it on a bessource that never got one throws rather than
+     * returning null. This mirrors [Location.storageOrNull]: a bessource always references a storage,
+     * but one built in memory (as the draft bessources of a scan are) need not have one yet, and a
+     * caller has to be able to tell "no storage" from "crash".
+     */
+    fun storageOrNull(): Storage? = if (this::storage.isInitialized) storage else null
+
 }
 

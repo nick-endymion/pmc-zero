@@ -7,6 +7,8 @@ import org.endy.pmczero.model.RessType
 import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.ScannerService
+import org.endy.pmczero.service.ThumbnailService
+import org.endy.pmczero.to.MsetThumbnailsTO
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.web.bind.annotation.*
@@ -16,7 +18,8 @@ import org.springframework.web.bind.annotation.*
 class MsetRessource(
     val msetService: MsetService,
     val scannerService: ScannerService,
-    val locationService: LocationService
+    val locationService: LocationService,
+    val thumbnailService: ThumbnailService
 ) {
 
     @GetMapping("/{id}")
@@ -32,6 +35,30 @@ class MsetRessource(
     @GetMapping("/{id}/ressources-urls")
     fun getMsetWithMediax(@PathVariable id: Int): List<RessourceUrlsTO> {
         return msetService.ressourcesInUse(id)
+    }
+
+    /**
+     * Creates the thumbnail of every medium of this mset, answering what happened to each of them.
+     *
+     * One medium that cannot be thumbnailed does not fail the call: a scanned mset routinely holds
+     * media with no primary bessource and media whose files are gone, and one of those must not stop
+     * the rest from being processed. The answer therefore splits the media three ways, into
+     * [MsetThumbnailsTO.thumbnails] (each carrying whether it was generated or was already there),
+     * [MsetThumbnailsTO.skipped] (no primary bessource, so nothing to derive one from) and
+     * [MsetThumbnailsTO.failures] (attempted and could not be finished, with the reason). Retrying is
+     * a matter of calling this again: media that already have a thumbnail are left alone, so only
+     * what is in failures is processed a second time.
+     *
+     * Answers 404 when the mset does not exist.
+     *
+     * @param force regenerate every thumbnail, even the ones already on disk
+     */
+    @PostMapping("/{id}/thumbnails")
+    fun createThumbnails(
+        @PathVariable id: Int,
+        @RequestParam(name = "force", required = false, defaultValue = "false") force: Boolean
+    ): MsetThumbnailsTO {
+        return thumbnailService.createThumbnailsOfMset(id, force)
     }
 
     @GetMapping("/")
