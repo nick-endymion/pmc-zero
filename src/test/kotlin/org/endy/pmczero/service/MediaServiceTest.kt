@@ -37,7 +37,7 @@ class MediaServiceTest {
 
     @BeforeEach
     fun setUp() {
-        val locationService = LocationService(locationRepository, StorageService(storageRepository))
+        val locationService = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
         service = MediaService(mediaRepository, bessourceRepository, locationService)
     }
 

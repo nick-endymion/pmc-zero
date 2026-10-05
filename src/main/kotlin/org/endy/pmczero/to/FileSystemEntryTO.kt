@@ -16,11 +16,16 @@ import java.time.Instant
  * The listing carries two entries whose [name] is the conventional '.' and '..': '.' is the listed
  * directory itself and '..' its parent, which is left out when the location itself is listed. Only
  * those two names are relative markers, [path] always points at a real folder.
+ *
+ * [existsAlready] tells a caller which files are known already: it is true when a medium with a
+ * primary bessource pointing at this entry is stored in the database, which is exactly what
+ * scanning this entry would create. A directory carries false, a directory is no medium.
  */
 data class FileSystemEntryTO(
     val name: String,
     val path: String,
     val isDirectory: Boolean,
     val size: Long,
-    val lastModified: Instant?
+    val lastModified: Instant?,
+    val existsAlready: Boolean = false
 )

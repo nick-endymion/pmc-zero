@@ -8,6 +8,7 @@ import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.repository.StorageRepository
 import org.endy.pmczero.to.BessourceTO
@@ -21,6 +22,9 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
@@ -40,6 +44,7 @@ class LocationServiceTest {
 
     private val locationRepository: LocationRepository = mock()
     private val storageRepository: StorageRepository = mock()
+    private val bessourceRepository: BessourceRepository = mock()
 
     private lateinit var service: LocationService
 
@@ -55,7 +60,7 @@ class LocationServiceTest {
     @BeforeEach
     fun setUp() {
         // real StorageService on top of a mocked repository: keeps the (final) service class unmocked
-        service = LocationService(locationRepository, StorageService(storageRepository))
+        service = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
     }
 
     // -------------------------------------------------------------------------------------
@@ -983,6 +988,128 @@ class LocationServiceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // Already known entries
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `flags a file whose medium is stored already`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+
+        val result = service.listDirectory(location.id!!)
+
+        // the '.' entry is the location itself and can never be a known medium
+        assertEquals(listOf(".", "a.pdf"), result.map { it.name })
+        assertEquals(listOf(false, true), result.map { it.existsAlready })
+    }
+
+    @Test
+    fun `leaves a file the database knows nothing about unflagged`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+
+        val result = service.listDirectory(location.id!!)
+
+        // only the file the database knows is flagged, b.pdf is not
+        assertEquals(listOf("a.pdf"), result.filter { it.existsAlready }.map { it.name })
+    }
+
+    @Test
+    fun `matches a bessource of a recursive listing by its path below the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020/jan.pdf").apply { parentFile.mkdirs(); createNewFile() }
+        givenExistingMedia(location, "tn/2020/jan.pdf")
+
+        val jan = service.listDirectory(location.id!!, subdir = "tn/2020", recursive = true)
+            .single { it.name == "jan.pdf" }
+
+        assertTrue(jan.existsAlready)
+        // the query is answered with the path below the location, not with the entry name
+        verify(bessourceRepository).findNamesOfExistingMedia(
+            location.storage.id!!, RessType.PRIMARY.i, listOf("tn/2020/jan.pdf")
+        )
+    }
+
+    @Test
+    fun `asks the database only about the files of the listing, in no particular order`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+
+        service.listDirectory(location.id!!)
+
+        // the directories and the '.' entry are no media, so their paths are not looked up
+        val asked = argumentCaptor<Collection<String>>()
+        verify(bessourceRepository).findNamesOfExistingMedia(
+            eq(location.storage.id!!), eq(RessType.PRIMARY.i), asked.capture()
+        )
+        assertEquals(setOf("a.pdf", "b.pdf"), asked.firstValue.toSet())
+    }
+
+    @Test
+    fun `never flags a directory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+        File(location.uri, "a.pdf").createNewFile()
+        // a bessource named like the folder would still not make the folder a known medium
+        givenExistingMedia(location, "tn")
+
+        val result = service.listDirectory(location.id!!)
+
+        assertEquals(listOf(".", "tn"), result.filter { it.isDirectory }.map { it.name })
+        assertTrue(result.none { it.isDirectory && it.existsAlready })
+    }
+
+    @Test
+    fun `never flags the dot entries`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn").mkdir()
+
+        assertTrue(service.listDirectory(location.id!!, subdir = "tn").none { it.existsAlready })
+    }
+
+    @Test
+    fun `checks the whole listing in a single query`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        service.listDirectory(location.id!!, recursive = true)
+
+        verify(bessourceRepository, times(1)).findNamesOfExistingMedia(
+            eq(location.storage.id!!), eq(RessType.PRIMARY.i), any()
+        )
+    }
+
+    @Test
+    fun `does not ask the database when the location has no storage`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
+
+        val result = service.listDirectory(withoutStorage.id!!)
+
+        assertFalse(result.first { it.name == "a.pdf" }.existsAlready)
+        verifyNoInteractions(bessourceRepository)
+    }
+
+    @Test
+    fun `does not ask the database for an empty folder`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        service.listDirectory(location.id!!)
+
+        // the location folder itself is a directory, so no file name could be looked up
+        verifyNoInteractions(bessourceRepository)
+    }
+
+    // -------------------------------------------------------------------------------------
     // Draft mset
     // -------------------------------------------------------------------------------------
 
@@ -1262,6 +1389,23 @@ class LocationServiceTest {
         return givenLocation(dir.absolutePath, locationType)
             // a bessource always needs a storage, so the location gets one of its own
             .also { it.storage = storage(nextStorageId++) }
+    }
+
+    /**
+     * a stored primary bessource named [name] in the storage of [location], which is what makes a
+     * listed file of that path known already. The answer is filtered the way the query filters, so
+     * a test can register several names of different storages at once.
+     */
+    private fun givenExistingMedia(location: Location, vararg names: String) {
+        val storageId = location.storage.id!!
+        whenever(
+            bessourceRepository.findNamesOfExistingMedia(
+                eq(storageId), eq(RessType.PRIMARY.i), any<Collection<String>>()
+            )
+        ).thenAnswer { invocation ->
+            val asked = invocation.getArgument<Collection<String>>(2)
+            names.filter { it in asked }
+        }
     }
 
     private fun bessource(

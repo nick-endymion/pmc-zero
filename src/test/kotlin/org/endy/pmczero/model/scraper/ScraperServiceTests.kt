@@ -3,6 +3,7 @@ package org.endy.pmczero.model.scraper
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
+import io.mockk.mockk
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
@@ -58,7 +59,7 @@ class ScraperServiceTests {
 
     @Test
     fun locationTest() {
-        val locationService2 = LocationService(locationRepository, storageService)
+        val locationService2 = LocationService(locationRepository, storageService, mockk())
         var urls = listOf("https://abc.de/abde/aaaa.html", "https://abc.de/abde/aaeea.html","https://abc.de/abde/waaa.html")
         var commonUrl = locationService2.getCommonStart(urls)
         println(commonUrl)

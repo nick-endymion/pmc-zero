@@ -10,6 +10,7 @@ import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.to.BessourceTO
 import org.endy.pmczero.to.FileSystemEntryTO
@@ -22,7 +23,8 @@ import java.time.Instant
 @Service
 class LocationService(
     private val locationRepository: LocationRepository,
-    private val storageService: StorageService
+    private val storageService: StorageService,
+    private val bessourceRepository: BessourceRepository
 ) {
 
     val extension = ".jpg"
@@ -143,6 +145,11 @@ class LocationService(
      * back up without ever leaving the location. The '..' entry is left out on the location itself,
      * which has no parent to walk up to. Every entry carries [FileSystemEntryTO.name], relative to
      * the listed directory, and [FileSystemEntryTO.path], relative to the location root.
+     *
+     * Every listed file also reports in [FileSystemEntryTO.existsAlready] whether a medium with a
+     * primary bessource pointing at it is stored already, so a caller can leave known files out of
+     * a scan. Without a storage to compare against nothing can be known, so the flag stays false.
+     *
      * @throws NotFoundException when no location with that id exists, or when [subdir] does not
      * exist or points outside of the location
      * @throws NotAccessibleException when the location is not an FS location or its path is not
@@ -163,12 +170,35 @@ class LocationService(
             if (recursive) folder.walkTopDown().drop(1)
             else folder.listFiles()?.asSequence() ?: emptySequence()
 
-        val listed = entries
-            .map { entryTO(root, folder, it) }
+        // collected first, so the whole listing is checked against the database in one query
+        val unsorted = entries.map { entryTO(root, folder, it) }.toList()
+        val marked = unsorted.markExisting(location)
+
+        val listed = marked
             .sortedWith(compareByDescending<FileSystemEntryTO> { it.isDirectory }.thenBy { it.name.lowercase() })
             .toList()
 
         return listOf(selfEntry(root, folder)) + listOfNotNull(parentEntryOrNull(root, folder)) + listed
+    }
+
+    /**
+     * the [entries] with [FileSystemEntryTO.existsAlready] set on those a scan would not have to
+     * create, i.e. on those whose path is already the name of a primary bessource of a medium in
+     * the storage of [location]
+     *
+     * Directories are left untouched, a directory is no medium. Without a storage there is nothing
+     * to compare against and no bessource could point at the location anyway, so every file stays
+     * false instead of asking the database about names of a storage that does not exist.
+     */
+    private fun List<FileSystemEntryTO>.markExisting(location: Location): List<FileSystemEntryTO> {
+        val storageId = location.storageOrNull()?.id ?: return this
+        val files = filter { !it.isDirectory }
+        if (files.isEmpty()) return this
+        val known = bessourceRepository
+            .findNamesOfExistingMedia(storageId, RessType.PRIMARY.i, files.map { it.path })
+            .toSet()
+        if (known.isEmpty()) return this
+        return map { if (it.path in known) it.copy(existsAlready = true) else it }
     }
 
     /**

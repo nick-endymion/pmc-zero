@@ -39,7 +39,7 @@ class MsetServiceTest {
 
     @BeforeEach
     fun setUp() {
-        val locationService = LocationService(locationRepository, StorageService(storageRepository))
+        val locationService = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
         val mediaService = MediaService(mediaRepository, bessourceRepository, locationService)
         service = MsetService(mediaRepository, msetRepository, mediaService)
     }

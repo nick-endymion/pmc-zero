@@ -43,6 +43,9 @@ class LocationRessource(
      * Every entry reports its name relative to the listed directory and its path relative to the
      * root of the location, so the path can be handed back as the subdir of a new listing.
      *
+     * A listed file is flagged as existsAlready when a medium with a primary bessource pointing at
+     * that file is stored already, so a scan can skip what is known. Directories are always false.
+     *
      * @param subdir directory relative to the location, the location itself when omitted
      * @param recursive return the whole tree below that directory instead of only its children
      */
