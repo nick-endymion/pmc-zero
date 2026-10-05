@@ -1138,6 +1138,7 @@ class LocationServiceTest {
     @Test
     fun `draftMset names the mset after the location when no subpath is given`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
 
         assertEquals(location.name, service.draftMset(location.id!!).name)
         assertEquals(location.name, service.draftMset(location.id!!, subdir = "  ").name)
@@ -1279,10 +1280,134 @@ class LocationServiceTest {
     }
 
     @Test
-    fun `draftMset creates no media for an empty directory`() {
+    fun `draftMset throws when the directory holds no files at all`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
 
-        assertTrue(service.draftMset(location.id!!).media.isEmpty())
+        // nothing to scan is an error, not an empty mset
+        assertThrows<NotAccessibleException> {
+            service.draftMset(location.id!!)
+        }
+    }
+
+    @Test
+    fun `draftMset throws when the directory holds only subdirectories`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+
+        // directories produce no medium of their own, so there is nothing to scan either
+        assertThrows<NotAccessibleException> {
+            service.draftMset(location.id!!)
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Draft mset of known files
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `draftMset creates no medium for a file that is stored already`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+
+        val mset = service.draftMset(location.id!!)
+
+        // the draft holds what a scan would still create, a.pdf is stored already
+        assertEquals(listOf("b.pdf"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `draftMset creates no medium for any known file of a recursive scan`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+        givenExistingMedia(location, "tn/2020/jan.pdf")
+
+        val mset = service.draftMset(location.id!!)
+
+        assertEquals(listOf("a.pdf"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `draftMset matches a known file by its path below the location, not by its name`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        // two files of the same name in different folders, only one of them is known
+        File(location.uri, "a").mkdirs()
+        File(location.uri, "b").mkdirs()
+        File(location.uri, "a/shot.jpg").createNewFile()
+        File(location.uri, "b/shot.jpg").createNewFile()
+        givenExistingMedia(location, "a/shot.jpg")
+
+        val mset = service.draftMset(location.id!!)
+
+        // a/shot.jpg is known, so only the equally named file of the other folder is created
+        assertEquals(listOf("shot.jpg"), mset.media.map { it.name })
+        assertEquals(listOf("b/shot.jpg"), mset.media.flatMap { it.bessources }.map { it.name })
+    }
+
+    @Test
+    fun `draftMset throws when every file is known`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf", "b.pdf")
+
+        assertThrows<NotAccessibleException> {
+            service.draftMset(location.id!!)
+        }
+    }
+
+    @Test
+    fun `draftMset names the scanned subpath in the nothing to scan error`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/thumb.png").apply { parentFile.mkdirs(); createNewFile() }
+        givenExistingMedia(location, "tn/thumb.png")
+
+        val e = assertThrows<NotAccessibleException> {
+            service.draftMset(location.id!!, subdir = "tn")
+        }
+
+        assertTrue(e.message!!.contains("tn"), e.message)
+    }
+
+    @Test
+    fun `draftMset says every file is stored already in the nothing to scan error`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+
+        val e = assertThrows<NotAccessibleException> {
+            service.draftMset(location.id!!)
+        }
+
+        assertTrue(e.message!!.contains("stored already"), e.message)
+    }
+
+    @Test
+    fun `draftMset takes a known file of another storage into account`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        // the bessource is known, but it points at another storage, so this location's scan still
+        // has to create the medium for it
+        givenExistingMedia(otherLocation(LocationType.MAIN_FS), "a.pdf")
+
+        assertEquals(listOf("a.pdf"), service.draftMset(location.id!!).media.map { it.name })
+    }
+
+    @Test
+    fun `draftMset reports only unsaved media in its response`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+
+        val response = service.draftMset(location.id!!).toTOwithMedia(true)
+
+        // the known file is left out entirely, so what remains is genuinely unsaved
+        assertEquals(listOf("b.pdf"), response.media!!.map { it.name })
+        assertTrue(response.media!!.all { it.id == null })
     }
 
     @Test
@@ -1390,6 +1515,9 @@ class LocationServiceTest {
             // a bessource always needs a storage, so the location gets one of its own
             .also { it.storage = storage(nextStorageId++) }
     }
+
+    /** a location of its own, so a test can tell the storage of [location] from another one */
+    private fun otherLocation(locationType: LocationType): Location = givenExistingLocation(locationType)
 
     /**
      * a stored primary bessource named [name] in the storage of [location], which is what makes a

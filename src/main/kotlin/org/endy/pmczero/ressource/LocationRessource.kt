@@ -63,6 +63,12 @@ class LocationRessource(
      * anything: one medium per file below that directory, each with the bessource pointing at it.
      * The caller can review and change the draft before saving it via POST to this same path.
      *
+     * Files that are stored already produce no medium, the draft holds only what a scan would still
+     * create. Ask GET on fs-listing for the existsAlready flag of each file.
+     *
+     * Answers 409 when there is nothing left to scan, i.e. when every file below the directory is
+     * stored already or the directory holds no files at all. No draft is created in that case.
+     *
      * @param subpath directory relative to the location, the location itself when omitted
      */
     @GetMapping("/{id}/fs-mset")
@@ -78,7 +84,9 @@ class LocationRessource(
      * with its media. The same as the draft of GET on this path, but persisted.
      *
      * The mset is saved as a new row every call, so scanning the same directory twice leaves two
-     * msets behind.
+     * msets behind. Its media are not created twice though: a file that is stored already, so one
+     * whose listing entry reports existsAlready, produces no medium. When that leaves nothing to
+     * create at all the call answers 409 and no mset is saved.
      *
      * @param subpath directory relative to the location, the location itself when omitted
      */

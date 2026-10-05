@@ -217,16 +217,34 @@ class LocationService(
      * and has no ressource pointing at it. The '.' and '..' entries of the listing are skipped for
      * the same reason.
      *
+     * Files that are stored already, so those whose listing entry reports
+     * [FileSystemEntryTO.existsAlready], produce no medium either. The draft therefore holds only
+     * what a scan would still have to create, and scanning the same directory twice does not create
+     * a second medium for a file the first scan already stored.
+     *
+     * Nothing to scan is reported as an error instead of as an empty mset, so a caller cannot
+     * mistake a scan that found nothing for one that succeeded. That also covers a directory that
+     * holds no files at all: it has nothing to add either. Ask GET on [listDirectory] for the
+     * [FileSystemEntryTO.existsAlready] flag of each file to see what is stored already.
+     *
      * @throws NotFoundException when no location with that id exists, or when [subdir] does not
      * exist or points outside of the location
-     * @throws NotAccessibleException when the location is not an FS location, or its path is not
-     * accessible on the file system
+     * @throws NotAccessibleException when the location is not an FS location, its path is not
+     * accessible on the file system, or there is no file left to scan because everything is stored
+     * already
      */
     fun draftMset(locationId: Int, subdir: String? = null): Mset {
         val location = findById(locationId)
         // listDirectory answers the '.', '..' and escaping subdir problems the same way as the
         // listing itself, so the draft cannot be built for a directory that cannot be listed
-        val entries = listDirectory(locationId, subdir, recursive = true).filter { !it.isDirectory }
+        val entries = listDirectory(locationId, subdir, recursive = true)
+            .filter { !it.isDirectory && !it.existsAlready }
+        // thrown before any mset is built, so a scan that finds nothing leaves no set behind
+        if (entries.isEmpty()) throw NotAccessibleException(
+            "nothing to scan in location $locationId" +
+                (subdir?.takeIf { it.isNotBlank() }?.let { " below $it" } ?: "") +
+                ": every file is stored already"
+        )
         // a bessource always references a storage, without one it cannot even be instantiated
         val storage = location.storageOrNull()
             ?: throw NotAccessibleException("location $locationId has no storage to build bessources against")
