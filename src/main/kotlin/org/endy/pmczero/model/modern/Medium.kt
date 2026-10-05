@@ -33,7 +33,16 @@ class Medium {
     @Column(name = "mtype", nullable = true)
     var mtype: Int? = null
 
-    @OneToMany(mappedBy = "medium", fetch = FetchType.LAZY, cascade = [CascadeType.PERSIST])
+    /**
+     * The bessources of this medium, deleted with it.
+     *
+     * ALL rather than PERSIST alone, so a bessource cannot outlive its medium: a_bessources.medium_id
+     * is a foreign key onto a_media and the database refuses to delete a medium that bessources
+     * still point at. A bessource is meaningless without the medium it belongs to, so nothing is
+     * lost by removing it along with the medium, and nothing that has to be kept is deleted with
+     * it.
+     */
+    @OneToMany(mappedBy = "medium", fetch = FetchType.LAZY, cascade = [CascadeType.ALL])
     var bessources: MutableList<Bessource> = mutableListOf()
 
     @OneToMany(

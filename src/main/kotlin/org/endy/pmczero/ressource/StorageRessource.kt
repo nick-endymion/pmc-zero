@@ -14,12 +14,12 @@ class StorageRessource(
 
     @GetMapping("/")
     fun getStorages(): List<StorageTO> {
-        return storageService.findAll().map { it.toTO() }
+        return storageService.findAll().map { it.toTO(true) }
     }
 
     @GetMapping("/{id}")
     fun getStorage(@PathVariable id: Int): StorageTO {
-        return storageService.findById(id).toTO()
+        return storageService.findById(id).toTO(true)
     }
 
     @GetMapping("/{id}/locations")
@@ -31,7 +31,7 @@ class StorageRessource(
     fun createStorage(@RequestBody storageTO: StorageTO): StorageTO {
         val saved = storageService.save(storageTO.toEntity())
         // re-read so the response reflects the persisted row
-        return storageService.findById(saved.id!!).toTO()
+        return storageService.findById(saved.id!!).toTO(true)
     }
 
     @PutMapping("/{id}")

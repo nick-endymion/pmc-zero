@@ -39,10 +39,16 @@ class MsetService(
         return msetRepository.save(mset)
     }
 
+    /**
+     * Deletes the mset together with its media and the bessources of those media, which is what the
+     * cascades of [Mset.media] and [Medium.bessources] take care of.
+     *
+     * A medium that carries bookmarks is the one exception: [Medium.bookmarks] has no cascade, so
+     * the delete of such a set is refused by the database and rolled back as a whole.
+     */
     @Transactional
     fun delete(id: Int) {
         msetRepository.delete(findById(id))
-        // TODO > what about media an their ressources ? This wont work
     }
 
     fun ressourcesInUse(id: Int): List<RessourceUrlsTO> {
