@@ -1,10 +1,13 @@
 package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.service.MediaDeletionService
 import org.endy.pmczero.service.MediaService
 import org.endy.pmczero.service.ThumbnailService
+import org.endy.pmczero.to.MediumDeletionTO
 import org.endy.pmczero.to.MediumTO
 import org.endy.pmczero.to.ThumbnailTO
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -17,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/media")
 class MediumRessource(
     private val mediaService: MediaService,
-    private val thumbnailService: ThumbnailService
+    private val thumbnailService: ThumbnailService,
+    private val mediaDeletionService: MediaDeletionService
 ) {
 
 
@@ -68,6 +72,27 @@ class MediumRessource(
         @RequestParam(name = "deleted", required = false, defaultValue = "true") deleted: Boolean
     ): MediumTO {
         return mediaService.setDeleted(id, deleted).toTO()
+    }
+
+    /**
+     * Deletes this medium for good, together with its bessources, and renames the files behind them
+     * with `deleted_` in front of the file name.
+     *
+     * Only a medium that is marked deleted may be deleted this way, see [MediaService.setDeleted].
+     * A medium that is not marked is refused with 409 rather than deleted, because the mark is the
+     * step that separates a deliberate removal from a request that has not been made yet.
+     *
+     * The files are renamed, not erased, so a deletion that was a mistake can still be undone by
+     * hand as long as nobody has cleaned the folder up. Files that cannot be located, or whose
+     * location is not a folder on disk, are left as they are; the record goes either way.
+     *
+     * Answers 404 for an unknown medium and 409 when the medium is not marked deleted, or when one of
+     * the files to be renamed is already there under its new name, in which case nothing is deleted
+     * at all.
+     */
+    @DeleteMapping("/{id}")
+    fun deleteMedium(@PathVariable id: Int): MediumDeletionTO {
+        return mediaDeletionService.deleteMarkedMedium(id)
     }
 //    TODO
 //    get with Mset (Attributes)
