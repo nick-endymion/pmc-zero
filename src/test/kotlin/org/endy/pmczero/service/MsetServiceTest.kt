@@ -13,10 +13,13 @@ import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.MsetRepository
 import org.endy.pmczero.repository.StorageRepository
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.util.Optional
 
@@ -172,6 +175,50 @@ class MsetServiceTest {
         givenMset(medium(name = "doc", primary = bessource("doc.pdf", RessType.PRIMARY)))
 
         assertEquals("http://example.org/main/doc.jpg", service.ressourcesInUse(1)[0].primaryUrl)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Saving
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `save hands the mset with its media to the repository`() {
+        val mset = Mset().apply { name = "scanned" }
+        givenMsetIsSaved()
+
+        val saved = service.save(mset)
+
+        verify(msetRepository).save(mset)
+        assertSame(mset, saved)
+    }
+
+    @Test
+    fun `save links every medium back to the mset it is saved into`() {
+        val medium = Medium().apply { name = "a.jpg" }
+        val mset = Mset().apply { name = "scanned"; media = mutableListOf(medium) }
+        givenMsetIsSaved()
+
+        service.save(mset)
+
+        assertSame(mset, medium.mset)
+    }
+
+    @Test
+    fun `save links every bessource back to its medium`() {
+        val bessource = Bessource().apply { name = "tn/a.jpg"; storage = storage(1) }
+        val medium = Medium().apply { name = "a.jpg"; bessources = mutableListOf(bessource) }
+        val mset = Mset().apply { name = "scanned"; media = mutableListOf(medium) }
+        givenMsetIsSaved()
+
+        service.save(mset)
+
+        assertSame(medium, bessource.medium)
+    }
+
+    // CrudRepository.save returns whatever the repository answers, a real one hands back the row
+    // with its generated id, so the mock echoes its argument here
+    private fun givenMsetIsSaved() {
+        whenever(msetRepository.save(any<Mset>())).thenAnswer { it.getArgument(0) }
     }
 
     // -------------------------------------------------------------------------------------

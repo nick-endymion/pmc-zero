@@ -149,8 +149,7 @@ class MediaService(
         val primaryUrl = provided.firstOrNull { it.ressType == RessType.PRIMARY.i }?.url
         val tnUrl = provided.firstOrNull { it.ressType == RessType.TN.i }?.url
 
-        return if (primaryUrl == null || tnUrl == null) null
-        else RessourceUrlsTO(medium.id, medium.name, primaryUrl, tnUrl)
+        return  RessourceUrlsTO(medium.id, medium.name, primaryUrl, tnUrl)
     }
 
     fun file(id: Int, type: RessType) {

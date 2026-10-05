@@ -52,12 +52,12 @@ class MsetService(
             try {  // important, since there are migrated media of type (legacy) folder, which have no ressources
                 val ressourceUrls = mediaService.ressourceUrls(medium)
                 if (ressourceUrls == null) {
-                    println("no ressource found for medium: " + medium.id)
+                    println("No ressource found for medium: " + medium.id)
                     continue
                 }
                 mips.add(ressourceUrls)
             } catch (e: Exception) {
-                println("no ressource found for medium: " + id)
+                println("Excpetion: no ressource found for medium: " + id)
             }
         }
         return mips

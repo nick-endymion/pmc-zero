@@ -39,6 +39,7 @@ fun Medium.toTO(withBessources: Boolean = true, withMset: Boolean = false): Medi
         name = name,
         created_at = created_at,
         updated_at = updated_at,
+        mtype = mtype,
         bessources = bessources.map { it.toTO() },
         mset = if (withMset) {
             mset?.toTO()

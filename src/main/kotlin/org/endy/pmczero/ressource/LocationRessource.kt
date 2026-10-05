@@ -2,15 +2,21 @@ package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.service.LocationService
+import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.to.FileSystemEntryTO
 import org.endy.pmczero.to.LocationTO
+import org.endy.pmczero.to.MsetTO
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/locations")
-class LocationRessource(val locationService: LocationService) {
+class LocationRessource(
+    val locationService: LocationService,
+    val msetService: MsetService
+) {
 
     @GetMapping("/")
     fun getFolders(): Iterable<LocationTO> {
@@ -47,6 +53,40 @@ class LocationRessource(val locationService: LocationService) {
         @RequestParam(name = "recursive", required = false, defaultValue = "false") recursive: Boolean
     ): List<FileSystemEntryTO> {
         return locationService.listDirectory(id, subdir, recursive)
+    }
+
+    /**
+     * Answers the mset that scanning a directory of this location would produce, without saving
+     * anything: one medium per file below that directory, each with the bessource pointing at it.
+     * The caller can review and change the draft before saving it via POST to this same path.
+     *
+     * @param subpath directory relative to the location, the location itself when omitted
+     */
+    @GetMapping("/{id}/fs-mset")
+    fun draftMset(
+        @PathVariable("id") id: Int,
+        @RequestParam(name = "subpath", required = false) subpath: String?
+    ): MsetTO {
+        return locationService.draftMset(id, subpath).toTOwithMedia(true)
+    }
+
+    /**
+     * Scans a directory of this location and saves the mset it produces, answering the saved mset
+     * with its media. The same as the draft of GET on this path, but persisted.
+     *
+     * The mset is saved as a new row every call, so scanning the same directory twice leaves two
+     * msets behind.
+     *
+     * @param subpath directory relative to the location, the location itself when omitted
+     */
+    @PostMapping("/{id}/fs-mset")
+    fun createMsetFromDirectory(
+        @PathVariable("id") id: Int,
+        @RequestParam(name = "subpath", required = false) subpath: String?
+    ): MsetTO {
+        val saved = msetService.save(locationService.draftMset(id, subpath))
+        // re-read so the response carries the generated ids and timestamps of the saved rows
+        return msetService.findById(saved.id!!, withMedia = true).toTOwithMedia(true)
     }
 
     @PostMapping("/default")

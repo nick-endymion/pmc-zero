@@ -3,10 +3,12 @@ package org.endy.pmczero.service
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.LocationType
+import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
+import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.to.BessourceTO
@@ -87,13 +89,8 @@ class LocationService(
         }
 
         return allBessources.map { bessource ->
-            val url = getUrlFor(bessource)
-            if (url != null) {
-                bessource.url = url
-                bessource
-            } else {
-                throw NotFoundException()
-            }
+            bessource.url = getUrlFor(bessource)
+            bessource
         }
     }
 
@@ -172,6 +169,70 @@ class LocationService(
             .toList()
 
         return listOf(selfEntry(root, folder)) + listOfNotNull(parentEntryOrNull(root, folder)) + listed
+    }
+
+    /**
+     * Builds the [Mset] that scanning [subdir] of an FS location would produce, without persisting
+     * anything: one [Medium] per file below that directory, each carrying the [Bessource] that
+     * points at the file. It is the draft counterpart of [listDirectory], so a caller can review
+     * what a scan would create, and change it, before saving it via [MsetService.save].
+     *
+     * The mset is named after [subdir], or after the location when that is blank. A [Medium] is
+     * named after the file name alone, so two files of the same name in different subdirectories
+     * end up as two equally named media, while its [Bessource] is named after the file relative to
+     * the location, which is the form [url] needs to build a working url. The type of a medium is
+     * derived from the file extension, see [Mtype.of].
+     *
+     * Subdirectories are traversed but produce no medium of their own, a directory is not a medium
+     * and has no ressource pointing at it. The '.' and '..' entries of the listing are skipped for
+     * the same reason.
+     *
+     * @throws NotFoundException when no location with that id exists, or when [subdir] does not
+     * exist or points outside of the location
+     * @throws NotAccessibleException when the location is not an FS location, or its path is not
+     * accessible on the file system
+     */
+    fun draftMset(locationId: Int, subdir: String? = null): Mset {
+        val location = findById(locationId)
+        // listDirectory answers the '.', '..' and escaping subdir problems the same way as the
+        // listing itself, so the draft cannot be built for a directory that cannot be listed
+        val entries = listDirectory(locationId, subdir, recursive = true).filter { !it.isDirectory }
+        // a bessource always references a storage, without one it cannot even be instantiated
+        val storage = location.storageOrNull()
+            ?: throw NotAccessibleException("location $locationId has no storage to build bessources against")
+
+        val mset = Mset().apply {
+            name = subdir?.takeIf { it.isNotBlank() } ?: location.name
+        }
+
+        mset.media = entries.map { entry -> mediumOf(entry, mset, storage) }.toMutableList()
+
+        return mset
+    }
+
+    /**
+     * the [Medium] for the listed file [entry], named after the file itself, with the [Bessource]
+     * that points at the file, named relative to the location so [url] can use it
+     */
+    private fun mediumOf(entry: FileSystemEntryTO, mset: Mset, storage: Storage): Medium {
+        // a recursive listing reports the path of a file below the scanned directory, a medium is
+        // named after the file itself
+        val fileName = entry.name.substringAfterLast('/')
+        val medium = Medium().apply {
+            name = fileName
+            mtype = Mtype.of(fileName).i
+            this.mset = mset
+        }
+        medium.bessources = mutableListOf(
+            Bessource().apply {
+                name = entry.path
+                ressType = RessType.PRIMARY.i
+                this.storage = storage
+            }
+        )
+        // the bessource points back at its medium, the way a saved one would
+        medium.bessources.forEach { it.medium = medium }
+        return medium
     }
 
     /**

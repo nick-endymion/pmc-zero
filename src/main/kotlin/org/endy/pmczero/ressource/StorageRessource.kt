@@ -29,7 +29,6 @@ class StorageRessource(
 
     @PostMapping("/")
     fun createStorage(@RequestBody storageTO: StorageTO): StorageTO {
-        if (storageTO.id != null) throw Exception()
         val saved = storageService.save(storageTO.toEntity())
         // re-read so the response reflects the persisted row
         return storageService.findById(saved.id!!).toTO()

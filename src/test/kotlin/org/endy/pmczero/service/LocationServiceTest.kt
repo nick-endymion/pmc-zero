@@ -2,7 +2,9 @@ package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
+import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.LocationType
+import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Storage
@@ -46,6 +48,9 @@ class LocationServiceTest {
 
     /** Location ids for the locations registered by [givenLocation] */
     private var nextLocationId = 100
+
+    /** Storage ids for the storages registered by [givenExistingLocation] */
+    private var nextStorageId = 100
 
     @BeforeEach
     fun setUp() {
@@ -978,6 +983,230 @@ class LocationServiceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // Draft mset
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `draftMset creates one medium per file below the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!)
+
+        assertEquals(listOf("a.pdf", "b.pdf"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `draftMset names the mset after the scanned subpath`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+
+        assertEquals("tn/2020", mset.name)
+    }
+
+    @Test
+    fun `draftMset names the mset after the location when no subpath is given`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertEquals(location.name, service.draftMset(location.id!!).name)
+        assertEquals(location.name, service.draftMset(location.id!!, subdir = "  ").name)
+    }
+
+    @Test
+    fun `draftMset leaves out directories and the dot entries`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/thumb.png").createNewFile()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!)
+
+        // 'tn' and 'tn/2020' are directories, '.' is the location itself
+        assertEquals(listOf("jan.pdf", "thumb.png"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `draftMset names a medium after the file alone, without the path below the scanned directory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+
+        assertEquals(listOf("jan.pdf"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `draftMset names the media of equally named files in different subdirectories alike`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a").mkdirs()
+        File(location.uri, "b").mkdirs()
+        File(location.uri, "a/shot.jpg").createNewFile()
+        File(location.uri, "b/shot.jpg").createNewFile()
+
+        val mset = service.draftMset(location.id!!)
+
+        assertEquals(listOf("shot.jpg", "shot.jpg"), mset.media.map { it.name })
+        // the bessources keep them apart, they are the ones the url is built from
+        assertEquals(
+            listOf("a/shot.jpg", "b/shot.jpg"),
+            mset.media.flatMap { it.bessources }.map { it.name })
+    }
+
+    @Test
+    fun `draftMset names a bessource relative to the location so its url resolves`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+
+        assertEquals(listOf("tn/2020/jan.pdf"), mset.media.flatMap { it.bessources }.map { it.name })
+    }
+
+    @Test
+    fun `draftMset creates one primary bessource per medium`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val bessources = service.draftMset(location.id!!).media.flatMap { it.bessources }
+
+        assertEquals(listOf(RessType.PRIMARY.i), bessources.map { it.ressType })
+    }
+
+    @Test
+    fun `draftMset points each bessource at the storage of the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val bessource = service.draftMset(location.id!!).media.flatMap { it.bessources }[0]
+
+        assertSame(location.storage, bessource.storage)
+    }
+
+    @Test
+    fun `draftMset links each bessource back to its medium and each medium to the mset`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!)
+        val medium = mset.media[0]
+
+        assertSame(mset, medium.mset)
+        assertSame(medium, medium.bessources[0].medium)
+    }
+
+    @Test
+    fun `draftMset derives the medium type from the file extension`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.jpg").createNewFile()
+        File(location.uri, "b.mp4").createNewFile()
+        File(location.uri, "c.epub").createNewFile()
+        File(location.uri, "d.txt").createNewFile()
+
+        val mset = service.draftMset(location.id!!)
+
+        assertEquals(
+            listOf(Mtype.PHOTO.i, Mtype.MOVIE.i, Mtype.BOOK.i, Mtype.UNDEFINED.i),
+            mset.media.map { it.mtype })
+    }
+
+    @Test
+    fun `draftMset maps to the same response shape as the media of a saved mset`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.jpg").createNewFile()
+
+        val response = service.draftMset(location.id!!, subdir = "tn").toTOwithMedia(true)
+
+        assertEquals("tn", response.name)
+        assertNull(response.id)
+        // the medium carries the file name alone, the bessource the path below the location
+        assertEquals(listOf("jan.jpg"), response.media!!.map { it.name })
+        assertEquals(listOf(Mtype.PHOTO.i), response.media!!.map { it.mtype })
+        // the medium is not nested back into the mset, like in the response of a saved mset
+        assertNull(response.media!![0].mset)
+        val bessource = response.media!![0].bessources[0]
+        assertEquals("tn/2020/jan.jpg", bessource.name)
+        assertEquals(RessType.PRIMARY.i, bessource.ressType)
+        assertEquals(location.storage.id, bessource.storageId)
+        // the medium is unsaved, so it has no id to hand out yet
+        assertNull(bessource.mediumId)
+    }
+
+    @Test
+    fun `draftMset returns unsaved entities, the draft carries no id yet`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!)
+
+        assertNull(mset.id)
+        assertNull(mset.media[0].id)
+        assertNull(mset.media[0].bessources[0].id)
+        assertNull(mset.created_at)
+    }
+
+    @Test
+    fun `draftMset creates no media for an empty directory`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertTrue(service.draftMset(location.id!!).media.isEmpty())
+    }
+
+    @Test
+    fun `draftMset throws NotAccessibleException for an HTTP location`() {
+        val location = givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+
+        assertThrows<NotAccessibleException> {
+            service.draftMset(location.id!!)
+        }
+    }
+
+    @Test
+    fun `draftMset throws NotAccessibleException when the location has no storage`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        // storage is lateinit, so a location without one is created by simply not setting it
+        val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
+
+        assertThrows<NotAccessibleException> {
+            service.draftMset(withoutStorage.id!!)
+        }
+    }
+
+    @Test
+    fun `draftMset throws NotFoundException when the subdirectory is missing`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertThrows<NotFoundException> {
+            service.draftMset(location.id!!, subdir = "no-such-dir")
+        }
+    }
+
+    @Test
+    fun `draftMset throws NotFoundException when the subdirectory escapes the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(tempDir, "outside").mkdir()
+
+        assertThrows<NotFoundException> {
+            service.draftMset(location.id!!, subdir = "../outside")
+        }
+    }
+
+    @Test
+    fun `draftMset throws NotFoundException for an unknown location id`() {
+        whenever(locationRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.draftMset(99)
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
 
@@ -1031,6 +1260,8 @@ class LocationServiceTest {
     private fun givenExistingLocation(locationType: LocationType): Location {
         val dir = File(tempDir, "location-$nextLocationId").apply { mkdir() }
         return givenLocation(dir.absolutePath, locationType)
+            // a bessource always needs a storage, so the location gets one of its own
+            .also { it.storage = storage(nextStorageId++) }
     }
 
     private fun bessource(
