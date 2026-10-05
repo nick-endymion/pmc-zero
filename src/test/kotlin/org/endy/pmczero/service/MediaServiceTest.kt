@@ -13,10 +13,14 @@ import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.StorageRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.util.Optional
 
@@ -274,6 +278,74 @@ class MediaServiceTest {
         val medium = medium()
 
         assertNull(service.ressourceUrls(medium))
+    }
+
+    // -------------------------------------------------------------------------------------
+    // setDeleted
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `setDeleted marks the medium and hands it to the repository`() {
+        val medium = givenStoredMedium()
+
+        service.setDeleted(5, true)
+
+        assertEquals(true, medium.deleted)
+        verify(mediaRepository).save(medium)
+    }
+
+    @Test
+    fun `setDeleted clears the mark when asked to`() {
+        val medium = givenStoredMedium().apply { deleted = true }
+
+        service.setDeleted(5, false)
+
+        assertEquals(false, medium.deleted)
+    }
+
+    @Test
+    fun `setDeleted answers the medium as it was persisted`() {
+        // createdAt is updatable=false, so the instance that was sent in does not carry it back
+        givenStoredMedium()
+        val saved = Medium().apply { id = 5; name = "medium-5"; deleted = true }
+        whenever(mediaRepository.save(any<Medium>())).thenReturn(saved)
+        whenever(mediaRepository.findById(5)).thenReturn(Optional.of(saved))
+
+        assertSame(saved, service.setDeleted(5, true))
+    }
+
+    @Test
+    fun `setDeleted throws NotFoundException for an unknown medium`() {
+        whenever(mediaRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.setDeleted(99, true)
+        }
+        verify(mediaRepository, never()).save(any<Medium>())
+    }
+
+    @Test
+    fun `setDeleted does not delete the row`() {
+        // a mark, not a deletion: the row and its bessources have to survive it
+        val medium = givenStoredMedium()
+
+        service.setDeleted(5, true)
+
+        verify(mediaRepository, never()).delete(any<Medium>())
+        verify(mediaRepository, never()).deleteById(any<Int>())
+        assertEquals(1, medium.bessources.size)
+    }
+
+    /** a medium the repository knows by id, with one bessource on it */
+    private fun givenStoredMedium(): Medium {
+        val medium = Medium().apply {
+            id = 5
+            name = "medium-5"
+            bessources = mutableListOf(primary("doc.pdf", RessType.PRIMARY))
+        }
+        whenever(mediaRepository.findById(5)).thenReturn(Optional.of(medium))
+        whenever(mediaRepository.save(any<Medium>())).thenAnswer { it.getArgument(0) }
+        return medium
     }
 
     // -------------------------------------------------------------------------------------

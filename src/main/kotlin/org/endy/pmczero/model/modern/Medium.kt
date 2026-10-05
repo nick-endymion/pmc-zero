@@ -34,6 +34,21 @@ class Medium {
     var mtype: Int? = null
 
     /**
+     * Whether this medium is marked as deleted, so the row stays but is not acted on any more.
+     *
+     * A mark rather than a deletion, which is why the row survives: the media of a scanned set can
+     * be large, and the decision what to do with them is not always the one that was made when they
+     * were found. Nothing removes the row on its own, see
+     * [org.endy.pmczero.service.MediaService.setDeleted] for what does set the flag.
+     *
+     * A marked medium does not count as known in the file listing any more, so a scan of the same
+     * location lists its files again and can create them anew. That is what makes the flag a way to
+     * bring media back.
+     */
+    @Column(name = "deleted", nullable = true)
+    var deleted: Boolean? = false
+
+    /**
      * The bessources of this medium, deleted with it.
      *
      * ALL rather than PERSIST alone, so a bessource cannot outlive its medium: a_bessources.medium_id

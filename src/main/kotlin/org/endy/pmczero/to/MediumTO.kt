@@ -12,6 +12,8 @@ data class MediumTO (
     var created_at: LocalDateTime? = null,
     var updated_at: LocalDateTime? = null,
     var mtype: Int? = null,
+    /** Whether the medium is marked as deleted, see [Medium.deleted]. */
+    var deleted: Boolean? = false,
     var bessources: List<BessourceTO> =  listOf()
 )
 

@@ -22,7 +22,10 @@ interface BessourceRepository : CrudRepository<Bessource, Int> {
      */
     @Query(
         "select b.name from Bessource b join b.medium m " +
-            "where b.storage.id = :storageId and b.ressType = :ressType and b.name in :names"
+            "where b.storage.id = :storageId and b.ressType = :ressType and b.name in :names " +
+            // a medium marked as deleted is not acted on any more, so its files are unknown to a
+            // scan again and can be created anew
+            "and (m.deleted is null or m.deleted = false)"
     )
     fun findNamesOfExistingMedia(
         @Param("storageId") storageId: Int,

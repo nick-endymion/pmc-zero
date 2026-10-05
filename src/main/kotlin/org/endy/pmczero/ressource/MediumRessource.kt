@@ -8,6 +8,7 @@ import org.endy.pmczero.to.ThumbnailTO
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -45,6 +46,28 @@ class MediumRessource(
         @RequestParam(name = "force", required = false, defaultValue = "false") force: Boolean
     ): ThumbnailTO {
         return thumbnailService.createThumbnail(id, force)
+    }
+
+    /**
+     * Marks this medium as deleted, or undoes that, answering the medium as it was stored.
+     *
+     * The row and its bessources survive either way, and the files behind them are not touched: a
+     * marked medium is not acted on any more, which means a scan of its location lists its files
+     * again as unknown. Calling this with false brings it back.
+     *
+     * `?deleted=false` clears the flag. Absent, the medium is marked, so the common case needs no
+     * parameter at all.
+     *
+     * Answers 404 when the medium does not exist.
+     *
+     * @param deleted false clears the mark, anything else sets it
+     */
+    @PutMapping("/{id}/deleted")
+    fun setDeleted(
+        @PathVariable id: Int,
+        @RequestParam(name = "deleted", required = false, defaultValue = "true") deleted: Boolean
+    ): MediumTO {
+        return mediaService.setDeleted(id, deleted).toTO()
     }
 //    TODO
 //    get with Mset (Attributes)

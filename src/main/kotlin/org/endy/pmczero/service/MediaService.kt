@@ -32,6 +32,27 @@ class MediaService(
         mediaRepository.delete(findById(id))
     }
 
+    /**
+     * Sets or clears [Medium.deleted] on the medium with [id], so the row survives either way.
+     *
+     * A flag rather than a deletion, see [Medium.deleted]: the row stays and its files are left
+     * where they are. Clearing it again brings the medium back into everything that treats the
+     * stored media as the known ones, the file listing among them, which is what makes this a way
+     * to undo a mark.
+     *
+     * Re-read after the save, because the response has to reflect the persisted row rather than the
+     * instance that was sent in.
+     *
+     * @throws NotFoundException when no medium with that id exists
+     */
+    fun setDeleted(id: Int, deleted: Boolean): Medium {
+        val medium = findById(id)
+        medium.deleted = deleted
+        mediaRepository.save(medium)
+        // createdAt is updatable=false, so the merged instance does not carry it back
+        return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    }
+
 //    -------------
 
     fun findBesById(id: Int): Bessource {

@@ -178,6 +178,112 @@ class MsetPersistenceTest {
         assertTrue(msetRepository.findByStorageId(storage.id!!).isEmpty())
     }
 
+    // -------------------------------------------------------------------------------------
+    // Msets of a storage, once a medium of theirs is marked deleted
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `still finds an mset whose only medium is marked deleted`() {
+        // the mark is about the medium, not the set, so the set still exists on that storage
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+        mediaRepository.findAll().single().deleted = true
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(listOf("scanned"), msetRepository.findByStorageId(storage.id!!).map { it.name })
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Known files of the file listing
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `reports the file of a stored medium as already existing`() {
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+
+        assertEquals(
+            listOf("doc-1"),
+            bessourceRepository.findNamesOfExistingMedia(
+                storage.id!!, RessType.PRIMARY.i, listOf("doc-1")
+            )
+        )
+    }
+
+    @Test
+    fun `does not report the file of a medium marked deleted`() {
+        // this is what lets a scan of the same location pick the file up again
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+        mediaRepository.findAll().single().deleted = true
+        entityManager.flush()
+        entityManager.clear()
+
+        assertTrue(
+            bessourceRepository
+                .findNamesOfExistingMedia(storage.id!!, RessType.PRIMARY.i, listOf("doc-1"))
+                .isEmpty()
+        )
+    }
+
+    @Test
+    fun `reports the file again once the mark is cleared`() {
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+        mediaRepository.findAll().single().deleted = false
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(
+            listOf("doc-1"),
+            bessourceRepository.findNamesOfExistingMedia(
+                storage.id!!, RessType.PRIMARY.i, listOf("doc-1")
+            )
+        )
+    }
+
+    @Test
+    fun `treats a medium whose flag was never set as not deleted`() {
+        // the column is nullable, so the rows migrated before it existed have no value at all
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+        // native, because a bulk JPQL update would leave the persistence context holding the
+        // old value and the test would pass for the wrong reason
+        entityManager.entityManager.createNativeQuery("update a_media set deleted = null")
+            .executeUpdate()
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(
+            listOf("doc-1"),
+            bessourceRepository.findNamesOfExistingMedia(
+                storage.id!!, RessType.PRIMARY.i, listOf("doc-1")
+            )
+        )
+    }
+
+    @Test
+    fun `reports no file of a medium whose bessource is not primary`() {
+        val storage = givenStorage("shelf")
+        val medium = Medium().apply { name = "doc.pdf" }
+        medium.bessources = mutableListOf(
+            Bessource().apply {
+                name = "doc.pdf"
+                ressType = RessType.TN.i
+                this.storage = storage
+                this.medium = medium
+            }
+        )
+        persistSet("scanned", listOf(medium))
+
+        assertTrue(
+            bessourceRepository
+                .findNamesOfExistingMedia(storage.id!!, RessType.PRIMARY.i, listOf("doc.pdf"))
+                .isEmpty()
+        )
+    }
+
     @Test
     fun `finds the mset regardless of the type of the bessource`() {
         // a thumbnail lives in the tn location of the same storage, so it points there too
@@ -194,6 +300,47 @@ class MsetPersistenceTest {
         persistSet("scanned", listOf(medium))
 
         assertEquals(listOf("scanned"), msetRepository.findByStorageId(storage.id!!).map { it.name })
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Setting the deleted flag
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `the deleted flag is stored and read back`() {
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+        val id = mediaRepository.findAll().single().id!!
+
+        mediaRepository.findById(id).get().deleted = true
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(true, mediaRepository.findById(id).get().deleted)
+    }
+
+    @Test
+    fun `a medium that was never marked is not deleted`() {
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+
+        // the column is nullable and the rows that predate it have no value, so a medium nobody
+        // touched must not read as marked
+        assertEquals(false, mediaRepository.findAll().single().deleted)
+    }
+
+    @Test
+    fun `marking a medium does not delete its row or its bessource`() {
+        val storage = givenStorage("shelf")
+        givenSet("scanned", storage)
+        val id = mediaRepository.findAll().single().id!!
+
+        mediaRepository.findById(id).get().deleted = true
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(1, mediaRepository.count())
+        assertEquals(1, bessourceRepository.count())
     }
 
     // -------------------------------------------------------------------------------------
