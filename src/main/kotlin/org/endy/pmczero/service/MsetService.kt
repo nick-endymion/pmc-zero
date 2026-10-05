@@ -15,8 +15,24 @@ import org.springframework.transaction.annotation.Transactional
 class MsetService(
     private val mediaRepository: MediaRepository,
     private val msetRepository: MsetRepository,
-    private val mediaService: MediaService
+    private val mediaService: MediaService,
+    private val storageService: StorageService
 ) {
+
+    /**
+     * the msets that hold media whose files live on [storageId]
+     *
+     * An mset has no storage of its own, so this walks set -> media -> bessource -> storage: a set
+     * belongs to the storage its files are on. See [MsetRepository.findByStorageId].
+     *
+     * @throws NotFoundException when no storage with that id exists. An unknown id is answered as
+     * such rather than as a storage that happens to hold nothing, so a mistyped id does not read
+     * as an empty result
+     */
+    fun findByStorageId(storageId: Int): List<Mset> {
+        storageService.findById(storageId)
+        return msetRepository.findByStorageId(storageId)
+    }
 
     fun findById(id: Int, withMedia: Boolean = false): Mset {
         if (withMedia)

@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
@@ -17,8 +18,10 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.util.Optional
@@ -41,7 +44,7 @@ class MsetServiceTest {
     fun setUp() {
         val locationService = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
         val mediaService = MediaService(mediaRepository, bessourceRepository, locationService)
-        service = MsetService(mediaRepository, msetRepository, mediaService)
+        service = MsetService(mediaRepository, msetRepository, mediaService, StorageService(storageRepository))
     }
 
     @Test
@@ -219,6 +222,41 @@ class MsetServiceTest {
     // with its generated id, so the mock echoes its argument here
     private fun givenMsetIsSaved() {
         whenever(msetRepository.save(any<Mset>())).thenAnswer { it.getArgument(0) }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Msets of a storage
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finds the msets of a storage`() {
+        givenStorage(storage(1))
+        whenever(msetRepository.findByStorageId(1)).thenReturn(
+            listOf(Mset().apply { id = 5; name = "scanned" })
+        )
+
+        val result = service.findByStorageId(1)
+
+        assertEquals(listOf(5), result.map { it.id })
+    }
+
+    @Test
+    fun `finds no msets for a storage that holds none`() {
+        givenStorage(storage(1))
+        whenever(msetRepository.findByStorageId(1)).thenReturn(emptyList())
+
+        assertTrue(service.findByStorageId(1).isEmpty())
+    }
+
+    @Test
+    fun `checks the storage exists before looking for its msets`() {
+        // an unknown id is not a storage that happens to hold nothing
+        whenever(storageRepository.findById(42)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.findByStorageId(42)
+        }
+        verify(msetRepository, never()).findByStorageId(any())
     }
 
     // -------------------------------------------------------------------------------------

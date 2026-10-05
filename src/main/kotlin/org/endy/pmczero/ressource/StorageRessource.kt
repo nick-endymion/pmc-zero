@@ -2,14 +2,17 @@ package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
+import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.StorageTO
 import org.springframework.web.bind.annotation.*
 
 @RestController
 @RequestMapping("/api/storages")
 class StorageRessource(
-    val storageService: StorageService
+    val storageService: StorageService,
+    val msetService: MsetService
 ) {
 
     @GetMapping("/")
@@ -25,6 +28,21 @@ class StorageRessource(
     @GetMapping("/{id}/locations")
     fun getStorageWithLocations(@PathVariable id: Int): StorageTO {
         return storageService.findById(id, withLocations = true).toTO(withLocations = true)
+    }
+
+    /**
+     * Answers the msets whose media point at files on this storage.
+     *
+     * An mset has no storage of its own, so the relation runs through its media and their
+     * bessources. The media are left out of the answer: this is the list of sets, and a caller
+     * that wants the files of a set asks for it on its own url.
+     *
+     * Answers 404 for an unknown storage, so a mistyped id is not mistaken for a storage without
+     * sets.
+     */
+    @GetMapping("/{id}/msets")
+    fun getMsets(@PathVariable id: Int): List<MsetTO> {
+        return msetService.findByStorageId(id).map { it.toTO() }
     }
 
     @PostMapping("/")

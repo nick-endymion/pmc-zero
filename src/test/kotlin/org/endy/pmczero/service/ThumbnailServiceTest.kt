@@ -69,7 +69,9 @@ class ThumbnailServiceTest {
     fun setUp() {
         val locationService = LocationService(mock(), StorageService(storageRepository), bessourceRepository)
         val mediaService = MediaService(mediaRepository, bessourceRepository, locationService)
-        msetService = MsetService(mediaRepository, msetRepository, mediaService)
+        msetService = MsetService(
+            mediaRepository, msetRepository, mediaService, StorageService(storageRepository)
+        )
         service = ThumbnailService(
             mediaRepository,
             bessourceRepository,
