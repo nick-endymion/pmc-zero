@@ -1,0 +1,325 @@
+package org.endy.pmczero.model.scraper
+
+import org.endy.pmczero.exception.NotAccessibleException
+import org.endy.pmczero.model.LocationType
+import org.endy.pmczero.model.ScanningKontext
+import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Mset
+import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.service.Fetcher
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * Unit tests for [FileDownloader], against a [Fetcher] that records what it was asked for instead of
+ * going near the network.
+ *
+ * The point of every test here is the path a file lands at rather than its content: the fetcher
+ * writes a marker, so a test can tell which file was written and that it was written at all without
+ * standing up a server.
+ */
+class FileDownloaderTests {
+
+    @TempDir
+    lateinit var tempDir: File
+
+    private lateinit var fetcher: RecordingFetcher
+    private lateinit var worker: FileDownloader
+
+    /** the folder the scan writes into, i.e. the MAIN_FS location */
+    private lateinit var location: Location
+
+    @BeforeEach
+    fun setUp() {
+        fetcher = RecordingFetcher()
+        worker = FileDownloader()
+        location = givenLocation(tempDir.absolutePath, LocationType.MAIN_FS)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Where the file lands
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `writes the file into the location root when the kontext has no path`() {
+        val kontext = kontextFor(location, "")
+
+        worker.applya("http://example.org/bilder/erstes.jpg", kontext)
+
+        assertEquals(listOf("erstes.jpg"), writtenRelativeTo(location))
+    }
+
+    @Test
+    fun `writes the file into the folder the kontext names`() {
+        val kontext = kontextFor(location, "2020/august")
+
+        worker.applya("http://example.org/bilder/erstes.jpg", kontext)
+
+        assertEquals(listOf("2020/august/erstes.jpg"), writtenRelativeTo(location))
+        assertTrue(File(tempDir, "2020/august/erstes.jpg").isFile, "the file is where it should be")
+    }
+
+    @Test
+    fun `creates the folders of the kontext path that do not exist yet`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "deeply/nested/path"))
+
+        assertTrue(File(tempDir, "deeply/nested/path/a.jpg").isFile)
+    }
+
+    /**
+     * The path is a bessource style path, so a caller that built it on windows hands over `\` where
+     * this code writes `/`. Without the normalisation that would be one long file name on a posix
+     * system instead of a directory.
+     */
+    @Test
+    fun `normalises windows separators in the kontext path`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "2020\\august"))
+
+        assertTrue(File(tempDir, "2020/august/a.jpg").isFile)
+        assertEquals(listOf("2020/august/a.jpg"), writtenRelativeTo(location))
+    }
+
+    @Test
+    fun `ignores leading and trailing slashes on the kontext path`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "/2020/august/"))
+
+        assertEquals(listOf("2020/august/a.jpg"), writtenRelativeTo(location))
+    }
+
+    @Test
+    fun `treats a blank kontext path as the location root`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "   "))
+
+        assertEquals(listOf("a.jpg"), writtenRelativeTo(location))
+    }
+
+    // -------------------------------------------------------------------------------------
+    // The file name
+    // -------------------------------------------------------------------------------------
+
+    /** The query is not part of the name, or every `?size=large` would become a second file. */
+    @Test
+    fun `drops the query from the file name`() {
+        worker.applya("http://example.org/bilder/a.jpg?size=large", kontextFor(location, ""))
+
+        assertEquals(listOf("a.jpg"), writtenRelativeTo(location))
+    }
+
+    @Test
+    fun `drops the fragment from the file name`() {
+        worker.applya("http://example.org/bilder/a.jpg#anchor", kontextFor(location, ""))
+
+        assertEquals(listOf("a.jpg"), writtenRelativeTo(location))
+    }
+
+    /** A gallery names its images `1.jpg`, `2.jpg`, so the name is the last segment and nothing else. */
+    @Test
+    fun `takes the last path segment as the file name`() {
+        worker.applya("http://example.org/a/b/c/deep.jpg", kontextFor(location, ""))
+
+        assertEquals(listOf("deep.jpg"), writtenRelativeTo(location))
+    }
+
+    @Test
+    fun `decodes percent escapes in the file name`() {
+        worker.applya("http://example.org/bilder/das%20Bild.jpg", kontextFor(location, ""))
+
+        assertEquals(listOf("das_Bild.jpg"), writtenRelativeTo(location))
+    }
+
+    /**
+     * The name comes from a url, i.e. from text the scanned page had a say in. A nested path or a
+     * `..` in it must not become a directory or a step out of the folder of the scan.
+     */
+    @Test
+    fun `never lets the url write outside the folder of the scan`() {
+        worker.applya("http://example.org/bilder/../../etc/passwd", kontextFor(location, "2020"))
+
+        // only the last segment survives, so the traversal is not merely sanitised away: there is no
+        // path left for it to escape with, and the file lands inside the folder of the scan
+        assertEquals(listOf("2020/passwd"), writtenRelativeTo(location))
+        assertTrue(fetcher.downloads.single().target.path.startsWith(location.uri!!))
+    }
+
+    @Test
+    fun `names a url that has no last segment after its host`() {
+        worker.applya("http://example.org/", kontextFor(location, ""))
+
+        assertEquals(listOf("example.org"), writtenRelativeTo(location))
+    }
+
+    /** Two elements of the same name in one folder would otherwise silently overwrite each other. */
+    @Test
+    fun `two elements with the same file name land on the same file`() {
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/one/a.jpg", kontext)
+        worker.applya("http://example.org/two/a.jpg", kontext)
+
+        // same folder and same name, so the second download replaces the first
+        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location))
+        assertEquals(2, fetcher.downloads.size)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Which fetcher
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The kontext's fetcher rather than a downloader of the worker's own, so a browser scan fetches
+     * its files with the same session the page was read with. A page that only offers its urls to a
+     * logged in client would otherwise yield media whose files cannot be had at all.
+     */
+    @Test
+    fun `downloads through the fetcher of the kontext`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, ""))
+
+        assertEquals(listOf("http://example.org/a.jpg"), fetcher.downloads.map { it.url })
+        assertTrue(fetcher.reads.isEmpty(), "the worker downloads rather than reading the url as text")
+    }
+
+    @Test
+    fun `downloads without a proxy`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, ""))
+
+        assertEquals(listOf(false), fetcher.downloads.map { it.withProxy })
+    }
+
+    // -------------------------------------------------------------------------------------
+    // What it refuses
+    // -------------------------------------------------------------------------------------
+
+    /** A http location has no path, so there is nowhere to put the bytes. */
+    @Test
+    fun `refuses a location that is not a file system location`() {
+        val http = givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(http, ""))
+        }
+    }
+
+    /**
+     * The catchup location of a scan that was not assigned one carries a blank uri, and `File("")`
+     * is the working directory of the process. Without this the scan would quietly fill the folder
+     * the application was started in.
+     */
+    @Test
+    fun `refuses a location without a path`() {
+        val blank = givenLocation("", LocationType.MAIN_FS)
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(blank, ""))
+        }
+        assertTrue(fetcher.downloads.isEmpty(), "nothing was downloaded")
+    }
+
+    @Test
+    fun `refuses a location whose path is not an existing directory`() {
+        val missing = givenLocation(File(tempDir, "no-such-folder").absolutePath, LocationType.MAIN_FS)
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(missing, ""))
+        }
+    }
+
+    /** A scan assigned to the wrong location should fail rather than scatter files elsewhere. */
+    @Test
+    fun `refuses a location whose path is a file rather than a directory`() {
+        val file = File(tempDir, "a-file.txt").apply { writeText("not a folder") }
+        val asFile = givenLocation(file.absolutePath, LocationType.MAIN_FS)
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(asFile, ""))
+        }
+    }
+
+    /** A TN location is a folder like any other, so downloading into one is allowed. */
+    @Test
+    fun `accepts a TN file system location`() {
+        val tn = givenLocation(tempDir.absolutePath, LocationType.TN_FS)
+
+        worker.applya("http://example.org/thumb.jpg", kontextFor(tn, "2020"))
+
+        assertEquals(listOf("2020/thumb.jpg"), writtenRelativeTo(tn))
+    }
+
+    /** The failure of a download is the caller's to handle, so it is not swallowed. */
+    @Test
+    fun `lets a failed download through`() {
+        fetcher.failing = true
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(location, ""))
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Fixtures
+    // -------------------------------------------------------------------------------------
+
+    private fun kontextFor(location: Location, locationPath: String) =
+        ScanningKontext(location, Mset(), arrayListOf(), fetcher, locationPath)
+
+    private fun givenLocation(uri: String, locationType: LocationType) = Location().apply {
+        this.uri = uri
+        name = uri
+        this.locationType = locationType.i
+        inuse = 1
+        this.storage = Storage()
+    }
+
+    /**
+     * The paths of the files below [location], `/` separated and relative to its root.
+     *
+     * Read back off the file system rather than off the recorded downloads, so a file that was
+     * written to an unexpected place still shows up here.
+     */
+    private fun writtenRelativeTo(location: Location): List<String> =
+        File(location.uri!!).walkTopDown()
+            .filter { it.isFile }
+            .map { it.relativeTo(File(location.uri!!)).path.replace(File.separatorChar, '/') }
+            .sorted()
+            .toList()
+
+    /** One recorded download, since the arguments of `downloadTo` are three rather than one. */
+    private data class Download(val url: String, val target: File, val withProxy: Boolean)
+
+    /**
+     * A [Fetcher] that writes a marker file instead of making a request, and records what it was
+     * asked for.
+     *
+     * Writing a file rather than only recording it is what makes the path assertions meaningful: a
+     * worker that computed the right target but handed it to nothing would otherwise pass.
+     */
+    private class RecordingFetcher : Fetcher {
+
+        val downloads = mutableListOf<Download>()
+        val reads = mutableListOf<String>()
+
+        /** makes every download fail, to check that a failure is not swallowed */
+        var failing = false
+
+        override fun getAsString(urlString: String, withProxy: Boolean): String {
+            reads.add(urlString)
+            return ""
+        }
+
+        override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {
+            downloadTo(urlString, File(directory, "downloaded"))
+        }
+
+        override fun downloadTo(urlString: String, target: File, withProxy: Boolean): File {
+            if (failing) throw NotAccessibleException("download of $urlString refused")
+            downloads.add(Download(urlString, target, withProxy))
+            target.parentFile?.mkdirs()
+            target.writeText("content of $urlString")
+            return target
+        }
+    }
+}

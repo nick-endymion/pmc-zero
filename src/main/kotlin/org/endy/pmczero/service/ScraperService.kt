@@ -22,8 +22,19 @@ class ScraperService(
 //        loadScanners()
     }
 
-    fun scan(scraper: Scraper, url: String, locationId: Int? = null): ScanningKontext =
-        scanWith(scraper, url, locationId, downloader)
+    /**
+     * Runs [scraper] over [url] and answers the kontext it built up.
+     *
+     * @param locationId the location to scan into, or null for a catchup scan whose media point at
+     * the urls they were found under rather than at a storage
+     * @param locationPath the folder below the location the files of this scan belong in, see
+     * [ScanningKontext.locationPath]. Only a worker that writes files, e.g.
+     * [org.endy.pmczero.model.scraper.FileDownloader], reads it; a scraper that only records media
+     * ignores it
+     */
+    @JvmOverloads
+    fun scan(scraper: Scraper, url: String, locationId: Int? = null, locationPath: String = ""): ScanningKontext =
+        scanWith(scraper, url, locationId, downloader, locationPath)
 
     /**
      * The placeholder location a scan that has not been assigned a real one yet runs against.
@@ -41,19 +52,30 @@ class ScraperService(
      * that fills itself in with javascript yields the same elements as a static one. Which fetcher a
      * scan runs on is a property of the scan rather than of the scraper, so one scraper definition
      * serves both.
+     *
+     * @param locationPath see [scan]. A browser scan is the case where it matters most, since
+     * [org.endy.pmczero.model.scraper.FileDownloader] downloads through this kontext's fetcher, so a
+     * file is fetched with the same session the page that offered it was read with
      */
-    fun scanWithBrowser(scraper: Scraper, url: String, locationId: Int? = null): ScanningKontext =
-        scanWith(scraper, url, locationId, browserFetcher)
+    @JvmOverloads
+    fun scanWithBrowser(
+        scraper: Scraper,
+        url: String,
+        locationId: Int? = null,
+        locationPath: String = ""
+    ): ScanningKontext =
+        scanWith(scraper, url, locationId, browserFetcher, locationPath)
 
     private fun scanWith(
         scraper: Scraper,
         url: String,
         locationId: Int?,
-        fetcher: Fetcher
+        fetcher: Fetcher,
+        locationPath: String = ""
     ): ScanningKontext {
 //        val location = locationService.getLocationStartingWith(url)
         val location = if (locationId == null) catchupLocation() else locationService.findById(locationId)
-        val sc = getNewScanningContext(location, fetcher)
+        val sc = getNewScanningContext(location, fetcher, locationPath)
         scraper.doWork(url, "", sc)
         return sc
     }
@@ -72,8 +94,19 @@ class ScraperService(
         }
     }
 
-    fun getNewScanningContext(location: Location, fetcher: Fetcher = downloader): ScanningKontext {
-        return ScanningKontext(location, Mset(), arrayListOf(), fetcher)
+    /**
+     * A fresh kontext for a scan against [location].
+     *
+     * @param locationPath the folder below [location] the files of this scan belong in, see
+     * [ScanningKontext.locationPath]. Blank puts them into the location root
+     */
+    @JvmOverloads
+    fun getNewScanningContext(
+        location: Location,
+        fetcher: Fetcher = downloader,
+        locationPath: String = ""
+    ): ScanningKontext {
+        return ScanningKontext(location, Mset(), arrayListOf(), fetcher, locationPath)
     }
 
     fun findPossibleLocations(sc: ScanningKontext): List<Location> {

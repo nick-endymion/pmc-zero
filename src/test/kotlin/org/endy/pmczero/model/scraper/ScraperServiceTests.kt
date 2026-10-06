@@ -4,6 +4,9 @@ import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
+import io.mockk.verify
+import org.endy.pmczero.exception.NotAccessibleException
+import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Storage
@@ -11,7 +14,10 @@ import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.service.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class ScraperServiceTests {
@@ -60,6 +66,127 @@ class ScraperServiceTests {
         val bessources = media!![0].bessources
         assertEquals("http://aaa.de/link", bessources!![0].name)
 
+    }
+
+    /**
+     * A scan with a location and a path writes every image of the page into that path.
+     *
+     * [FileDownloader] is verified on its own in `FileDownloaderTests`; what is new here is that the
+     * path survives the trip from the [org.endy.pmczero.service.ScraperService.scan] call into the
+     * kontext the workers are handed.
+     *
+     * The page title is still picked up, so the set is named as before: the path belongs to the
+     * kontext and is of no interest to a worker that has no use for it.
+     *
+     * No [MediaAdder] here, on purpose rather than out of caution: it names a bessource after the
+     * element minus the uri of the location, so it only works against a location whose uri is the
+     * url prefix of the elements, and it throws on a file system location whose path is no prefix at
+     * all. That is a pre-existing limitation of that worker and it does not belong in this test.
+     */
+    @Test
+    fun `a scan with a location path downloads every image into that path`() {
+        val page = """
+            <html><head><title>Galerie</title></head><body>
+            <img src="/bilder/erstes.jpg">
+            <img src="zweites.jpg">
+            <img src="drittes.png">
+            </body></html>
+        """.trimIndent()
+
+        every { downloader.getAsString(any()) } returns page
+
+        val target = Files.createTempDirectory("scan").toFile()
+        target.deleteOnExit()
+        val location = fsLocation(7, target)
+        every { locationService.findById(7) } returns location
+        givenDownloaderWritesFiles()
+
+        val scanner = Scraper(
+            RegexParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(
+                    Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader())
+                )
+            )
+        )
+
+        val sc = ScraperService(locationService, downloader, browserFetcher)
+            .scan(scanner, "http://testfatest.com/galerie.html", locationId = 7, locationPath = "2020/august")
+
+        // the path got as far as the kontext the workers are handed
+        assertEquals("2020/august", sc.locationPath)
+        assertEquals("Galerie", sc.mset?.name)
+
+        // and every image of the page landed inside it
+        val written = target.walkTopDown().filter { it.isFile }
+            .map { it.relativeTo(target).path.replace(File.separatorChar, '/') }
+            .sorted()
+            .toList()
+
+        assertEquals(
+            listOf("2020/august/drittes.png", "2020/august/erstes.jpg", "2020/august/zweites.jpg"),
+            written
+        )
+
+        // through the downloader of the service, i.e. the fetcher of the kontext, so the files and the
+        // page came from the same place
+        verify(exactly = 3) { downloader.downloadTo(any(), any(), any()) }
+    }
+
+    /**
+     * The same scan without a path puts its files into the location root, so the path is an addition
+     * to the existing behaviour rather than a replacement of it.
+     */
+    @Test
+    fun `a scan without a location path downloads into the location root`() {
+        every { downloader.getAsString(any()) } returns
+                "<html><body><img src='/bilder/erstes.jpg'></body></html>"
+
+        val target = Files.createTempDirectory("scan-root").toFile()
+        target.deleteOnExit()
+        every { locationService.findById(8) } returns fsLocation(8, target)
+        givenDownloaderWritesFiles()
+
+        val scanner = Scraper(
+            RegexParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader()))
+            )
+        )
+
+        val sc = ScraperService(locationService, downloader, browserFetcher)
+            .scan(scanner, "http://testfatest.com/galerie.html", locationId = 8)
+
+        assertEquals("", sc.locationPath)
+        assertTrue(File(target, "erstes.jpg").isFile)
+    }
+
+    /**
+     * A scan without a location is a catchup one, whose placeholder location has no path. Downloading
+     * then has to fail rather than fall back to the working directory of the process, which is what
+     * `File("")` resolves to.
+     */
+    @Test
+    fun `a catchup scan cannot download its elements`() {
+        val scanner = Scraper(
+            RegexParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader()))
+            )
+        )
+        every { downloader.getAsString(any()) } returns
+                "<html><body><img src='/bilder/erstes.jpg'></body></html>"
+
+        assertFailsWith<NotAccessibleException> {
+            ScraperService(locationService, downloader, browserFetcher)
+                .scan(scanner, "http://testfatest.com/galerie.html")
+        }
+
+        verify(exactly = 0) { downloader.downloadTo(any(), any(), any()) }
     }
 
     /**
@@ -159,6 +286,33 @@ class ScraperServiceTests {
             )
         )
 
+    }
+
+    /**
+     * Lets the mocked [Downloader] answer every `downloadTo` by writing the file it was handed, so a
+     * test can look at what really landed on disk.
+     *
+     * The paths are already resolved by the time the downloader is called, so this answers without
+     * looking at its arguments: the assertions that matter are about where the files are, and those
+     * are read back off the file system.
+     */
+    private fun givenDownloaderWritesFiles() {
+        every { downloader.downloadTo(any(), any(), any()) } answers {
+            val target = secondArg<File>()
+            target.parentFile?.mkdirs()
+            target.writeText("content of ${firstArg<String>()}")
+            target
+        }
+    }
+
+    /** a writable MAIN_FS location pointing at [folder], which is what a scan needs to store into */
+    private fun fsLocation(id: Int, folder: File) = Location().also {
+        it.id = id
+        it.name = "Bilder-$id"
+        it.uri = folder.absolutePath
+        it.locationType = LocationType.MAIN_FS.i
+        it.inuse = 1
+        it.storage = Storage()
     }
 
     /**

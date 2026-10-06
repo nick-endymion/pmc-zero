@@ -185,6 +185,28 @@ class SerializationTests {
 
     }
 
+    /**
+     * [FileDownloader] round trips under its serial name, so it can be configured in a scanner row
+     * like the other workers.
+     *
+     * It is the one worker with no parameters of its own, everything it needs comes from the
+     * [org.endy.pmczero.model.ScanningKontext], which is exactly why the path lives there rather than
+     * on the worker: a stored scraper would otherwise carry a path that only meant anything when it
+     * was configured.
+     */
+    @Test
+    fun `the file downloader round trips under its serial name`() {
+
+        val json = Json.encodeToString(Scraper(PassThroughParser(), FileDownloader()))
+
+        assertTrue(json.contains(""""type":"fileDownloader""""), "fileDownloader expected in $json")
+
+        val decoded = Json.decodeFromString<Scraper>(json)
+
+        assertIs<FileDownloader>(decoded.worker)
+        assertIs<PassThroughParser>(decoded.parser)
+    }
+
     @Test
     fun `serialization and deserializtion work 4`() {
 
