@@ -190,6 +190,70 @@ class ScraperServiceTests {
     }
 
     /**
+     * A full import in one scan: every image of the page is recorded as a medium and downloaded, and
+     * every bessource points at a file that is really there.
+     *
+     * This is the combination that could not work before. [MediaAdder] named a bessource after the
+     * element minus the uri of the location, which is only meaningful for a location whose uri is a
+     * url prefix, so against the file system location of an import it threw
+     * `StringIndexOutOfBoundsException` before recording anything.
+     *
+     * The last assertion is the one that matters: a medium whose bessource names a file that is not
+     * there is a url that answers 404, and nothing in the scan would say why.
+     */
+    @Test
+    fun `a scan records a medium for every image and downloads it`() {
+        val page = """
+            <html><head><title>Galerie</title></head><body>
+            <img src="/bilder/erstes.jpg">
+            <img src="zweites.jpg">
+            <img src="https://cdn.de/drittes.png">
+            </body></html>
+        """.trimIndent()
+
+        every { downloader.getAsString(any()) } returns page
+
+        val target = Files.createTempDirectory("scan-both").toFile()
+        target.deleteOnExit()
+        every { locationService.findById(9) } returns fsLocation(9, target)
+        givenDownloaderWritesFiles()
+
+        val scanner = Scraper(
+            RegexParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(
+                    Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scraper(DomParser("(.+)", "img", "abs:src"), MediaAdder()),
+                    Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader())
+                )
+            )
+        )
+
+        val sc = ScraperService(locationService, downloader, browserFetcher)
+            .scan(scanner, "http://testfatest.com/galerie.html", locationId = 9, locationPath = "2020/august")
+
+        val media = sc.mset!!.media
+        assertEquals(3, media.size)
+        assertEquals(listOf("erstes.jpg", "zweites.jpg", "drittes.png"), media.map { it.name })
+
+        // every bessource names a file that the scan really wrote
+        for (medium in media) {
+            val relative = medium.bessources.single().name!!
+            assertTrue(
+                File(target, relative).isFile,
+                "medium ${medium.name} points at '$relative', which is not a file"
+            )
+        }
+
+        // and the names sit below the path of the scan, so LocationService.url would serve them
+        assertEquals(
+            listOf("2020/august/erstes.jpg", "2020/august/zweites.jpg", "2020/august/drittes.png"),
+            media.map { it.bessources.single().name }
+        )
+    }
+
+    /**
      * Every image of a gallery page ends up as a medium, and nothing else does.
      *
      * The page mixes the four ways a src can appear that a scan has to survive: absolute on the
