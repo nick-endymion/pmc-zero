@@ -31,7 +31,9 @@ import org.springframework.web.bind.annotation.RestController
  *    that writes.
  * 3. [importImagesWithScraper] for the same import with the page picked apart by the scraper pipeline,
  *    which is what to reach for when the images are not quite what [importImages] collects.
- * 4. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
+ * 4. [importWithSerializedScraper] for the same import with the scraper itself handed in as json, for a
+ *    scraper that is not just the images of the page.
+ * 5. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
  *    when a page needs its elements picked differently.
  *
  * All of them are POSTs that write or that cost a browser and a wait. They are not GETs because a
@@ -150,6 +152,49 @@ class ScraperRessource(
      * @param persist false answers the draft without writing the media to the database. The files are
      * written either way
      */
+    /**
+     * The same import as [importImagesWithScraper], with the scraper handed in as json rather than built
+     * from a pattern.
+     *
+     * This is the one to call for a scraper that is not just "the images of the page". What it picks is
+     * whatever the json says: a [DomParser] with any tag and any attribute, a [DomParser] with a regex of
+     * its own in place of the pattern, any nesting of them. That is the difference from the endpoint
+     * before, whose pattern is a single url filter over `img[src]` and nothing else.
+     *
+     * The json is the shape that is stored in `a.scanner.serialization`, so a scraper that has been
+     * stored, or written by a caller that once fetched it from
+     * [org.endy.pmczero.service.ScannerService.getScanner], can be run from here without being rewritten.
+     *
+     * The scraper has to download its own files: one that only records media is refused with a 409 rather
+     * than answered with a set whose every url points at a file that was never written, see
+     * [ScraperImageImportService.importWith].
+     *
+     * @param scraper the serialized [org.endy.pmczero.model.scraper.Scraper] to run
+     * @param name the name of the mset and of the folder the files go into. Blank names the set after
+     * the page title the scraper picks up
+     * @param waitForSelector a css selector to wait for before collecting. See [render]
+     * @param persist false answers the draft without writing the media to the database. The files are
+     * written either way
+     */
+    @PostMapping("/scraper-import")
+    fun importWithSerializedScraper(
+        @RequestParam url: String,
+        @RequestParam locationId: Int,
+        @RequestParam scraper: String,
+        @RequestParam(required = false) name: String?,
+        @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(defaultValue = "3") scrollTimes: Int,
+        @RequestParam(defaultValue = "true") persist: Boolean
+    ): ImageImportTO = scraperImageImportService.importWith(
+        locationId = locationId,
+        url = url,
+        scraper = scraper,
+        name = name,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector,
+        persist = persist
+    )
+
     @PostMapping("/scraper-images")
     fun importImagesWithScraper(
         @RequestParam url: String,

@@ -8,7 +8,12 @@ import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
 import org.endy.pmczero.model.scraper.MediaAdder
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import org.endy.pmczero.model.scraper.PassThroughParser
 import org.endy.pmczero.model.scraper.RecoveryWorker
+import org.endy.pmczero.model.scraper.ScanFormat
+import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
 import org.junit.jupiter.api.BeforeEach
@@ -216,6 +221,210 @@ class ScraperImageImportServiceTests {
         val result = service.import(locationId = 7, url = "http://example.org/galerie.html", name = "G", pattern = "  ")
 
         assertEquals(3, result.imported)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // With a scraper handed in as json
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The json of the scraper this service builds itself, so a test can send one without writing it out.
+     *
+     * A function rather than a property, because it needs [service] and that is built in [setUp]: a
+     * property initialiser would run before the beforeEach and read a lateinit that is not there yet.
+     */
+    private fun imageScraperJson(): String = ScanFormat.json.encodeToString(service.scraperOf(null))
+
+    @Test
+    fun `runs a scraper handed in as json`() {
+        givenPage(page)
+
+        val result = service.importWith(
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scraper = imageScraperJson(),
+            name = "G"
+        )
+
+        assertEquals(3, result.imported)
+        assertEquals(
+            listOf("G/drittes.png", "G/erstes.jpg", "G/zweites.jpg"),
+            writtenRelativeTo(tempDir)
+        )
+    }
+
+    /** The whole point of the json: a scraper picks something the built one cannot, here a pdf link. */
+    @Test
+    fun `runs a scraper that picks something other than images`() {
+        givenPage(
+            """
+            <html><head><title>Dokumente</title></head><body>
+            <a href="/files/bericht.pdf">Bericht</a>
+            <img src="/bilder/erstes.jpg">
+            </body></html>
+            """.trimIndent()
+        )
+
+        val scraperJson = ScanFormat.json.encodeToString(
+            Scraper(
+                PassThroughParser(),
+                StructuredWorker(
+                    download = false,
+                    scrapers = listOf(
+                        Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                        Scraper(DomParser("(.*)", "a", "abs:href"), MediaAdder()),
+                        Scraper(
+                            DomParser("(.*)", "a", "abs:href"),
+                            RecoveryWorker(FileDownloader())
+                        )
+                    )
+                )
+            )
+        )
+
+        val result = service.importWith(
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scraper = scraperJson,
+            name = "Doku"
+        )
+
+        assertEquals(1, result.imported)
+        assertEquals(listOf("bericht.pdf"), result.media.map { it.name })
+        assertEquals(listOf("Doku/bericht.pdf"), writtenRelativeTo(tempDir))
+    }
+
+    /** A scraper that records media but never writes them would answer with urls that all 404. */
+    @Test
+    fun `refuses a scraper that does not download its files`() {
+        givenPage(page)
+
+        val e = assertThrows<NotAccessibleException> {
+            service.importWith(
+                locationId = 7,
+                url = "http://example.org/galerie.html",
+                scraper = ScanFormat.json.encodeToString(
+                    Scraper(
+                        PassThroughParser(),
+                        StructuredWorker(
+                            download = false,
+                            scrapers = listOf(
+                                Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                                Scraper(DomParser("(.+)", "img[src]", "abs:src"), MediaAdder())
+                            )
+                        )
+                    )
+                ),
+                name = "G"
+            )
+        }
+
+        assertTrue(e.message!!.contains("no FileDownloader"))
+        assertEquals(emptyList(), writtenRelativeTo(tempDir), "nothing was written")
+    }
+
+    /**
+     * The download is usually below a [StructuredWorker], and often inside the [RecoveryWorker] that
+     * wraps it, so neither of those hides it from the check.
+     *
+     * Two levels of [StructuredWorker], which is as deep as a scraper anyone would build. The html is
+     * carried down by a [PassThroughParser] at each level rather than by a [DomParser], since a
+     * [StructuredWorker] hands its element to the scrapers below it: one fed the page title would hand
+     * that title on as the text to pick apart, which is what the pipeline is for and not a mistake here.
+     */
+    @Test
+    fun `finds the download wherever it sits in the worker tree`() {
+        givenPage(page)
+
+        val nested = ScanFormat.json.encodeToString(
+            Scraper(
+                PassThroughParser(),
+                StructuredWorker(
+                    download = false,
+                    scrapers = listOf(
+                        Scraper(
+                            PassThroughParser(),
+                            StructuredWorker(
+                                download = false,
+                                scrapers = listOf(
+                                    Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                                    Scraper(DomParser("(.+)", "img[src]", "abs:src"), MediaAdder())
+                                )
+                            )
+                        ),
+                        Scraper(
+                            PassThroughParser(),
+                            StructuredWorker(
+                                download = false,
+                                scrapers = listOf(
+                                    Scraper(
+                                        DomParser("(.+)", "img[src]", "abs:src"),
+                                        RecoveryWorker(FileDownloader())
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        val result = service.importWith(
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scraper = nested,
+            name = "G"
+        )
+
+        assertEquals(3, result.imported)
+        assertEquals(3, writtenRelativeTo(tempDir).size)
+    }
+
+    /**
+     * Broken json is answered as a 409 with the reason rather than as a bare 500.
+     *
+     * A [kotlinx.serialization.SerializationException] is not an [Exception] this application maps, so it
+     * would otherwise reach a client as an unhandled failure that says only that something went wrong.
+     */
+    @Test
+    fun `answers a broken scraper as not accessible with the reason`() {
+        givenPage(page)
+
+        val e = assertThrows<NotAccessibleException> {
+            service.importWith(locationId = 7, url = "http://example.org/g.html", scraper = "{ not json")
+        }
+
+        assertTrue(e.message!!.contains("not a scraper this application knows"))
+    }
+
+    /** Json that is valid but not a scraper, e.g. an array, has to be refused the same way. */
+    @Test
+    fun `answers json that is not a scraper as not accessible`() {
+        givenPage(page)
+
+        assertThrows<NotAccessibleException> {
+            service.importWith(locationId = 7, url = "http://example.org/g.html", scraper = "[1,2,3]")
+        }
+    }
+
+    /** A serialized scraper round trips, which is what makes one storeable and reusable. */
+    @Test
+    fun `a serialized scraper survives a round trip`() {
+        givenPage(page)
+
+        val original = service.scraperOf(".*zweites.*")
+        val roundTripped = ScanFormat.json.decodeFromString<Scraper>(ScanFormat.json.encodeToString(original))
+
+        val result = service.importWith(
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scraper = ScanFormat.json.encodeToString(roundTripped),
+            name = "G"
+        )
+
+        // the regex of the parser survived, so the same image is picked as before
+        assertEquals(1, result.imported)
+        assertEquals(listOf("zweites.jpg"), result.media.map { it.name })
     }
 
     // -------------------------------------------------------------------------------------

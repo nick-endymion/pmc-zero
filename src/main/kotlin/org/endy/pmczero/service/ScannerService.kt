@@ -27,14 +27,10 @@ class ScannerService(
 //        {"htmlParser": {"type": "Domparser","regex": "(.*)","tag": "","attribute":""},"worker":{"type":"setCreator"}}
 
     init {
-        // No serializersModule here on purpose. Both [Parser] and [Worker] are sealed, so
-        // kotlinx.serialization resolves their subclasses on its own and names each one by its
-        // @SerialName. The module this used to build registered all six by hand, which is what an
-        // open (abstract) Parser needed and a sealed one does not: an unregistered subclass of an
-        // abstract base fails, while a sealed base ignores the module for its own hierarchy.
-        format = Json {
-            prettyPrint = true
-        }
+        // the one format of the project, see [ScanFormat]. Shared rather than built here, so a scraper
+        // written by this service and one read by an endpoint that was handed a serialized scraper are
+        // the same json and not merely two that happen to agree today.
+        format = ScanFormat.json
         scannerShorts = serializedScannerRepository.findAllByValid(true)
     }
 

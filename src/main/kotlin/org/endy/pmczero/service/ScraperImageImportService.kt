@@ -7,10 +7,14 @@ import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
 import org.endy.pmczero.model.scraper.MediaAdder
 import org.endy.pmczero.model.scraper.PassThroughParser
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.decodeFromString
 import org.endy.pmczero.model.scraper.RecoveryWorker
+import org.endy.pmczero.model.scraper.ScanFormat
 import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
+import org.endy.pmczero.model.scraper.Worker
 import org.endy.pmczero.to.ImageImportFailureTO
 import org.endy.pmczero.to.ImageImportTO
 import org.springframework.stereotype.Service
@@ -69,6 +73,72 @@ class ScraperImageImportService(
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
         persist: Boolean = true
+    ): ImageImportTO = importWith(
+        locationId = locationId,
+        url = url,
+        scraper = scraperOf(pattern),
+        name = name,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector,
+        persist = persist
+    )
+
+    /**
+     * The same import as [import], with the scraper handed in rather than built here.
+     *
+     * The scraper is json, the same shape that is stored in `a.scanner.serialization` and that
+     * [org.endy.pmczero.service.ScannerService] reads, so a scraper can be written once, stored, and
+     * run from either place. Read with [ScanFormat], which is where the format of the project lives.
+     *
+     * Two things are worth knowing about a scraper that arrives this way rather than being built by
+     * [scraperOf]:
+     *
+     * - it may download nothing. The scraper of [import] is what writes the files of an import, and a
+     *   scraper without a [FileDownloader] in it records media whose files exist nowhere, which is the
+     *   state this whole class exists to avoid. So one that does not download is refused rather than
+     *   answered with a set of dangling media. [FileDownloader] and [MediaAdder] also both belong in it,
+     *   or the media are recorded without being written.
+     * - it may not write files at all, in which case [locationId] is only a name to file the set under.
+     *   That is refused too, since the endpoint is an import.
+     *
+     * @param scraper the serialized scraper to run, i.e. the json of a [Scraper]
+     * @throws NotAccessibleException when [scraper] is not the json of a scraper, when it holds no
+     * worker that downloads the files of the media it records, when the location cannot receive files,
+     * the browser cannot be started, [waitForSelector] does not appear, or the page holds no image
+     * @throws org.endy.pmczero.exception.NotFoundException when no location has that id
+     */
+    fun importWith(
+        locationId: Int,
+        url: String,
+        scraper: String,
+        name: String? = null,
+        scrollTimes: Int = 3,
+        waitForSelector: String? = null,
+        persist: Boolean = true
+    ): ImageImportTO = importWith(
+        locationId = locationId,
+        url = url,
+        scraper = scraperOrFail(scrapeSerializable(scraper)),
+        name = name,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector,
+        persist = persist
+    )
+
+    /**
+     * The same import as [import], over a scraper that is already an object.
+     *
+     * The one place the import actually runs, so [import], [importWith] and a caller that holds a
+     * scraper cannot drift apart in what they do with a page.
+     */
+    fun importWith(
+        locationId: Int,
+        url: String,
+        scraper: Scraper,
+        name: String? = null,
+        scrollTimes: Int = 3,
+        waitForSelector: String? = null,
+        persist: Boolean = true
     ): ImageImportTO {
         val location = writableLocation(locationId)
         val storageId = location.storageOrNull()?.id
@@ -81,7 +151,7 @@ class ScraperImageImportService(
 
         val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(name, url))
 
-        scraperOf(pattern).doWork(html, baseUriOf(url), kontext)
+        scraper.doWork(html, baseUriOf(url), kontext)
 
         // no image at all is reported rather than answered as an empty result, so a caller cannot mistake
         // a page whose images never loaded for one that holds none, and is spared an empty set
@@ -148,6 +218,55 @@ class ScraperImageImportService(
                 )
             )
         )
+    }
+
+    /**
+     * The [Scraper] that is [serialized], or a failure that says what was wrong with it.
+     *
+     * A [kotlinx.serialization.SerializationException] names the class or the field it stumbled on, which
+     * is already the most useful thing a caller can be told about a broken scraper. It is not an
+     * [Exception] this application maps, so it would reach a client as a bare 500; it is turned into a
+     * [NotAccessibleException] to be answered as a 409 with its message, the way a browser that cannot be
+     * started is.
+     */
+    private fun scrapeSerializable(serialized: String): Scraper =
+        try {
+            ScanFormat.json.decodeFromString<Scraper>(serialized)
+        } catch (e: SerializationException) {
+            throw NotAccessibleException(
+                "the scraper is not a scraper this application knows: ${e.message ?: e.toString()}"
+            )
+        }
+
+    /**
+     * [scraper], checked for the one thing an import needs it to do, which is write the files of the media
+     * it records.
+     *
+     * A scraper without a [FileDownloader] answers with media whose files exist nowhere: every url the
+     * rest of the application builds for them points at a path that is not there, and nothing in the
+     * answer says so. That is the state this class exists to produce, so a scraper arriving from a
+     * caller is asked whether it really does it rather than being trusted.
+     *
+     * The search is over the whole worker tree rather than the top of it, since the download sits
+     * somewhere below a [StructuredWorker] in every scraper worth running, and often inside a
+     * [RecoveryWorker] that wraps it.
+     */
+    private fun scraperOrFail(scraper: Scraper): Scraper {
+        if (!scraper.worker.writesFiles())
+            throw NotAccessibleException(
+                "the scraper holds no FileDownloader, so the media it records would point at files " +
+                    "that are never written"
+            )
+
+        return scraper
+    }
+
+    /** whether [worker], or anything below it, writes the file of the element it is handed */
+    private fun Worker.writesFiles(): Boolean = when (this) {
+        is FileDownloader -> true
+        is RecoveryWorker -> worker.writesFiles()
+        is StructuredWorker -> scrapers.any { it.worker.writesFiles() }
+        else -> false
     }
 
     /**
