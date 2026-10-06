@@ -21,6 +21,9 @@ class ScraperServiceTests {
     public lateinit var downloader: Downloader
 
     @MockK
+    public lateinit var browserFetcher: BrowserFetcher
+
+    @MockK
     public lateinit var locationRepository: LocationRepository
 
     @MockK
@@ -42,7 +45,7 @@ class ScraperServiceTests {
             downloader.getAsString(any())
         } returns "<html><title>Der Titel</title><a>http://aaa.de/link</a></html>"
 
-        var scraper = ScraperService(locationService, downloader)
+        var scraper = ScraperService(locationService, downloader, browserFetcher)
 
         val scanner: Scraper = setScraper()
 

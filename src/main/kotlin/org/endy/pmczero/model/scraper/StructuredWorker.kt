@@ -17,7 +17,7 @@ class StructuredWorker(
         val text = if (download) {
             baseUri = getBusUri(element)
             println(baseUri)
-            scanningKontext.downloader.getAsString(element)
+            scanningKontext.fetcher.getAsString(element)
         } else element
         for (scanner in scrapers)
             scanner.doWork(text, baseUri, scanningKontext)
