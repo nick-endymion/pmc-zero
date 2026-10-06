@@ -5,6 +5,7 @@ import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
+import org.endy.pmczero.model.scraper.FoundElementsWorker
 import org.endy.pmczero.model.scraper.MediaAdder
 import org.endy.pmczero.model.scraper.PassThroughParser
 import kotlinx.serialization.SerializationException
@@ -15,8 +16,10 @@ import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
 import org.endy.pmczero.model.scraper.Worker
+import org.endy.pmczero.to.FoundElementTO
 import org.endy.pmczero.to.ImageImportFailureTO
 import org.endy.pmczero.to.ImageImportTO
+import org.endy.pmczero.to.ImageListTO
 import org.springframework.stereotype.Service
 
 /**
@@ -219,6 +222,132 @@ class ScraperImageImportService(
             )
         )
     }
+
+    /**
+     * The images of the pages [url] links to, collected and nothing else: no file is downloaded, no
+     * medium created, nothing stored.
+     *
+     * The same as [list], one page deeper: [list] collects the images of the page it is given, this
+     * collects the images of every page that page links to. Which links are followed is [linkClass],
+     * since a gallery index links every navigation entry on the site as well as the pages of the gallery.
+     *
+     * Two levels of [org.endy.pmczero.model.FoundElement.level] in one answer, which is what they are
+     * for: level 1 is the index page and its links, level 2 the images found on the pages those links
+     * lead to. So a caller can see both what was linked and what was found, and tell a missing image
+     * from a missing page.
+     *
+     * Every link is followed to its end, so this costs a render per page the index links to. It is
+     * still nothing like an import, which would fetch every single image on top of that.
+     *
+     * @param linkClass the css class of the links to follow, e.g. `gallery-link` on an index that
+     * wraps each entry of the gallery in one. Blank follows every `a[href]` of the page, which on a
+     * real site is every navigation link on it, so this is worth passing whenever the page offers a
+     * class to pick the gallery by
+     * @param pattern a regex an image url has to match on the pages that are followed. Blank takes
+     * every image of them
+     * @param scrollTimes how often a page is scrolled before its images are collected, since a lazily
+     * loading gallery appends them while scrolling
+     * @param waitForSelector a css selector to wait for before collecting, needed on a single page
+     * application whose images do not exist at the load event. See [BrowserFetcher.render]
+     * @throws NotAccessibleException when the browser cannot be started or [waitForSelector] does not
+     * appear
+     */
+    fun listLevel2(
+        url: String,
+        linkClass: String? = null,
+        pattern: String? = null,
+        scrollTimes: Int = 3,
+        waitForSelector: String? = null
+    ): ImageListTO {
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes)
+
+        val kontext = scraperService.getNewScanningContext(
+            scraperService.catchupLocation(),
+            browserFetcher,
+            ""
+        )
+
+        level2ScraperOf(linkClass, pattern).doWork(html, baseUriOf(url), kontext)
+
+        return ImageListTO(
+            url = url,
+            found = kontext.foundElements.size,
+            elements = kontext.foundElements.map { FoundElementTO(it.level, it.element) }
+        )
+    }
+
+    /**
+     * The urls [url] offers as images, collected and nothing else: no file is downloaded, no medium
+     * created, nothing stored.
+     *
+     * The call to make before an import, and cheaper than one by a factor of the number of images: a
+     * render of the page and the parsing of its dom, where an import also fetches every single file. So
+     * this is how a caller finds out whether a page holds what it was after, and which of its images are
+     * worth having, before asking for any of it to be written.
+     *
+     * What it collects is up to [scraperOf] and to [pattern], so the answer is the same set of urls an
+     * import would have taken, in the same order. That is the point of it sharing the parser: a list that
+     * is not what the import would have fetched is not worth much as a preview.
+     *
+     * @param pattern a regex an image url has to match, `(.+)` for all of them. See [scraperOf]
+     * @param scrollTimes how often the page is scrolled before its images are collected, since a lazily
+     * loading gallery appends them while scrolling
+     * @param waitForSelector a css selector to wait for before collecting, needed on a single page
+     * application whose images do not exist at the load event. See [BrowserFetcher.render]
+     * @throws NotAccessibleException when the browser cannot be started or [waitForSelector] does not
+     * appear
+     */
+    fun list(
+        url: String,
+        pattern: String? = null,
+        scrollTimes: Int = 3,
+        waitForSelector: String? = null
+    ): ImageListTO {
+        // rendered here rather than by the StructuredWorker, which would fetch the page itself and so lose
+        // the scroll count and the selector wait
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes)
+
+        // the catchup location rather than a real one: nothing is written, so there is nothing for a
+        // location to be. Its empty uri would stop a scraper that did try to write, which is the answer
+        // this wants rather than files in a folder nobody asked about.
+        val kontext = scraperService.getNewScanningContext(
+            scraperService.catchupLocation(),
+            browserFetcher,
+            ""
+        )
+
+        listScraperOf(pattern).doWork(html, baseUriOf(url), kontext)
+
+        return ImageListTO(
+            url = url,
+            found = kontext.foundElements.size,
+            elements = kontext.foundElements.map { FoundElementTO(it.level, it.element) }
+        )
+    }
+
+    /**
+     * The scraper [list] runs: every image of the page, collected and nothing else.
+     *
+     * No [SetCreator], no [MediaAdder] and no [FileDownloader], since [list] answers with the elements
+     * rather than with a set of media, and each of those three would put something in the way of that.
+     * A single scraper, so [org.endy.pmczero.model.scraper.FoundElementsWorker.foundElements] holds
+     * exactly the images and nothing else, at level 1.
+     *
+     * The same [DomParser] as [scraperOf], deliberately: a preview that offered different urls than the
+     * import would take is not a preview of that import.
+     */
+    fun listScraperOf(pattern: String?): Scraper = Scraper(
+        PassThroughParser(),
+        StructuredWorker(
+            download = false,
+            scrapers = listOf(
+                Scraper(
+                    DomParser(pattern?.takeIf { it.isNotBlank() } ?: "(.+)", "img[src]", "abs:src"),
+                    FoundElementsWorker(1)
+                )
+            )
+        )
+    )
 
     /**
      * The [Scraper] that is [serialized], or a failure that says what was wrong with it.

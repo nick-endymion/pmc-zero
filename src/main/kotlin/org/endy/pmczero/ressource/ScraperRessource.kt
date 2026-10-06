@@ -12,6 +12,7 @@ import org.endy.pmczero.service.ImageImportService
 import org.endy.pmczero.service.ScraperImageImportService
 import org.endy.pmczero.service.ScraperService
 import org.endy.pmczero.to.ImageImportTO
+import org.endy.pmczero.to.ImageListTO
 import org.endy.pmczero.to.MsetTO
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -33,7 +34,9 @@ import org.springframework.web.bind.annotation.RestController
  *    which is what to reach for when the images are not quite what [importImages] collects.
  * 4. [importWithSerializedScraper] for the same import with the scraper itself handed in as json, for a
  *    scraper that is not just the images of the page.
- * 5. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
+ * 5. [listScraperImages] to see which image urls a page offers, downloading nothing. It costs a render
+ *    where an import costs a render per image, so it is the one to hit before committing to an import.
+ * 6. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
  *    when a page needs its elements picked differently.
  *
  * All of them are POSTs that write or that cost a browser and a wait. They are not GETs because a
@@ -193,6 +196,39 @@ class ScraperRessource(
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
         persist = persist
+    )
+
+    /**
+     * The image urls of [url], collected and nothing else: no file is downloaded, no medium created,
+     * nothing stored.
+     *
+     * The call to make before an import, since it costs a render of the page where an import also fetches
+     * every single image. So it answers whether a page holds what one was after, and which of its images
+     * are worth having, before anything is written.
+     *
+     * The same parser as `/scraper-images`, deliberately: a list of urls that is not what the import
+     * would have fetched is not worth much as a preview of it.
+     *
+     * No location is needed, since nothing is written anywhere.
+     *
+     * @param pattern a regex an image url has to match, e.g. to list only the full size files of a page
+     * that also links to its thumbnails. Blank takes every image of the page
+     * @param waitForSelector a css selector to wait for before collecting, needed on a single page
+     * application whose images do not exist at the load event. See [render]
+     * @param scrollTimes how often the page is scrolled before its images are collected, since a
+     * lazily loading gallery appends them while scrolling
+     */
+    @PostMapping("/scraper-image-list")
+    fun listScraperImages(
+        @RequestParam url: String,
+        @RequestParam(required = false) pattern: String?,
+        @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(defaultValue = "3") scrollTimes: Int
+    ): ImageListTO = scraperImageImportService.list(
+        url = url,
+        pattern = pattern,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector
     )
 
     @PostMapping("/scraper-images")

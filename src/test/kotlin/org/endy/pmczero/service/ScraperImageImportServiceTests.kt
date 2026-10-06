@@ -7,6 +7,7 @@ import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
+import org.endy.pmczero.model.scraper.FoundElementsWorker
 import org.endy.pmczero.model.scraper.MediaAdder
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -81,6 +82,12 @@ class ScraperImageImportServiceTests {
 
         whenever(locationService.findById(7)).thenReturn(location)
         whenever(locationService.isFileSystemAccessible(7)).thenReturn(true)
+
+        // the placeholder a scan without a location runs against, which is what a listing uses since it
+        // writes nothing. A mock answers null for an unstubbed call, and a kontext of null is not one.
+        whenever(scraperService.catchupLocation()).thenReturn(
+            Location().also { it.name = "Catchup Location"; it.uri = ""; it.storage = Storage() }
+        )
 
         // the kontext is built by ScraperService in production, so here it is built directly. The real
         // object, since what is under test is what the workers do with it.
@@ -221,6 +228,184 @@ class ScraperImageImportServiceTests {
         val result = service.import(locationId = 7, url = "http://example.org/galerie.html", name = "G", pattern = "  ")
 
         assertEquals(3, result.imported)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Listing the urls of a page
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The whole point of this endpoint: the urls of the page, and nothing fetched.
+     *
+     * A render and a parse, where an import of the same page also downloads every image. So an
+     * unreachable image cannot fail this, which is exactly the difference.
+     */
+    @Test
+    fun `lists the image urls of a page without downloading anything`() {
+        givenPage(page)
+
+        val result = service.list(url = "http://example.org/galerie.html")
+
+        assertEquals(3, result.found)
+        assertEquals(
+            listOf("erstes.jpg", "zweites.jpg", "drittes.png"),
+            result.elements.map { it.element.substringAfterLast('/') }
+        )
+        assertEquals(emptyList(), writtenRelativeTo(tempDir), "nothing was written")
+        verify(browserFetcher, never()).downloadTo(any<String>(), any<File>(), any())
+    }
+
+    /** Absolute, since the parser reads an `abs:` attribute: what a browser would follow. */
+    @Test
+    fun `lists the urls a browser would follow`() {
+        givenPage(page)
+
+        val result = service.list(url = "http://example.org/unter/ordner/galerie.html")
+
+        assertEquals(
+            listOf(
+                "http://example.org/bilder/erstes.jpg",
+                "http://example.org/unter/ordner/zweites.jpg",
+                "https://cdn.de/drittes.png"
+            ),
+            result.elements.map { it.element }
+        )
+    }
+
+    /** Everything collected is at level 1, since the scraper of a listing holds one collector. */
+    @Test
+    fun `lists everything at level one`() {
+        givenPage(page)
+
+        val result = service.list(url = "http://example.org/galerie.html")
+
+        assertEquals(listOf(1, 1, 1), result.elements.map { it.level })
+    }
+
+    /** The parser is the one of the import, so a preview is a preview of that import. */
+    @Test
+    fun `lists only the images matching the pattern`() {
+        givenPage(page)
+
+        val result = service.list(url = "http://example.org/galerie.html", pattern = ".*zweites.*")
+
+        assertEquals(1, result.found)
+        assertEquals(listOf("http://example.org/zweites.jpg"), result.elements.map { it.element })
+    }
+
+    @Test
+    fun `lists every image when the pattern is blank`() {
+        givenPage(page)
+
+        assertEquals(3, service.list(url = "http://example.org/galerie.html", pattern = "   ").found)
+    }
+
+    /** A page without images answers an empty list rather than an error: nothing to collect is a result. */
+    @Test
+    fun `lists nothing for a page without images`() {
+        givenPage("<html><body><p>nur Text</p></body></html>")
+
+        val result = service.list(url = "http://example.org/galerie.html")
+
+        assertEquals(0, result.found)
+        assertEquals(emptyList(), result.elements)
+    }
+
+    /** A page that has no images at all is still a page that answered, so no location is needed for it. */
+    @Test
+    fun `lists without a location to write into`() {
+        givenPage(page)
+
+        // neither findById nor isFileSystemAccessible is stubbed for this, so a call to either would
+        // hand back null and fail: a listing has nothing to write, so it asks for nothing
+        val result = service.list(url = "http://example.org/galerie.html")
+
+        assertEquals(3, result.found)
+        verify(locationService, never()).findById(any())
+        verify(locationService, never()).isFileSystemAccessible(any())
+    }
+
+    /**
+     * Nothing is stored, not even when the page holds something.
+     *
+     * The point of the endpoint: a caller looking at the urls of a gallery before asking for the import
+     * of it.
+     */
+    @Test
+    fun `stores nothing`() {
+        givenPage(page)
+
+        service.list(url = "http://example.org/galerie.html")
+
+        verify(msetService, never()).save(any())
+    }
+
+    /** No media, since there is no [MediaAdder] in the scraper of a listing. */
+    @Test
+    fun `creates no media`() {
+        givenPage(page)
+
+        service.list(url = "http://example.org/galerie.html")
+
+        assertEquals(0, lastKontext().mset?.media?.size ?: 0)
+    }
+
+    @Test
+    fun `lists the page once with the given scroll count and selector`() {
+        givenPage(page)
+
+        service.list(
+            url = "http://example.org/galerie.html",
+            scrollTimes = 7,
+            waitForSelector = "app-images"
+        )
+
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7)
+    }
+
+    @Test
+    fun `lets a browser failure through when listing`() {
+        whenever(browserFetcher.render(any(), anyOrNull(), any())).thenAnswer {
+            throw NotAccessibleException("the browser is disabled")
+        }
+
+        val e = assertThrows<NotAccessibleException> {
+            service.list(url = "http://example.org/galerie.html")
+        }
+
+        assertTrue(e.message!!.contains("browser is disabled"))
+    }
+
+    /** One collector and one parser, and nothing that stores or downloads. */
+    @Test
+    fun `builds a scraper that only collects`() {
+        val scraper = service.listScraperOf(null)
+
+        val structured = scraper.worker as StructuredWorker
+        assertEquals(1, structured.scrapers.size)
+
+        val inner = structured.scrapers.single()
+        assertTrue(inner.worker is FoundElementsWorker)
+        assertEquals(1, (inner.worker as FoundElementsWorker).level)
+
+        val parser = inner.parser as DomParser
+        assertEquals("img[src]", parser.tag)
+        assertEquals("abs:src", parser.attribute)
+        assertEquals("(.+)", parser.regex)
+    }
+
+    /** The parser is the one of the import, which is what makes a listing a preview of it. */
+    @Test
+    fun `lists with the same parser the import uses`() {
+        val listed = service.listScraperOf(".*zweites.*").worker as StructuredWorker
+        val imported = service.scraperOf(".*zweites.*").worker as StructuredWorker
+
+        val listedParser = listed.scrapers.last().parser as DomParser
+        val importedParser = imported.scrapers[1].parser as DomParser
+
+        assertEquals(importedParser.regex, listedParser.regex)
+        assertEquals(importedParser.tag, listedParser.tag)
+        assertEquals(importedParser.attribute, listedParser.attribute)
     }
 
     // -------------------------------------------------------------------------------------
