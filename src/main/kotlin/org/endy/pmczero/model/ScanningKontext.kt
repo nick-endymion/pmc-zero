@@ -81,5 +81,18 @@ data class ScanningKontext(
      * scrapers, which each run over a page of their own: a nested one that fetched its page must not
      * leave that uri behind for the scraper after it.
      */
-    var baseUri: String = ""
+    var baseUri: String = "",
+    /**
+     * The elements this scan ran into, each with the [FoundElement.level] of the worker that found it.
+     *
+     * What a scan collects when it is not collecting anything else: a worker that only records does
+     * not write files, create media or set a name, so a scraper built out of those alone answers
+     * nothing at all. This is where the elements it saw end up instead, which is what makes such a
+     * scraper worth running, see [org.endy.pmczero.model.scraper.FoundElementsWorker].
+     *
+     * On the kontext rather than on the worker, since the list is the result of the whole scan and a
+     * worker is only handed one element at a time. It also keeps two workers of one scraper, which run
+     * over the same elements, from each having to hand a result back to whoever called them.
+     */
+    var foundElements: MutableList<FoundElement> = mutableListOf()
 )
