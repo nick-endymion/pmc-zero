@@ -36,7 +36,9 @@ import org.springframework.web.bind.annotation.RestController
  *    scraper that is not just the images of the page.
  * 5. [listScraperImages] to see which image urls a page offers, downloading nothing. It costs a render
  *    where an import costs a render per image, so it is the one to hit before committing to an import.
- * 6. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
+ * 6. [listScraperImagesLevel2] for the same, over the pages a gallery index links to rather than over
+ *    the index page itself.
+ * 7. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
  *    when a page needs its elements picked differently.
  *
  * All of them are POSTs that write or that cost a browser and a wait. They are not GETs because a
@@ -218,6 +220,46 @@ class ScraperRessource(
      * @param scrollTimes how often the page is scrolled before its images are collected, since a
      * lazily loading gallery appends them while scrolling
      */
+    /**
+     * The images of the pages [url] links to, collected and nothing else: no file is downloaded, no
+     * medium created, nothing stored.
+     *
+     * The same as [listScraperImages], one page deeper, for a gallery whose images are not on its index
+     * page but on the pages that index links to.
+     *
+     * The answer holds two [org.endy.pmczero.to.FoundElementTO.level]s, which is what tells a caller
+     * apart a gallery that has no images from a gallery whose pages could not be reached: level 1 is
+     * the links found on the index page, level 2 the images found on the pages they lead to. A link at
+     * level 1 with nothing at level 2 under it is a page that answered and held no images, unless it
+     * is listed in [org.endy.pmczero.to.ImageListTO.failures], which is where a page that could not be
+     * read at all ends up.
+     *
+     * Every matched link is followed to its end, so the call costs a render per linked page. Pass
+     * [linkClass] whenever the page offers one: on a real site `a[href]` alone follows every navigation
+     * link on it.
+     *
+     * @param linkClass the css class of the links to follow, e.g. `gallery-link`. Blank follows every
+     * link of the page
+     * @param pattern a regex an image url has to match on the pages that are followed. Blank takes
+     * every image of them
+     * @param waitForSelector a css selector to wait for before collecting. See [render]
+     * @param scrollTimes how often a page is scrolled before its images are collected
+     */
+    @PostMapping("/scraper-image-list-level2")
+    fun listScraperImagesLevel2(
+        @RequestParam url: String,
+        @RequestParam(required = false) linkClass: String?,
+        @RequestParam(required = false) pattern: String?,
+        @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(defaultValue = "3") scrollTimes: Int
+    ): ImageListTO = scraperImageImportService.listLevel2(
+        url = url,
+        linkClass = linkClass,
+        pattern = pattern,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector
+    )
+
     @PostMapping("/scraper-image-list")
     fun listScraperImages(
         @RequestParam url: String,

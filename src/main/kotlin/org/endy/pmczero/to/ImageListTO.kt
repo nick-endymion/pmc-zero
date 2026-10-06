@@ -25,7 +25,21 @@ data class ImageListTO(
      * Absolute, since the parsers of this application read an `abs:` attribute: what is answered is the
      * url a browser would follow rather than the attribute as the page wrote it.
      */
-    val elements: List<FoundElementTO> = emptyList()
+    val elements: List<FoundElementTO> = emptyList(),
+
+    /**
+     * The pages that could not be read, with the reason each one did.
+     *
+     * Only ever filled by a run that follows links, i.e.
+     * [org.endy.pmczero.ressource.ScraperRessource.listScraperImagesLevel2], where a link that answers
+     * an error or times out would otherwise be indistinguishable from a link to a page that holds no
+     * images at all. Both read as a link in [elements] with nothing under it, and only this says which
+     * of the two happened.
+     *
+     * Empty for a listing of a single page, which reads one page and so has nothing that can fail after
+     * the render itself.
+     */
+    val failures: List<ImageImportFailureTO> = emptyList()
 )
 
 /**

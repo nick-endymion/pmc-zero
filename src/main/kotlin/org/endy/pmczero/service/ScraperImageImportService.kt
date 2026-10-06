@@ -272,7 +272,10 @@ class ScraperImageImportService(
         return ImageListTO(
             url = url,
             found = kontext.foundElements.size,
-            elements = kontext.foundElements.map { FoundElementTO(it.level, it.element) }
+            elements = kontext.foundElements.map { FoundElementTO(it.level, it.element) },
+            // a link that could not be read reads like a link to a page without images, since both leave
+            // a level 1 entry with nothing under it. Only this tells them apart.
+            failures = kontext.failures.map { ImageImportFailureTO(it.element, it.reason) }
         )
     }
 
@@ -322,6 +325,57 @@ class ScraperImageImportService(
             url = url,
             found = kontext.foundElements.size,
             elements = kontext.foundElements.map { FoundElementTO(it.level, it.element) }
+        )
+    }
+
+    /**
+     * The scraper [listLevel2] runs: the links of the index page at level 1, and the images of the
+     * pages those links lead to at level 2.
+     *
+     * Both steps are [FoundElementsWorker]s and nothing else, so what the run costs is a render per
+     * linked page and no downloads at all.
+     *
+     * The nesting does the work, and it is the [StructuredWorker] that fetches the page it is handed:
+     * `download = true` makes it read [element] over the [org.endy.pmczero.service.Fetcher] of the
+     * kontext, which is the browser here. So the outer worker receives the links of the index page and
+     * hands each one down to an inner scraper that reads that page and picks its images. The pages are
+     * not fetched in the service, since a worker has no way of asking for anything but the element it
+     * was given.
+     *
+     * [linkClass] narrows which links are followed, by a css selector rather than by a class of its
+     * own: the one place that knows about the markup of a page is the parser, and `a[href]` alone
+     * would follow every navigation link on the site.
+     *
+     * @param pattern a regex an image url has to match, `(.+)` for all of them
+     */
+    fun level2ScraperOf(linkClass: String?, pattern: String?): Scraper {
+        val linkSelector = linkClass?.takeIf { it.isNotBlank() }?.let { "a.$it" } ?: "a[href]"
+        val imageRegex = pattern?.takeIf { it.isNotBlank() } ?: "(.+)"
+
+        val linksOfIndex = DomParser("(.*)", linkSelector, "abs:href")
+
+        return Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    // the links themselves, so the answer shows what was linked as well as what was found
+                    Scraper(linksOfIndex, FoundElementsWorker(1)),
+                    // and each linked page read for its images: the inner worker downloads, since it is
+                    // handed a url rather than the html of a page
+                    Scraper(
+                        linksOfIndex,
+                        RecoveryWorker(
+                            StructuredWorker(
+                                download = true,
+                                scrapers = listOf(
+                                    Scraper(DomParser(imageRegex, "img[src]", "abs:src"), FoundElementsWorker(2))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
         )
     }
 

@@ -17,6 +17,7 @@ import org.endy.pmczero.model.scraper.ScanFormat
 import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
+import org.endy.pmczero.to.FoundElementTO
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -228,6 +229,292 @@ class ScraperImageImportServiceTests {
         val result = service.import(locationId = 7, url = "http://example.org/galerie.html", name = "G", pattern = "  ")
 
         assertEquals(3, result.imported)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Listing the images of the pages a page links to
+    // -------------------------------------------------------------------------------------
+
+    /** An index page linking two pages of the gallery, each with images of its own. */
+    private val indexPage = """
+        <html><body>
+            <a href="/seite1.html" class="galerie">Seite 1</a>
+            <a href="/seite2.html" class="galerie">Seite 2</a>
+            </body></html>
+    """.trimIndent()
+
+    private val seite1 = """<html><body><img src="/bilder/eins-a.jpg"></body></html>"""
+    private val seite2 = """<html><body><img src="/bilder/zwei-a.jpg"><img src="/bilder/zwei-b.jpg"></body></html>"""
+
+    /** The index page answers the render, each linked page answers the fetch of the inner worker. */
+    private fun givenIndexWithLinkedPages(vararg pages: Pair<String, String>) {
+        givenPage(indexPage)
+
+        whenever(browserFetcher.getAsString(any(), any())).thenAnswer { invocation ->
+            val wanted = invocation.getArgument<String>(0)
+            pages.firstOrNull { wanted.endsWith(it.first) }?.second
+                ?: throw NotAccessibleException("$wanted answered 404 Not Found")
+        }
+    }
+
+    /**
+     * The links at level 1 and the images of the pages behind them at level 2.
+     *
+     * Both levels in one answer is what the [org.endy.pmczero.model.FoundElement.level] is for, and it
+     * is what makes a caller able to say which page held which image.
+     */
+    @Test
+    fun `lists the links and the images of the pages behind them`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        assertEquals(
+            listOf(
+                FoundElementTO(1, "http://example.org/seite1.html"),
+                FoundElementTO(1, "http://example.org/seite2.html"),
+                FoundElementTO(2, "http://example.org/bilder/eins-a.jpg"),
+                FoundElementTO(2, "http://example.org/bilder/zwei-a.jpg"),
+                FoundElementTO(2, "http://example.org/bilder/zwei-b.jpg")
+            ),
+            result.elements
+        )
+        assertEquals(5, result.found)
+    }
+
+    /** Each linked page is rendered once, since it costs a browser round trip. */
+    @Test
+    fun `follows every matched link`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        // eq on the url rather than a raw value: a raw argument cannot be mixed with a matcher, and the
+        // proxy flag has to be a matcher to keep the two in step
+        verify(browserFetcher).getAsString(eq("http://example.org/seite1.html"), any())
+        verify(browserFetcher).getAsString(eq("http://example.org/seite2.html"), any())
+    }
+
+    /** The whole point of this endpoint: nothing is downloaded, only pages are read. */
+    @Test
+    fun `downloads no image of any of the pages`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        verify(browserFetcher, never()).downloadTo(any<String>(), any<File>(), any())
+        assertEquals(emptyList(), writtenRelativeTo(tempDir), "nothing was written")
+    }
+
+    @Test
+    fun `stores nothing of the pages it followed`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        verify(msetService, never()).save(any())
+    }
+
+    @Test
+    fun `creates no media of the pages it followed`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        assertEquals(0, lastKontext().mset?.media?.size ?: 0)
+    }
+
+    /** The class narrows what is followed: an index links the navigation of the site as well. */
+    @Test
+    fun `follows only the links of the given class`() {
+        givenPage(
+            """
+            <html><body>
+                <a href="/seite1.html" class="galerie">Seite 1</a>
+                <a href="/impressum.html">Impressum</a>
+                <a href="/kontakt.html">Kontakt</a>
+            </body></html>
+            """.trimIndent()
+        )
+        whenever(browserFetcher.getAsString(any(), any())).thenAnswer { invocation ->
+            when (val wanted = invocation.getArgument<String>(0)) {
+                "http://example.org/seite1.html" -> seite1
+                else -> throw NotAccessibleException("$wanted answered 404 Not Found")
+            }
+        }
+
+        val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        assertEquals(
+            listOf(
+                FoundElementTO(1, "http://example.org/seite1.html"),
+                FoundElementTO(2, "http://example.org/bilder/eins-a.jpg")
+            ),
+            result.elements
+        )
+        verify(browserFetcher, never()).getAsString(eq("http://example.org/impressum.html"), any())
+    }
+
+    /** Without a class every link is followed, which on a real page is every navigation link on it. */
+    @Test
+    fun `follows every link when no class is given`() {
+        givenPage("""<html><body><a href="/seite1.html">x</a></body></html>""")
+        whenever(browserFetcher.getAsString(any(), any())).thenReturn(seite1)
+
+        val result = service.listLevel2(url = "http://example.org/index.html")
+
+        assertEquals(2, result.found)
+    }
+
+    /**
+     * A page that cannot be read is reported rather than lost.
+     *
+     * Both a broken link and a page that holds no images leave a level 1 entry with nothing under it,
+     * so only the failure list says which of the two happened. A [RecoveryWorker] is what keeps one dead
+     * link from ending the run and losing every other page with it.
+     */
+    @Test
+    fun `reports a page it could not read`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        // both pages answer here, so nothing failed; the dead one is arranged below instead
+        assertEquals(emptyList(), result.failures)
+    }
+
+    @Test
+    fun `reports a broken link and keeps the pages that worked`() {
+        givenPage(indexPage)
+        whenever(browserFetcher.getAsString(any(), any())).thenAnswer { invocation ->
+            when (val wanted = invocation.getArgument<String>(0)) {
+                "http://example.org/seite1.html" -> seite1
+                else -> throw NotAccessibleException("$wanted answered 404 Not Found")
+            }
+        }
+
+        val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        // both links are still reported at level 1, since the index really did hold them
+        assertEquals(2, result.elements.count { it.level == 1 })
+        // the one that worked kept its image
+        assertEquals(
+            listOf(FoundElementTO(2, "http://example.org/bilder/eins-a.jpg")),
+            result.elements.filter { it.level == 2 }
+        )
+        val failure = result.failures.single()
+        assertEquals("http://example.org/seite2.html", failure.url)
+        assertTrue(failure.reason.contains("404"))
+    }
+
+    /** A page that answers and holds nothing is not a failure: that is what it had. */
+    @Test
+    fun `does not call a page without images a failure`() {
+        givenPage(indexPage)
+        whenever(browserFetcher.getAsString(any(), any())).thenReturn("<html><body>leer</body></html>")
+
+        val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        assertEquals(emptyList(), result.failures)
+        assertEquals(2, result.found, "the two links are still there")
+    }
+
+    /** The pattern is applied on the pages that are followed, not on the index page. */
+    @Test
+    fun `takes only the images of the pages that match the pattern`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1, "/seite2.html" to seite2)
+
+        val result = service.listLevel2(
+            url = "http://example.org/index.html",
+            linkClass = "galerie",
+            pattern = ".*zwei-a.*"
+        )
+
+        assertEquals(
+            listOf(FoundElementTO(2, "http://example.org/bilder/zwei-a.jpg")),
+            result.elements.filter { it.level == 2 }
+        )
+    }
+
+    @Test
+    fun `lists an index without links as just the index`() {
+        givenPage("<html><body><p>keine Links</p></body></html>")
+
+        val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
+
+        assertEquals(0, result.found)
+        assertEquals(emptyList(), result.elements)
+    }
+
+    @Test
+    fun `lets a browser failure on the index through`() {
+        whenever(browserFetcher.render(any(), anyOrNull(), any())).thenAnswer {
+            throw NotAccessibleException("the browser is disabled")
+        }
+
+        val e = assertThrows<NotAccessibleException> {
+            service.listLevel2(url = "http://example.org/index.html")
+        }
+
+        assertTrue(e.message!!.contains("browser is disabled"))
+    }
+
+    /** The index is rendered once by the service; the pages behind its links are read by the fetcher. */
+    @Test
+    fun `renders the index once with the given scroll count and selector`() {
+        givenIndexWithLinkedPages("/seite1.html" to seite1)
+
+        service.listLevel2(
+            url = "http://example.org/index.html",
+            linkClass = "galerie",
+            scrollTimes = 7,
+            waitForSelector = "app-links"
+        )
+
+        verify(browserFetcher).render("http://example.org/index.html", "app-links", 7)
+    }
+
+    /**
+     * The scraper is what does the work: the links of the index are picked by a parser, and a
+     * [StructuredWorker] below it fetches each of them and picks the images of that page.
+     */
+    @Test
+    fun `builds a scraper that follows the links of the index`() {
+        val scraper = service.level2ScraperOf(linkClass = "galerie", pattern = null)
+
+        val structured = scraper.worker as StructuredWorker
+        // the links themselves, and the pages behind them
+        assertEquals(2, structured.scrapers.size)
+
+        val linksParser = structured.scrapers[0].parser as DomParser
+        assertEquals("a.galerie", linksParser.tag)
+        assertEquals("abs:href", linksParser.attribute)
+        assertEquals(1, (structured.scrapers[0].worker as FoundElementsWorker).level)
+
+        // the second branch reads each linked page, which is what download = true is for
+        val inner = (structured.scrapers[1].worker as RecoveryWorker).worker as StructuredWorker
+        assertTrue(inner.download)
+        val imagesParser = inner.scrapers.single().parser as DomParser
+        assertEquals("img[src]", imagesParser.tag)
+        assertEquals("abs:src", imagesParser.attribute)
+        assertEquals(2, (inner.scrapers.single().worker as FoundElementsWorker).level)
+    }
+
+    @Test
+    fun `falls back to every link when no class is given`() {
+        val scraper = service.level2ScraperOf(linkClass = "  ", pattern = null)
+
+        val structured = scraper.worker as StructuredWorker
+        assertEquals("a[href]", (structured.scrapers[0].parser as DomParser).tag)
+    }
+
+    @Test
+    fun `puts the pattern into the inner scraper`() {
+        val scraper = service.level2ScraperOf(linkClass = null, pattern = ".*zwei.*")
+
+        val inner = ((scraper.worker as StructuredWorker).scrapers[1].worker as RecoveryWorker)
+            .worker as StructuredWorker
+        assertEquals(".*zwei.*", (inner.scrapers.single().parser as DomParser).regex)
     }
 
     // -------------------------------------------------------------------------------------
