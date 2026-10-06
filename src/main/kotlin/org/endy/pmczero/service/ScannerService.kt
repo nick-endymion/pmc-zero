@@ -3,9 +3,6 @@ package org.endy.pmczero.service
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.polymorphic
-import kotlinx.serialization.modules.subclass
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.ScannerShort
@@ -30,28 +27,12 @@ class ScannerService(
 //        {"htmlParser": {"type": "Domparser","regex": "(.*)","tag": "","attribute":""},"worker":{"type":"setCreator"}}
 
     init {
-        val module = SerializersModule {
-            polymorphic(Parser::class) {
-                subclass(DomParser::class)
-            }
-            polymorphic(Parser::class) {
-                subclass(PassThroughParser::class)
-            }
-            polymorphic(Parser::class) {
-                subclass(RegexParser::class)
-            }
-            polymorphic(Worker::class) {
-                subclass(SetCreator::class)
-            }
-            polymorphic(Worker::class) {
-                subclass(StructuredWorker::class)
-            }
-            polymorphic(Worker::class) {
-                subclass(MediaAdder::class)
-            }
-        }
+        // No serializersModule here on purpose. Both [Parser] and [Worker] are sealed, so
+        // kotlinx.serialization resolves their subclasses on its own and names each one by its
+        // @SerialName. The module this used to build registered all six by hand, which is what an
+        // open (abstract) Parser needed and a sealed one does not: an unregistered subclass of an
+        // abstract base fails, while a sealed base ignores the module for its own hierarchy.
         format = Json {
-            serializersModule = module
             prettyPrint = true
         }
         scannerShorts = serializedScannerRepository.findAllByValid(true)
