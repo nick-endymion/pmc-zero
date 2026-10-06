@@ -52,5 +52,34 @@ data class ScanningKontext(
      * [org.endy.pmczero.model.scraper.FileDownloader] each ask without the second one of them
      * believing the first had claimed a name.
      */
-    var takenFileNames: MutableMap<String, String> = mutableMapOf()
+    var takenFileNames: MutableMap<String, String> = mutableMapOf(),
+    /**
+     * The elements of this scan that could not be handled, with the reason each one did.
+     *
+     * Empty unless a scan asked to be told, see
+     * [org.endy.pmczero.model.scraper.RecoveryWorker], which is what puts anything in here. A worker
+     * that throws takes the whole scan down with it, and over the elements of a page that costs every
+     * image that would have worked. So the failures a caller wants to hear about are collected here
+     * rather than propagated, and a scan that records nothing in this list had no trouble.
+     *
+     * On the kontext because the workers have no other channel: [org.endy.pmczero.model.scraper.Worker]
+     * answers nothing, so a failure can only be thrown or left behind, and a scan that is not allowed
+     * to fail cannot throw.
+     */
+    var failures: MutableList<ScanFailure> = mutableListOf(),
+    /**
+     * The uri the [ScanningKontext.mset] of this scan is being built from, i.e. the page the elements
+     * were found on. Blank when there is none, which is the case for a scan over a whole location.
+     *
+     * On the kontext rather than on a worker because a [org.endy.pmczero.model.scraper.Worker] is only
+     * handed an element and has no way of knowing where that element came from, while resolving an
+     * element needs exactly that. A [org.endy.pmczero.model.scraper.DomParser] reading an `abs:` attribute
+     * answers the url the page served it under, so without this a page that writes `/bilder/1.jpg` and a
+     * page that writes it out in full are told apart, and only one of them yields a usable url.
+     *
+     * Saved and restored by the [org.endy.pmczero.model.scraper.StructuredWorker] around its inner
+     * scrapers, which each run over a page of their own: a nested one that fetched its page must not
+     * leave that uri behind for the scraper after it.
+     */
+    var baseUri: String = ""
 )

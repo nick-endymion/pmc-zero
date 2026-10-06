@@ -9,6 +9,7 @@ import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
 import org.endy.pmczero.service.BrowserFetcher
 import org.endy.pmczero.service.ImageImportService
+import org.endy.pmczero.service.ScraperImageImportService
 import org.endy.pmczero.service.ScraperService
 import org.endy.pmczero.to.ImageImportTO
 import org.endy.pmczero.to.MsetTO
@@ -28,7 +29,9 @@ import org.springframework.web.bind.annotation.RestController
  *    nothing comes out of [importImages].
  * 2. [importImages] to fetch the images into a location and record them as media. This is the call
  *    that writes.
- * 3. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
+ * 3. [importImagesWithScraper] for the same import with the page picked apart by the scraper pipeline,
+ *    which is what to reach for when the images are not quite what [importImages] collects.
+ * 4. [draft] to see what a scraper makes of a page without storing anything, which is worth a look
  *    when a page needs its elements picked differently.
  *
  * All of them are POSTs that write or that cost a browser and a wait. They are not GETs because a
@@ -40,7 +43,8 @@ import org.springframework.web.bind.annotation.RestController
 class ScraperRessource(
     private val scraperService: ScraperService,
     private val browserFetcher: BrowserFetcher,
-    private val imageImportService: ImageImportService
+    private val imageImportService: ImageImportService,
+    private val scraperImageImportService: ScraperImageImportService
 ) {
 
     /**
@@ -122,6 +126,47 @@ class ScraperRessource(
         waitForSelector = waitForSelector,
         persist = persist,
         skipExisting = skipExisting
+    )
+
+    /**
+     * The same import as [importImages], with the page picked apart by the scraper pipeline rather than
+     * by [ImageImportService], and answered in the same [ImageImportTO].
+     *
+     * Two imports of the same thing, so it is worth saying which to call:
+     *
+     * - this one, when what the page offers has to be expressed as a parser: the links of a page
+     *   rather than its images, a `data-` attribute, a css selector. The scraper of this call is built
+     *   in [ScraperImageImportService.scraperOf] and could as well come out of the database, which is
+     *   what [org.endy.pmczero.service.ScannerService] is set up for.
+     * - [importImages], when the images are wanted and nothing about how they are picked matters. Its
+     *   handling of what is already stored is the more careful of the two: `skipExisting` there leaves
+     *   the files of an earlier import alone, while this endpoint has no such parameter and writes them
+     *   again. So a second run over the same gallery is worth through that one and not through this.
+     *
+     * @param name the name of the mset and of the folder the files go into, the url when blank
+     * @param pattern a regex an image url has to match. Blank takes every image of the page
+     * @param waitForSelector a css selector to wait for before collecting, needed on a single page
+     * application whose images do not exist at the load event. See [render]
+     * @param persist false answers the draft without writing the media to the database. The files are
+     * written either way
+     */
+    @PostMapping("/scraper-images")
+    fun importImagesWithScraper(
+        @RequestParam url: String,
+        @RequestParam locationId: Int,
+        @RequestParam(required = false) name: String?,
+        @RequestParam(required = false) pattern: String?,
+        @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(defaultValue = "3") scrollTimes: Int,
+        @RequestParam(defaultValue = "true") persist: Boolean
+    ): ImageImportTO = scraperImageImportService.import(
+        locationId = locationId,
+        url = url,
+        name = name,
+        pattern = pattern,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector,
+        persist = persist
     )
 
     /**

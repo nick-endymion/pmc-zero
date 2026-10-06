@@ -1,0 +1,191 @@
+package org.endy.pmczero.service
+
+import org.endy.pmczero.exception.NotAccessibleException
+import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.scraper.DomParser
+import org.endy.pmczero.model.scraper.FileDownloader
+import org.endy.pmczero.model.scraper.MediaAdder
+import org.endy.pmczero.model.scraper.PassThroughParser
+import org.endy.pmczero.model.scraper.RecoveryWorker
+import org.endy.pmczero.model.scraper.Scraper
+import org.endy.pmczero.model.scraper.SetCreator
+import org.endy.pmczero.model.scraper.StructuredWorker
+import org.endy.pmczero.to.ImageImportFailureTO
+import org.endy.pmczero.to.ImageImportTO
+import org.springframework.stereotype.Service
+
+/**
+ * Imports the images of a web page by running a [Scraper] over it, the counterpart of
+ * [ImageImportService.import], which does the same work without the scraper pipeline.
+ *
+ * The two sit side by side because they answer different questions. [ImageImportService] collects the
+ * image urls out of the rendered dom itself and downloads them; this one hands the dom to a scraper and
+ * lets the parsers and workers of the pipeline pick it apart. So this is the one to reach for when what
+ * a page offers has to be expressed as a parser, e.g. to take the links of a page rather than its
+ * images, or to read a `data-` attribute, or to narrow the elements with a css selector. It is also the
+ * path that a stored scanner goes through, see [org.endy.pmczero.service.ScannerService], so a scraper
+ * worth keeping belongs there rather than here.
+ *
+ * The scraper of this call is built by [scraperOf] rather than loaded from the database, since there is
+ * nowhere to store one yet, the same reason [org.endy.pmczero.ressource.ScraperRessource.draft] builds
+ * its own. It is an ordinary [Scraper] all the same, so it serializes like any other.
+ *
+ * What this does not reproduce from [ImageImportService] is the skipping of files that are already in
+ * the location, so a second run over the same gallery writes the files again. [ImageImportTO.skipped]
+ * is therefore always 0 here rather than answering a question this does not ask.
+ */
+@Service
+class ScraperImageImportService(
+    private val scraperService: ScraperService,
+    private val browserFetcher: BrowserFetcher,
+    private val locationService: LocationService,
+    private val msetService: MsetService
+) {
+
+    /**
+     * Imports the images of [url] into the location with [locationId] by running a scraper over the
+     * rendered page.
+     *
+     * @param name the name of the mset and of the folder the files go into, the url when blank
+     * @param pattern a regex an image url has to match, e.g. to take only the full size files of a page
+     * that also links to its thumbnails. Blank takes every image the parser finds
+     * @param scrollTimes how often the page is scrolled before its images are collected, since a
+     * lazily loading gallery appends them while scrolling
+     * @param waitForSelector a css selector to wait for before collecting, needed on a single page
+     * application whose images do not exist at the load event. See [BrowserFetcher.render]
+     * @param persist false answers the draft without writing the media to the database. The files are
+     * written either way, the way [ImageImportService.import] does it, so a draft costs the downloads
+     * but not the rows
+     * @throws NotAccessibleException when the location cannot receive files, the browser cannot be
+     * started, [waitForSelector] does not appear, or the page holds no image at all
+     * @throws org.endy.pmczero.exception.NotFoundException when no location has that id
+     */
+    fun import(
+        locationId: Int,
+        url: String,
+        name: String? = null,
+        pattern: String? = null,
+        scrollTimes: Int = 3,
+        waitForSelector: String? = null,
+        persist: Boolean = true
+    ): ImageImportTO {
+        val location = writableLocation(locationId)
+        val storageId = location.storageOrNull()?.id
+
+        // rendered here rather than by the StructuredWorker below, which would fetch the page itself and
+        // so lose the scroll count and the wait for a selector: a lazily loading gallery read without
+        // scrolling answers only what was above the fold, and a single page application read at the load
+        // event answers an empty shell
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes)
+
+        val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(name, url))
+
+        scraperOf(pattern).doWork(html, baseUriOf(url), kontext)
+
+        // no image at all is reported rather than answered as an empty result, so a caller cannot mistake
+        // a page whose images never loaded for one that holds none, and is spared an empty set
+        if (kontext.mset?.media.isNullOrEmpty())
+            throw NotAccessibleException("no images found on $url, so nothing to import")
+
+        val media = kontext.mset!!.media
+
+        // only when one was asked for: the [org.endy.pmczero.model.scraper.SetCreator] of the scraper has
+        // already named the set after the page title, and overwriting that with the url would throw away
+        // the one name that says what the images are of
+        kontext.mset?.name = name?.takeIf { it.isNotBlank() } ?: kontext.mset?.name ?: url
+
+        val saved = if (persist) msetService.save(kontext.mset!!) else null
+
+        return ImageImportTO(
+            locationId = locationId,
+            url = url,
+            storageId = storageId,
+            msetId = saved?.id,
+            found = media.size,
+            imported = media.size,
+            // this import does not skip anything, see the class comment
+            skipped = 0,
+            failed = kontext.failures.size,
+            media = media.map { it.toTO() },
+            failures = kontext.failures.map { ImageImportFailureTO(it.element, it.reason) }
+        )
+    }
+
+    /**
+     * The scraper this import runs: the page title as the name of the set, and every image the
+     * [DomParser] finds recorded as a medium and downloaded.
+     *
+     * `abs:src` rather than `src`, which is what makes the urls absolute: jsoup resolves the attribute
+     * against the base uri the caller passed in, and a page that writes `/bilder/1.jpg` has no absolute
+     * url of its own to offer.
+     *
+     * [MediaAdder] and [FileDownloader] run as two scrapers over the same elements rather than as one
+     * worker doing both, which is what the pipeline is for: they are separate steps that happen to need
+     * the same element. Both ask the same [org.endy.pmczero.model.scraper.ScanPath] for the path, so the
+     * medium and the file it points at cannot drift apart.
+     *
+     * [RecoveryWorker] wraps the one that writes, so an image that cannot be fetched is recorded as a
+     * failure rather than ending the import and losing every image that would have worked. It wraps only
+     * the download, since [MediaAdder] works on the url alone and has nothing to fail on.
+     *
+     * @param pattern a regex an image url has to match, `(.+)` for all of them. It goes into the parser
+     * rather than being applied to a list of urls afterwards, which is what makes it a selector: with the
+     * pattern in the parser the page is parsed once and the other branch sees the same elements
+     */
+    fun scraperOf(pattern: String?): Scraper {
+        val imageRegex = pattern?.takeIf { it.isNotBlank() } ?: "(.+)"
+
+        return Scraper(
+            // the html itself is the element, since the page has already been fetched above
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scraper(DomParser(imageRegex, "img[src]", "abs:src"), MediaAdder()),
+                    Scraper(DomParser(imageRegex, "img[src]", "abs:src"), RecoveryWorker(FileDownloader()))
+                )
+            )
+        )
+    }
+
+    /**
+     * The location the files are written to, checked for the one thing this import needs it to do.
+     *
+     * A http location is refused rather than silently ignored: it has no file system path, so there is
+     * nowhere to put the bytes, and the alternative would be recording media whose files exist nowhere.
+     */
+    private fun writableLocation(locationId: Int): Location {
+        val location = locationService.findById(locationId)
+
+        if (!locationService.isFileSystemAccessible(locationId))
+            throw NotAccessibleException(
+                "location $locationId is not an accessible file system location, " +
+                    "so no image can be written into it"
+            )
+
+        return location
+    }
+
+    /**
+     * The folder below [location] the files of this import go into, named after [name] or [url].
+     *
+     * Sanitised down to what a file name may hold, because a page title is free text and may hold
+     * anything at all, and the folder is derived from one. One folder per import, so a second gallery
+     * cannot overwrite the files of the first one.
+     */
+    private fun folderFor(name: String?, url: String): String {
+        val raw = name?.takeIf { it.isNotBlank() } ?: url
+        return sanitise(raw).ifBlank { "import" }
+    }
+
+    /** [text] reduced to what a single file name may hold: no separators, no reserved characters */
+    private fun sanitise(text: String): String =
+        text.map { if (it.isLetterOrDigit() || it == '.' || it == '-' || it == '_') it else '_' }
+            .joinToString("")
+            .trim('.', ' ')
+
+    /** the part of [url] a relative image url is resolved against, i.e. everything up to the last slash */
+    private fun baseUriOf(url: String): String = url.substringBeforeLast('/') + "/"
+}
