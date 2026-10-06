@@ -95,10 +95,15 @@ class ImageImportService(
 
         val mset = Mset().apply { this.name = name?.takeIf { it.isNotBlank() } ?: url }
         val failures = mutableListOf<ImageImportFailureTO>()
+        // per import call, so a clash is judged against the whole page. See [uniqueFileName], and the
+        // scraper counterpart it points at
         val used = mutableSetOf<String>()
         var skipped = 0
 
         for (imageUrl in urls) {
+            // before the `relative in taken` check below, since a variant of a name that is already
+            // stored is not that name and so is not skipped: the file is wanted again, only under a
+            // name that is free
             val fileName = uniqueFileName(fileNameOf(imageUrl), used)
             val relative = "$folder/$fileName"
 
@@ -280,9 +285,27 @@ class ImageImportService(
     /**
      * [fileName], or the first variant of it that is not in [used] yet.
      *
-     * The counter goes in front of the extension, so the name keeps saying what it is: `bild_1.jpg`
-     * rather than `bild.jpg_1`. Variants rather than a single counter per run, so a gallery that
+     * The counter goes in front of the extension, so the name keeps saying what it is: `bild.1.jpg`
+     * rather than `bild.jpg.1`. Variants rather than a single counter per run, so a gallery that
      * repeats a name twice gets two files and a gallery that has none at all is unaffected.
+     *
+     * The same thing is done for the scraper pipeline, see
+     * [org.endy.pmczero.model.scraper.ScanPath.firstFreeVariantOf], which is deliberately kept
+     * separate rather than shared:
+     *
+     * - this one is a set of names for the whole [import] call, and [used] is created per call at the
+     *   top of it. It can be a set because only this service ever allocates a name.
+     * - the scraper one is keyed by the element it was derived from, in
+     *   [org.endy.pmczero.model.ScanningKontext.takenFileNames]. That is what lets the two workers of
+     *   a scraper that both need a name,
+     *   [org.endy.pmczero.model.scraper.MediaAdder] and [org.endy.pmczero.model.scraper.FileDownloader],
+     *   ask for the same element and get the same answer, rather than the second one believing the
+     *   first had already claimed a name.
+     *
+     * So the two cannot be merged without giving this service a kontext to hold its state in, which is
+     * more coupling than ten lines of counter are worth. When one of them changes, change both: they
+     * have to agree on what a clash is called, since a scan and an import that name the same file
+     * differently would each overwrite what the other wrote.
      */
     private fun uniqueFileName(fileName: String, used: MutableSet<String>): String {
         if (used.add(fileName)) return fileName

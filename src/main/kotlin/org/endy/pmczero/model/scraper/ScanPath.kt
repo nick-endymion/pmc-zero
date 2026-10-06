@@ -78,6 +78,11 @@ internal object ScanPath {
      *
      * Only the file name is varied, never the folder of the scan, so a variant stays next to what it
      * collided with.
+     *
+     * The counterpart of this on the other import path is
+     * [org.endy.pmczero.service.ImageImportService.uniqueFileName], which names a clash the same way.
+     * It differs in what it keeps: a set of names for one `import` call, against the element keyed map
+     * of [ScanningKontext.takenFileNames] here, which is what lets two workers agree.
      */
     private fun freeFileNameOf(element: String, scanningKontext: ScanningKontext): String {
         val taken = scanningKontext.takenFileNames
@@ -100,6 +105,20 @@ internal object ScanPath {
      * The counter goes in front of the extension, so the name keeps saying what it is: `bild.1.jpg`
      * rather than `bild.jpg.1`. Variants rather than a single counter per run, so a page that clashes
      * three times gets three files and a page that never clashes is unaffected.
+     *
+     * The same thing is done for the other import path,
+     * [org.endy.pmczero.service.ImageImportService.uniqueFileName], which is deliberately kept
+     * separate rather than shared:
+     *
+     * - that one is a set of names for a whole `import` call, created at the top of the call, and it
+     *   can be a set of plain names because only [org.endy.pmczero.service.ImageImportService] ever
+     *   allocates one there.
+     * - this one works on the names keyed by their element in
+     *   [ScanningKontext.takenFileNames], see [freeFileNameOf], because two workers of a scraper need
+     *   the same answer for one element and neither of them is the only one asking.
+     *
+     * When one of them changes, change both: a scan and an import that named the same file differently
+     * would each overwrite what the other wrote.
      */
     private fun List<String>.firstFreeVariantOf(clashed: String): String {
         val used = this.toMutableSet()
@@ -118,6 +137,10 @@ internal object ScanPath {
      *
      * Only the folder of the scan is looked at, since that is where the file would go. False for a
      * location that holds no files, since there nothing is written and so nothing can be in the way.
+     *
+     * The other import path does not need this, since it looks at the disk before it allocates any
+     * name: [org.endy.pmczero.service.ImageImportService.namesAlreadyStored] collects the stored paths
+     * up front and skips those images. A scan has no such step, so the check is here.
      */
     private fun existingOnDisk(scanningKontext: ScanningKontext, name: String): Boolean {
         val uri = scanningKontext.location.uri?.takeIf { it.isNotBlank() } ?: return false
