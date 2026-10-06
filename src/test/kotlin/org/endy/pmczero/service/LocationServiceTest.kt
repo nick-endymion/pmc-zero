@@ -39,6 +39,12 @@ import java.util.Optional
  * Unless a test states otherwise, the bessource list passed in already contains a thumbnailed
  * (TN) bessource, so the TN generation step stays out of the way and the test can focus on one
  * behaviour. Tests around the TN generation itself pass a list with only a primary bessource.
+ *
+ * A url that cannot be built is reported as a null [BessourceTO.url] rather than as an exception,
+ * so an unconfigured or unknown location does not fail the whole list. The bessource is a
+ * legitimate one that simply has nowhere to point, and a caller filters on the null. The location
+ * type is still derived in that case, only the url stays empty. What does throw is a storage id no
+ * storage has, since that is a caller error rather than a missing configuration.
  */
 class LocationServiceTest {
 
@@ -325,6 +331,11 @@ class LocationServiceTest {
         verify(storageRepository, times(1)).findById(2)
     }
 
+    /**
+     * The one storage problem that is an error rather than a missing configuration: the caller asked
+     * for a storage that does not exist, which [org.endy.pmczero.service.StorageService.findById]
+     * reports as a [NotFoundException] and which nothing catches, so the whole call fails.
+     */
     @Test
     fun `throws NotFoundException when the storage of a bessource does not exist`() {
         whenever(storageRepository.findById(42)).thenReturn(Optional.empty())
@@ -337,14 +348,17 @@ class LocationServiceTest {
     }
 
     @Test
-    fun `throws NotFoundException when the storage has no in use location of the required type`() {
+    fun `leaves the url null when the storage has no in use location of the required type`() {
         // storage without a TN location
         givenStorage(storage(1, location("http://example.org/main", LocationType.MAIN_HTTP)))
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(tn), "HTTP")
-        }
+        val result = service.providePhysicalRessources(listOf(tn), "HTTP")
+
+        // a null url rather than an exception: the bessource is still a legitimate one, only its
+        // location is not configured, so a caller reads the null and leaves it out
+        assertNull(result[0].url)
+        assertEquals(LocationType.TN_HTTP, result[0].locationType)
     }
 
     @Test
@@ -366,24 +380,27 @@ class LocationServiceTest {
     }
 
     @Test
-    fun `throws NotFoundException when the matching location is not in use`() {
+    fun `leaves the url null when the matching location is not in use`() {
         givenStorage(storage(1, location("http://example.org/main", LocationType.MAIN_HTTP, inuse = 0)))
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary, tn), "HTTP")
-        }
+        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+
+        assertNull(result[0].url)
+        assertNull(result[1].url)
     }
 
     @Test
-    fun `throws NotFoundException when a bessource has no storage id`() {
+    fun `leaves the url null when a bessource has no storage id`() {
         givenStorage(httpStorage())
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = null, locationType = LocationType.MAIN_HTTP)
 
-        assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary), "HTTP")
-        }
+        val result = service.providePhysicalRessources(listOf(primary), "HTTP")
+
+        assertNull(result[0].url)
+        // the location type is still derived, only the url needs the storage
+        assertEquals(LocationType.MAIN_HTTP, result[0].locationType)
     }
 
     @Test
