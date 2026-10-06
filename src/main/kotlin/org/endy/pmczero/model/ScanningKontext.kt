@@ -27,11 +27,30 @@ data class ScanningKontext(
      * that only meant anything at the moment it was configured.
      *
      * It is a folder and not a full file name, so the files of one scan stay together the way the
-     * subdirectories of a scanned directory do, and two elements with the same file name do not
-     * overwrite each other. The name of a single file is derived from the element by the worker.
+     * subdirectories of a scanned directory do. The name of a single file is derived from the element
+     * by the worker, which is also what keeps two elements of the same name apart, see
+     * [takenFileNames].
      *
      * Blank rather than null for "no subfolder", so a caller does not have to decide between a
      * location root and a named one at every use.
      */
-    var locationPath: String = ""
+    var locationPath: String = "",
+    /**
+     * The file names already handed out during this scan, so a second element of the same name gets a
+     * variant of it rather than overwriting the first.
+     *
+     * Part of the kontext because the clash is between two elements of one run: a gallery that names
+     * its images `1.jpg`, `2.jpg`, ... has no problem, but a page that links the same file name twice,
+     * or links it and then links a thumb of the same name, would silently lose one of the two. The
+     * counter has to run across the whole scan for that, and both the worker that records a medium and
+     * the worker that downloads the file have to agree on the answer, which they cannot do unless the
+     * state is somewhere they share.
+     *
+     * The name is keyed by the element it was derived from, so asking again for the same element
+     * answers the same name rather than yet another variant. That is what lets
+     * [org.endy.pmczero.model.scraper.MediaAdder] and
+     * [org.endy.pmczero.model.scraper.FileDownloader] each ask without the second one of them
+     * believing the first had claimed a name.
+     */
+    var takenFileNames: MutableMap<String, String> = mutableMapOf()
 )

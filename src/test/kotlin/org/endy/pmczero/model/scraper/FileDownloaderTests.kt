@@ -153,17 +153,133 @@ class FileDownloaderTests {
         assertEquals(listOf("example.org"), writtenRelativeTo(location))
     }
 
-    /** Two elements of the same name in one folder would otherwise silently overwrite each other. */
+    /**
+     * Two elements of the same name in one folder get a variant each, so neither file replaces the
+     * other.
+     *
+     * Without this the second download would overwrite the first, and the medium recorded for the
+     * first would be left pointing at bytes that are no longer the ones it was recorded for. The
+     * counter goes in front of the extension, so the name keeps saying what it is.
+     */
     @Test
-    fun `two elements with the same file name land on the same file`() {
+    fun `two elements with the same file name get a variant each`() {
         val kontext = kontextFor(location, "2020")
 
         worker.applya("http://example.org/one/a.jpg", kontext)
         worker.applya("http://example.org/two/a.jpg", kontext)
 
-        // same folder and same name, so the second download replaces the first
-        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location))
+        assertEquals(listOf("2020/a.1.jpg", "2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        // the first element keeps the name, the second gets the variant
+        assertEquals(
+            mapOf("http://example.org/one/a.jpg" to "a.jpg", "http://example.org/two/a.jpg" to "a.1.jpg"),
+            kontext.takenFileNames
+        )
         assertEquals(2, fetcher.downloads.size)
+    }
+
+    /** A third clash keeps counting, rather than colliding with the variant of the second. */
+    @Test
+    fun `counts on for every further clash of the same file name`() {
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/one/a.jpg", kontext)
+        worker.applya("http://example.org/two/a.jpg", kontext)
+        worker.applya("http://example.org/three/a.jpg", kontext)
+
+        assertEquals(listOf("2020/a.1.jpg", "2020/a.2.jpg", "2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals(
+            mapOf(
+                "http://example.org/one/a.jpg" to "a.jpg",
+                "http://example.org/two/a.jpg" to "a.1.jpg",
+                "http://example.org/three/a.jpg" to "a.2.jpg"
+            ),
+            kontext.takenFileNames
+        )
+    }
+
+    /** A gallery that names its images `1.jpg`, `2.jpg`, ... never clashes, so nothing is suffixed. */
+    @Test
+    fun `leaves names of a gallery that never clashes alone`() {
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/1.jpg", kontext)
+        worker.applya("http://example.org/2.jpg", kontext)
+        worker.applya("http://example.org/3.jpg", kontext)
+
+        assertEquals(listOf("2020/1.jpg", "2020/2.jpg", "2020/3.jpg"), writtenRelativeTo(location, "2020"))
+        // nothing carries a counter, which would show up as an extra dot in front of the extension
+        assertEquals(listOf("1.jpg", "2.jpg", "3.jpg"), kontext.takenFileNames.values.sorted())
+    }
+
+    /**
+     * A file already in the folder of the scan keeps its name, so a second import of the same gallery
+     * does not overwrite the files the first one wrote.
+     *
+     * The file here was put there by something other than this scan, which is why it is not in
+     * `takenFileNames`: a gallery imported yesterday is on disk and nothing in this kontext knows it.
+     */
+    @Test
+    fun `does not take a name a file of an earlier scan already occupies`() {
+        val existing = File(tempDir, "2020/a.jpg").apply {
+            parentFile.mkdirs()
+            writeText("from an earlier import")
+        }
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/bilder/a.jpg", kontext)
+
+        assertEquals(listOf("2020/a.1.jpg", "2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals("from an earlier import", existing.readText(), "the earlier file was overwritten")
+        assertEquals(mapOf("http://example.org/bilder/a.jpg" to "a.1.jpg"), kontext.takenFileNames)
+    }
+
+    /**
+     * A file in another folder of the location is no clash, since it does not occupy the name in the
+     * folder this scan writes into.
+     */
+    @Test
+    fun `ignores files of another folder of the location`() {
+        File(tempDir, "2019/a.jpg").apply {
+            parentFile.mkdirs()
+            writeText("last years gallery")
+        }
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/bilder/a.jpg", kontext)
+
+        // only what this scan wrote below 2020, so the file of last years gallery does not count
+        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals("last years gallery", File(tempDir, "2019/a.jpg").readText(), "the old file was overwritten")
+    }
+
+    /**
+     * Asking twice for the same element answers the same name, which is what lets [MediaAdder] record
+     * a bessource and this worker write the file to the same path.
+     */
+    @Test
+    fun `answers the same name for the same element however often it is asked`() {
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/a.jpg", kontext)
+        worker.applya("http://example.org/a.jpg", kontext)
+
+        // the second ask is the same element, so it reuses the name rather than claiming a variant
+        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals(mapOf("http://example.org/a.jpg" to "a.jpg"), kontext.takenFileNames)
+    }
+
+    /** The counter is a property of the scan, so a second scan starts over at the original name. */
+    @Test
+    fun `starts the counter over for a second scan`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+
+        val second = kontextFor(location, "2021")
+        worker.applya("http://example.org/a.jpg", second)
+
+        // a different folder anyway, and the counter of the first scan did not carry over into it
+        assertEquals(mapOf("http://example.org/a.jpg" to "a.jpg"), second.takenFileNames)
+        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals(listOf("2021/a.jpg"), writtenRelativeTo(location, "2021"))
     }
 
     // -------------------------------------------------------------------------------------
@@ -275,17 +391,25 @@ class FileDownloaderTests {
     }
 
     /**
-     * The paths of the files below [location], `/` separated and relative to its root.
+     * The paths of the files below [folder] of [location], `/` separated and relative to [location].
      *
-     * Read back off the file system rather than off the recorded downloads, so a file that was
-     * written to an unexpected place still shows up here.
+     * Read back off the file system rather than off the recorded downloads, so a file that was written
+     * to an unexpected place still shows up here. Scoped to [folder] so that a file an earlier scan
+     * left in the location does not turn up in the listing of this one.
+     *
+     * Sorted, which puts `a.1.jpg` before `a.jpg`. Which element got which name is therefore asserted
+     * through [ScanningKontext.takenFileNames] rather than through the order of this list.
      */
-    private fun writtenRelativeTo(location: Location): List<String> =
-        File(location.uri!!).walkTopDown()
+    private fun writtenRelativeTo(location: Location, folder: String = ""): List<String> {
+        val root = File(location.uri!!)
+        val from = if (folder.isEmpty()) root else File(root, folder)
+
+        return from.walkTopDown()
             .filter { it.isFile }
-            .map { it.relativeTo(File(location.uri!!)).path.replace(File.separatorChar, '/') }
+            .map { it.relativeTo(root).path.replace(File.separatorChar, '/') }
             .sorted()
             .toList()
+    }
 
     /** One recorded download, since the arguments of `downloadTo` are three rather than one. */
     private data class Download(val url: String, val target: File, val withProxy: Boolean)

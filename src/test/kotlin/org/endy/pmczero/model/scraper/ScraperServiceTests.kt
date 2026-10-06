@@ -254,6 +254,57 @@ class ScraperServiceTests {
     }
 
     /**
+     * The same import over a page holding the same file name twice: two media on two paths and two
+     * files, rather than one medium whose file the second download replaced.
+     *
+     * The content of both files is asserted, not just their names, since "there are two files" is also
+     * true when the second overwrote the first and only one name was ever taken.
+     */
+    @Test
+    fun `a scan keeps both files when a page holds the same file name twice`() {
+        val page = """
+            <html><body>
+            <img src="/bilder/eins/a.jpg">
+            <img src="/bilder/zwei/a.jpg">
+            </body></html>
+        """.trimIndent()
+
+        every { downloader.getAsString(any()) } returns page
+
+        val target = Files.createTempDirectory("scan-clash").toFile()
+        target.deleteOnExit()
+        every { locationService.findById(10) } returns fsLocation(10, target)
+        givenDownloaderWritesFiles()
+
+        val scanner = Scraper(
+            RegexParser("(.*fa.*)"),
+            StructuredWorker(
+                true,
+                listOf(
+                    Scraper(DomParser("(.+)", "img", "abs:src"), MediaAdder()),
+                    Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader())
+                )
+            )
+        )
+
+        val sc = ScraperService(locationService, downloader, browserFetcher)
+            .scan(scanner, "http://testfatest.com/galerie.html", locationId = 10, locationPath = "2020")
+
+        val media = sc.mset!!.media
+        assertEquals(2, media.size)
+
+        for (medium in media) {
+            val relative = medium.bessources.single().name!!
+            assertTrue(File(target, relative).isFile, "$relative is recorded but no file is there")
+        }
+
+        // and each file really holds the bytes of its own url, rather than the second having replaced
+        // the first
+        assertEquals("content of http://testfatest.com/bilder/eins/a.jpg", File(target, "2020/a.jpg").readText())
+        assertEquals("content of http://testfatest.com/bilder/zwei/a.jpg", File(target, "2020/a.1.jpg").readText())
+    }
+
+    /**
      * Every image of a gallery page ends up as a medium, and nothing else does.
      *
      * The page mixes the four ways a src can appear that a scan has to survive: absolute on the
