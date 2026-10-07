@@ -115,6 +115,21 @@ class ImageImportServiceTest {
     }
 
     @Test
+    fun `records the location and the url on the set it saves`() {
+        givenPage("https://example.org/a.jpg")
+
+        service.import(locationId = 1, url = "https://example.org/gallery", name = "gallery")
+
+        // where the set says it came from, so a saved set needs no second lookup to learn what page it
+        // was taken from and which location the files went into
+        verify {
+            msetService.save(match {
+                it.locationId == 1 && it.url == "https://example.org/gallery"
+            })
+        }
+    }
+
+    @Test
     fun `names two images of the same file name apart`() {
         // two urls that differ, so neither the browser's distinct() nor anything else drops one, but
         // whose last path segment is the same, which is what galleries do

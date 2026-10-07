@@ -900,6 +900,48 @@ class ScraperImageImportServiceTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // Where the set came from
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `records the location and the url on the set it saves`() {
+        givenPage(page)
+
+        service.import(locationId = 7, url = "http://example.org/galerie.html", name = "Galerie")
+
+        val saved = savedMset()
+        assertEquals(7, saved.locationId)
+        assertEquals("http://example.org/galerie.html", saved.url)
+    }
+
+    /**
+     * The [SetCreator] of the scraper replaces the mset of the kontext with one of its own, so this is
+     * the case that decides whether the fields are set before or after the run.
+     */
+    @Test
+    fun `records the location and the url on a set the scraper created itself`() {
+        givenPage(page)
+
+        service.import(locationId = 7, url = "http://example.org/galerie.html", name = "Galerie")
+
+        // the set was built by the SetCreator of the standard scraper, not by the kontext
+        assertEquals("Galerie", savedMset().name)
+        assertEquals(7, savedMset().locationId)
+    }
+
+    @Test
+    fun `records the location and the url on a draft, which is not saved`() {
+        givenPage(page)
+
+        service.import(locationId = 7, url = "http://example.org/galerie.html", persist = false)
+
+        // the set of the last kontext, since nothing was saved to ask
+        val drafted = lastKontext().mset!!
+        assertEquals(7, drafted.locationId)
+        assertEquals("http://example.org/galerie.html", drafted.url)
+    }
+
+    // -------------------------------------------------------------------------------------
     // Persisting
     // -------------------------------------------------------------------------------------
 

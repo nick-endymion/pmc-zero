@@ -99,7 +99,13 @@ class ImageImportService(
         val folder = folderFor(name, url)
         val taken = namesAlreadyStored(location, storageId, folder, urls, skipExisting)
 
-        val mset = Mset().apply { this.name = name?.takeIf { it.isNotBlank() } ?: url }
+        val mset = Mset().apply {
+            this.name = name?.takeIf { it.isNotBlank() } ?: url
+            // this. on the left, so the names on the right are the parameters of this function and not
+            // the properties of the mset being built
+            this.locationId = locationId
+            this.url = url
+        }
         val failures = mutableListOf<ImageImportFailureTO>()
         // per import call, so a clash is judged against the whole page. See [uniqueFileName], and the
         // scraper counterpart it points at

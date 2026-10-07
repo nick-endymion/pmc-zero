@@ -176,6 +176,14 @@ class ScraperImageImportService(
         // the one name that says what the images are of
         kontext.mset?.name = name?.takeIf { it.isNotBlank() } ?: kontext.mset?.name ?: url
 
+        // after the scraper ran rather than on the mset the kontext was built with: a [SetCreator] in
+        // the scraper replaces that mset with one of its own, so anything set on it before the run is
+        // gone by the time the set is saved
+        kontext.mset?.apply {
+            this.locationId = locationId
+            this.url = url
+        }
+
         val saved = if (persist) msetService.save(kontext.mset!!) else null
 
         return ImageImportTO(

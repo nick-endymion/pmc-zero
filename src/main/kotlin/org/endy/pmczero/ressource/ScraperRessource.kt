@@ -393,6 +393,12 @@ class ScraperRessource(
         )
         else scraper.doWork(url, "", kontext)
 
+        // on the set the scraper built rather than the one the kontext started with, since the
+        // [SetCreator] of a scraper replaces it. Only the url is recorded: this draft runs against the
+        // placeholder location of catchupLocation(), which has no id, so there is nothing to record for
+        // one and no real location behind it to record
+        kontext.mset?.url = url
+
         return kontext.mset?.toTOwithMedia() ?: MsetTO()
     }
 
