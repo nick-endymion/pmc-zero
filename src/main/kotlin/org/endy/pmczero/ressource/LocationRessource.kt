@@ -1,6 +1,7 @@
 package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
+import org.endy.pmczero.mapper.toScanTO
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.modern.Location
@@ -8,7 +9,7 @@ import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.to.FileSystemEntryTO
 import org.endy.pmczero.to.LocationTO
-import org.endy.pmczero.to.MsetExpansionTO
+import org.endy.pmczero.to.MsetScanTO
 import org.endy.pmczero.to.MsetTO
 import org.springframework.web.bind.annotation.*
 
@@ -67,8 +68,12 @@ class LocationRessource(
      * Files that are stored already produce no medium, the draft holds only what a scan would still
      * create. Ask GET on fs-listing for the existsAlready flag of each file.
      *
-     * Answers 409 when there is nothing left to scan, i.e. when every file below the directory is
-     * stored already or the directory holds no files at all. No draft is created in that case.
+     * Nothing to scan is answered rather than refused: a directory that holds nothing new comes back
+     * as an empty mset, and [MsetScanTO.knownFiles] says how many files it holds so a caller can tell
+     * that from a scan that never ran. The same answer shape as the other two scan endpoints.
+     *
+     * Answers 404 when the location does not exist or the subpath does not, and 409 when the location
+     * cannot be listed or has no storage to build bessources against.
      *
      * @param subpath directory relative to the location, the location itself when omitted
      */
@@ -76,18 +81,24 @@ class LocationRessource(
     fun draftMset(
         @PathVariable("id") id: Int,
         @RequestParam(name = "subpath", required = false) subpath: String?
-    ): MsetTO {
-        return locationService.draftMset(id, subpath).toTOwithMedia(true)
+    ): MsetScanTO {
+        val scan = locationService.draftMset(id, subpath)
+
+        return scan.mset.toScanTO(scan.addedFiles, scan.knownFiles)
     }
 
     /**
-     * Scans a directory of this location and saves the mset it produces, answering the saved mset
-     * with its media. The same as the draft of GET on this path, but persisted.
+     * Scans a directory of this location and saves the mset it produces, answering what was saved.
+     * The same scan as GET on this path, persisted, in the same [MsetScanTO] shape.
      *
      * The mset is saved as a new row every call, so scanning the same directory twice leaves two
      * msets behind. Its media are not created twice though: a file that is stored already, so one
-     * whose listing entry reports existsAlready, produces no medium. When that leaves nothing to
-     * create at all the call answers 409 and no mset is saved.
+     * whose listing entry reports existsAlready, produces no medium. Use POST on
+     * [expandMset] to add what a directory has gained since, rather than leaving a second set behind.
+     *
+     * A directory that holds nothing new is still saved, as an empty set. That is what a scan of a
+     * directory whose files are all stored already produces, and the counts in the answer are what
+     * says so; expand the set it belongs to instead if an empty set is not wanted.
      *
      * @param subpath directory relative to the location, the location itself when omitted
      */
@@ -95,26 +106,30 @@ class LocationRessource(
     fun createMsetFromDirectory(
         @PathVariable("id") id: Int,
         @RequestParam(name = "subpath", required = false) subpath: String?
-    ): MsetTO {
-        val saved = msetService.save(locationService.draftMset(id, subpath))
+    ): MsetScanTO {
+        val scan = locationService.draftMset(id, subpath)
+        val saved = msetService.save(scan.mset)
+
         // re-read so the response carries the generated ids and timestamps of the saved rows
-        return msetService.findById(saved.id!!, withMedia = true).toTOwithMedia(true)
+        return msetService.findById(saved.id!!, withMedia = true)
+            .toScanTO(scan.addedFiles, scan.knownFiles)
     }
 
     /**
      * Adds the files of a directory of this location that have no medium yet to an mset that exists
      * already, answering what was added and the set as it was saved.
      *
-     * The same scan as POST on [createMsetFromDirectory], the same rules about which files count, but
-     * into the set named by [msetId] rather than into a new one. So a directory that has grown since
-     * its set was created is picked up without producing a second set for the same directory, which is
-     * what scanning it again through that endpoint would do.
+     * The same scan as the other two on this path, the same rules about which files count, and the
+     * same [MsetScanTO] answer. The only difference is where the media go: into the set named by
+     * [msetId] rather than into a new one. So a directory that has grown since its set was created
+     * is picked up without producing a second set for the same directory, which is what scanning it
+     * again through that endpoint would do.
      *
      * The media already in the set are left alone, and so is the location the set records: that is
      * where it came from, not where it is being extended to.
      *
      * Nothing new is answered rather than refused, since that is the normal state of a directory that
-     * has not changed. Read [MsetExpansionTO.addedFiles] to tell it from a scan that did something.
+     * has not changed. Read [MsetScanTO.addedFiles] to tell it from a scan that did something.
      *
      * Answers 404 when the mset does not exist and when the subpath does not exist or points outside
      * of the location, and 409 when the location cannot be listed or has no storage to build bessources
@@ -129,7 +144,7 @@ class LocationRessource(
         @PathVariable("id") id: Int,
         @RequestParam("msetId") msetId: Int,
         @RequestParam(name = "subpath", required = false) subpath: String?
-    ): MsetExpansionTO {
+    ): MsetScanTO {
         return msetService.expandMset(msetId, id, subpath)
     }
 

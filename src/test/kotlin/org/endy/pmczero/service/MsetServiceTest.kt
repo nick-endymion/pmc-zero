@@ -237,6 +237,39 @@ class MsetServiceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // The answer to an expansion
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `answers the saved set with its id and no separate msetId`() {
+        // the id is read off the mset rather than repeated beside it, so there is one place to read it
+        // from and nothing that can disagree with it
+        val mset = Mset().apply { id = 5 }
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(mset)
+        expansionFor(1, "a.pdf")
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals(5, result.mset.id)
+    }
+
+    @Test
+    fun `answers the same shape as a draft`() {
+        // one TO for both, so a caller reads a scan the same way whichever endpoint produced it
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(Mset().apply { id = 5; subpath = "tn" })
+        expansionFor(1, "tn/jan.pdf")
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals(1, result.addedFiles)
+        assertEquals(0, result.knownFiles)
+        assertEquals("tn", result.subpath)
+        assertEquals(listOf("jan.pdf"), result.mset.media!!.map { it.name })
+    }
+
+    // -------------------------------------------------------------------------------------
     // Stepping through the sets in id order
     // -------------------------------------------------------------------------------------
 
@@ -320,7 +353,7 @@ class MsetServiceTest {
 
         val result = service.expandMset(5, locationId = 1)
 
-        assertEquals(5, result.msetId)
+        assertEquals(5, result.mset.id)
         assertEquals("scanned", result.mset.name)
         verify(msetRepository).save(any<Mset>())
     }
@@ -336,7 +369,7 @@ class MsetServiceTest {
         service.expandMset(5, locationId = 1)
 
         assertEquals("tn/2020", askedSubpath)
-        assertEquals(1, expansion.added.size)
+        assertEquals(1, expansion.addedFiles)
         assertEquals(listOf("jan.pdf"), mset.media.map { it.name })
     }
 
@@ -351,7 +384,7 @@ class MsetServiceTest {
 
         // the parameter wins, which is what makes this usable for a set whose directory moved
         assertEquals("2021", askedSubpath)
-        assertEquals(1, expansion.added.size)
+        assertEquals(1, expansion.addedFiles)
         assertEquals(listOf("sep.pdf"), mset.media.map { it.name })
     }
 
@@ -366,7 +399,7 @@ class MsetServiceTest {
         service.expandMset(5, locationId = 1)
 
         assertNull(askedSubpath)
-        assertEquals(1, expansion.added.size)
+        assertEquals(1, expansion.addedFiles)
     }
 
     @Test
@@ -391,7 +424,7 @@ class MsetServiceTest {
         givenMsetIsSaved()
         whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(Mset().apply { id = 5 })
         whenever(locationService.expandMset(any(), eq(1), anyOrNull()))
-            .thenReturn(LocationService.Expansion(emptyList(), 4))
+            .thenReturn(LocationService.Scan(Mset().apply { id = 5 }, 0, 4))
 
         val result = service.expandMset(5, locationId = 1)
 
@@ -452,31 +485,29 @@ class MsetServiceTest {
      * instead of asserting on a stubbed matcher, which is what the tests about which directory is
      * scanned need. The scan itself is covered by LocationServiceTest.
      */
-    private fun expansionFor(locationId: Int, vararg names: String): LocationService.Expansion {
-        val expansion = LocationService.Expansion(
-            names.map { name ->
-                Medium().apply {
-                    this.name = name.substringAfterLast('/')
-                    bessources = mutableListOf(
-                        Bessource().apply {
-                            this.name = name
-                            // the response is mapped through the bessource, which reads its storage
-                            storage = Storage().apply { id = 1 }
-                        }
-                    )
-                }
-            },
-            0
-        )
+    private fun expansionFor(locationId: Int, vararg names: String): LocationService.Scan {
+        val media = names.map { name ->
+            Medium().apply {
+                this.name = name.substringAfterLast('/')
+                bessources = mutableListOf(
+                    Bessource().apply {
+                        this.name = name
+                        // the response is mapped through the bessource, which reads its storage
+                        storage = Storage().apply { id = 1 }
+                    }
+                )
+            }
+        }
         // answered rather than returned, so the media are added to the set the way the real service
-        // adds them: this method hands back what it added, it does not put it there itself
+        // adds them: the Scan carries the set it worked on, it does not put the media there itself
         whenever(locationService.expandMset(any(), eq(locationId), anyOrNull()))
             .thenAnswer { invocation ->
                 askedSubpath = invocation.getArgument<String?>(2)
-                invocation.getArgument<Mset>(0).media.addAll(expansion.added)
-                expansion
+                val mset = invocation.getArgument<Mset>(0)
+                mset.media.addAll(media)
+                LocationService.Scan(mset, media.size, 0)
             }
-        return expansion
+        return LocationService.Scan(Mset().apply { id = 7 }, media.size, 0)
     }
 
     // -------------------------------------------------------------------------------------

@@ -224,28 +224,20 @@ class LocationService(
      * what a scan would still have to create, and scanning the same directory twice does not create
      * a second medium for a file the first scan already stored.
      *
-     * Nothing to scan is reported as an error instead of as an empty mset, so a caller cannot
-     * mistake a scan that found nothing for one that succeeded. That also covers a directory that
-     * holds no files at all: it has nothing to add either. Ask GET on [listDirectory] for the
-     * [FileSystemEntryTO.existsAlready] flag of each file to see what is stored already.
+     * Nothing to scan is answered rather than reported as an error, so a directory that holds nothing
+     * new reads as an empty mset against the counts in [Scan] rather than as a failure: a caller can
+     * see from [Scan.knownFiles] that the directory was read and was already up to date. Ask GET on
+     * [listDirectory] for the [FileSystemEntryTO.existsAlready] flag of each file to see which they
+     * are.
      *
      * @throws NotFoundException when no location with that id exists, or when [subdir] does not
      * exist or points outside of the location
      * @throws NotAccessibleException when the location is not an FS location, its path is not
-     * accessible on the file system, or there is no file left to scan because everything is stored
-     * already
+     * accessible on the file system, or it has no storage and there is something to scan
      */
-    fun draftMset(locationId: Int, subdir: String? = null): Mset {
+    fun draftMset(locationId: Int, subdir: String? = null): Scan {
         val location = findById(locationId)
-        val entries = unsavedEntries(locationId, subdir)
-        // thrown before any mset is built, so a scan that finds nothing leaves no set behind
-        if (entries.isEmpty()) throw NotAccessibleException(
-            "nothing to scan in location $locationId" +
-                (subdir?.takeIf { it.isNotBlank() }?.let { " below $it" } ?: "") +
-                ": every file is stored already"
-        )
-        // a bessource always references a storage, without one it cannot even be instantiated
-        val storage = storageOf(location)
+        val found = scanOf(locationId, subdir)
 
         val mset = Mset().apply {
             name = subdir?.takeIf { it.isNotBlank() } ?: location.name
@@ -253,13 +245,25 @@ class LocationService(
             this.subpath = subpathOf(subdir)
         }
 
-        mset.media = entries.map { entry -> mediumOf(entry, mset, storage) }.toMutableList()
+        // the storage is only reached to build bessources, so a scan with nothing to build never gets
+        // that far and an unconfigured location is not in the way of an empty one
+        val added = if (found.unsaved.isEmpty()) emptyList() else {
+            val storage = storageOf(location)
+            found.unsaved.map { entry -> mediumOf(entry, mset, storage) }
+        }
+        mset.media = added.toMutableList()
 
-        return mset
+        return Scan(mset, added.size, found.known)
     }
 
-    /** What [expandMset] added to a set: the new media, and how many files it left out. */
-    data class Expansion(val added: List<Medium>, val knownFiles: Int)
+    /** What a scan of a directory found: the set it built or extended, and the two counts. */
+    data class Scan(
+        val mset: Mset,
+        /** how many media the scan created */
+        val addedFiles: Int,
+        /** how many files of the directory were stored already, and so produced no medium */
+        val knownFiles: Int
+    )
 
     /**
      * Adds the files below [subdir] of an FS location to [mset] that have no medium yet, the same
@@ -269,11 +273,7 @@ class LocationService(
      * files count is the same and deliberately so: a file that is stored already produces no medium
      * either way, so expanding a set twice does not create a second medium for a file the first run
      * already stored, and expanding a set that was built from the same directory adds nothing at all.
-     *
-     * Nothing new is not an error. A scan that finds nothing has nothing to add, which is what a
-     * repeated call over an unchanged directory should look like, so this answers an empty [Expansion]
-     * rather than throwing the way [draftMset] does: there a new set is what was asked for and an
-     * empty one would be a lie, here nothing was.
+     * Both answer the same [Scan], so a caller reads one shape whichever it called.
      *
      * The media are added to [mset] in memory, not persisted: saving is the caller's, which is what
      * [draftMset] does as well, so the two can be reviewed before they are written.
@@ -283,33 +283,50 @@ class LocationService(
      * @throws NotAccessibleException when the location is not an FS location or its path is not
      * accessible, or when it has no storage and there is something to add
      */
-    fun expandMset(mset: Mset, locationId: Int, subdir: String? = null): Expansion {
+    fun expandMset(mset: Mset, locationId: Int, subdir: String? = null): Scan {
         val location = findById(locationId)
-        val entries = listDirectory(locationId, subdir, recursive = true)
-        // the unsaved files, and the stored ones counted alongside them, since a caller expanding a
-        // directory wants to hear that it was already up to date rather than only that nothing was
-        // added
-        val unsaved = entries.filter { !it.isDirectory && !it.existsAlready }
-        val known = entries.count { !it.isDirectory && it.existsAlready }
+        val found = scanOf(locationId, subdir)
 
-        if (unsaved.isEmpty()) return Expansion(emptyList(), known)
-
-        val storage = storageOf(location)
-        val added = unsaved.map { entry -> mediumOf(entry, mset, storage) }
+        // nothing new is answered rather than refused: that is the normal state of a directory nobody
+        // has touched since, and refusing would make a repeated call a sequence of failures
+        val added = if (found.unsaved.isEmpty()) emptyList() else {
+            val storage = storageOf(location)
+            found.unsaved.map { entry -> mediumOf(entry, mset, storage) }
+        }
         mset.media.addAll(added)
 
-        return Expansion(added, known)
+        return Scan(mset, added.size, found.known)
     }
 
+    /** One scan of a directory: the files that would become media, and the count of those that would not. */
+    private data class Found(
+        /** the non-directories that are not stored already */
+        val unsaved: List<FileSystemEntryTO>,
+        /** how many files are stored already, so produce no medium */
+        val known: Int
+    )
+
     /**
-     * The files below [subdir] that a scan would still have to create a medium for, i.e. the
-     * non-directories of a recursive listing that are not stored already.
+     * The files below [subdir] a scan would still have to create a medium for, and the count of those
+     * it would not.
+     *
+     * Both numbers come out of one listing, since the two are halves of the same question and asking
+     * twice would be two listings of the same directory that could disagree if a file arrived in
+     * between.
+     *
+     * Directories are in neither: a directory is no medium, so it is not a file to create one for and
+     * not a file that is stored already either.
      */
-    private fun unsavedEntries(locationId: Int, subdir: String?): List<FileSystemEntryTO> =
+    private fun scanOf(locationId: Int, subdir: String?): Found {
         // listDirectory answers the '.', '..' and escaping subdir problems the same way as the
-        // listing itself, so no draft can be built for a directory that cannot be listed
-        listDirectory(locationId, subdir, recursive = true)
-            .filter { !it.isDirectory && !it.existsAlready }
+        // listing itself, so no scan can be built for a directory that cannot be listed
+        val files = listDirectory(locationId, subdir, recursive = true).filter { !it.isDirectory }
+
+        return Found(
+            unsaved = files.filter { !it.existsAlready },
+            known = files.count { it.existsAlready }
+        )
+    }
 
     /** the [Storage] the bessources of a medium built for [location] point at */
     private fun storageOf(location: Location): Storage =

@@ -17,6 +17,26 @@ fun Mset.toTO(): MsetTO {
     )
 }
 
+/**
+ * The answer to a scan of a directory of a location: the set it built or extended, plus what the scan
+ * found, see [MsetScanTO].
+ *
+ * @param addedFiles the media the scan created
+ * @param knownFiles the files of the directory that were stored already
+ * @param withBessources hand out the bessources of the media as well, which a caller needs when it is
+ * about to act on the files rather than just show the set
+ */
+fun Mset.toScanTO(
+    addedFiles: Int,
+    knownFiles: Int,
+    withBessources: Boolean = true
+): MsetScanTO = MsetScanTO(
+    addedFiles = addedFiles,
+    knownFiles = knownFiles,
+    subpath = subpath,
+    mset = toTOwithMedia(withBessources)
+)
+
 fun Mset.toTOwithMedia(withBessources: Boolean = false): MsetTO {
     return MsetTO(
         id = id,

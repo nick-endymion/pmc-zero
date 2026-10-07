@@ -7,9 +7,9 @@ import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.MsetRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
-import org.endy.pmczero.mapper.toTOwithMedia
+import org.endy.pmczero.mapper.toScanTO
 import org.endy.pmczero.model.modern.Mset
-import org.endy.pmczero.to.MsetExpansionTO
+import org.endy.pmczero.to.MsetScanTO
 import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.transaction.annotation.Transactional
 
@@ -112,23 +112,15 @@ class MsetService(
      * outside of the location
      */
     @Transactional
-    fun expandMset(msetId: Int, locationId: Int, subdir: String? = null): MsetExpansionTO {
+    fun expandMset(msetId: Int, locationId: Int, subdir: String? = null): MsetScanTO {
         val mset = findById(msetId, withMedia = true)
         // the set's own directory when the caller names none, which is why it is read before the scan:
         // the scan needs the subpath, and there is no call afterwards that could tell what was used
         val scanned = subdir?.takeIf { it.isNotBlank() } ?: mset.subpath
 
-        val expansion = locationService.expandMset(mset, locationId, scanned)
+        val scan = locationService.expandMset(mset, locationId, scanned)
 
-        val saved = save(mset)
-
-        return MsetExpansionTO(
-            msetId = saved.id!!,
-            addedFiles = expansion.added.size,
-            knownFiles = expansion.knownFiles,
-            subpath = saved.subpath,
-            mset = saved.toTOwithMedia(true)
-        )
+        return save(scan.mset).toScanTO(scan.addedFiles, scan.knownFiles)
     }
 
     /**

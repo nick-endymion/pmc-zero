@@ -1138,7 +1138,7 @@ class LocationServiceTest {
         File(location.uri, "a.pdf").createNewFile()
         File(location.uri, "b.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         assertEquals(listOf("a.pdf", "b.pdf"), mset.media.map { it.name })
     }
@@ -1149,7 +1149,7 @@ class LocationServiceTest {
         File(location.uri, "tn/2020").mkdirs()
         File(location.uri, "tn/2020/jan.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020").mset
 
         assertEquals("tn/2020", mset.name)
     }
@@ -1159,8 +1159,8 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
 
-        assertEquals(location.name, service.draftMset(location.id!!).name)
-        assertEquals(location.name, service.draftMset(location.id!!, subdir = "  ").name)
+        assertEquals(location.name, service.draftMset(location.id!!).mset.name)
+        assertEquals(location.name, service.draftMset(location.id!!, subdir = "  ").mset.name)
     }
 
     @Test
@@ -1168,7 +1168,7 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
 
-        assertEquals(location.id, service.draftMset(location.id!!).locationId)
+        assertEquals(location.id, service.draftMset(location.id!!).mset.locationId)
     }
 
     @Test
@@ -1177,7 +1177,7 @@ class LocationServiceTest {
         File(location.uri, "tn/2020").mkdirs()
         File(location.uri, "tn/2020/jan.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020").mset
 
         assertEquals("tn/2020", mset.subpath)
     }
@@ -1188,9 +1188,9 @@ class LocationServiceTest {
         File(location.uri, "a.pdf").createNewFile()
 
         // the location root has no subpath below it, and a blank subdir means the same thing
-        assertNull(service.draftMset(location.id!!).subpath)
-        assertNull(service.draftMset(location.id!!, subdir = "  ").subpath)
-        assertNull(service.draftMset(location.id!!, subdir = "/").subpath)
+        assertNull(service.draftMset(location.id!!).mset.subpath)
+        assertNull(service.draftMset(location.id!!, subdir = "  ").mset.subpath)
+        assertNull(service.draftMset(location.id!!, subdir = "/").mset.subpath)
     }
 
     @Test
@@ -1201,9 +1201,9 @@ class LocationServiceTest {
 
         // the same folder three ways, all of them resolving to it above, so all of them are recorded
         // as the one path it can be asked for by
-        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "/tn/2020/").subpath)
-        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "tn\\2020").subpath)
-        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "tn/2020").subpath)
+        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "/tn/2020/").mset.subpath)
+        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "tn\\2020").mset.subpath)
+        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "tn/2020").mset.subpath)
     }
 
     @Test
@@ -1213,7 +1213,7 @@ class LocationServiceTest {
         File(location.uri, "tn/thumb.png").createNewFile()
         File(location.uri, "tn/2020/jan.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         // 'tn' and 'tn/2020' are directories, '.' is the location itself
         assertEquals(listOf("jan.pdf", "thumb.png"), mset.media.map { it.name })
@@ -1225,7 +1225,7 @@ class LocationServiceTest {
         File(location.uri, "tn/2020").mkdirs()
         File(location.uri, "tn/2020/jan.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020").mset
 
         assertEquals(listOf("jan.pdf"), mset.media.map { it.name })
     }
@@ -1238,7 +1238,7 @@ class LocationServiceTest {
         File(location.uri, "a/shot.jpg").createNewFile()
         File(location.uri, "b/shot.jpg").createNewFile()
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         assertEquals(listOf("shot.jpg", "shot.jpg"), mset.media.map { it.name })
         // the bessources keep them apart, they are the ones the url is built from
@@ -1253,7 +1253,7 @@ class LocationServiceTest {
         File(location.uri, "tn/2020").mkdirs()
         File(location.uri, "tn/2020/jan.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020").mset
 
         assertEquals(listOf("tn/2020/jan.pdf"), mset.media.flatMap { it.bessources }.map { it.name })
     }
@@ -1263,7 +1263,7 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
 
-        val bessources = service.draftMset(location.id!!).media.flatMap { it.bessources }
+        val bessources = service.draftMset(location.id!!).mset.media.flatMap { it.bessources }
 
         assertEquals(listOf(RessType.PRIMARY.i), bessources.map { it.ressType })
     }
@@ -1273,7 +1273,7 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
 
-        val bessource = service.draftMset(location.id!!).media.flatMap { it.bessources }[0]
+        val bessource = service.draftMset(location.id!!).mset.media.flatMap { it.bessources }[0]
 
         assertSame(location.storage, bessource.storage)
     }
@@ -1283,7 +1283,7 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
         val medium = mset.media[0]
 
         assertSame(mset, medium.mset)
@@ -1298,7 +1298,7 @@ class LocationServiceTest {
         File(location.uri, "c.epub").createNewFile()
         File(location.uri, "d.txt").createNewFile()
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         assertEquals(
             listOf(Mtype.PHOTO.i, Mtype.MOVIE.i, Mtype.BOOK.i, Mtype.UNDEFINED.i),
@@ -1311,7 +1311,7 @@ class LocationServiceTest {
         File(location.uri, "tn/2020").mkdirs()
         File(location.uri, "tn/2020/jan.jpg").createNewFile()
 
-        val response = service.draftMset(location.id!!, subdir = "tn").toTOwithMedia(true)
+        val response = service.draftMset(location.id!!, subdir = "tn").mset.toTOwithMedia(true)
 
         assertEquals("tn", response.name)
         assertNull(response.id)
@@ -1333,7 +1333,7 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         assertNull(mset.id)
         assertNull(mset.media[0].id)
@@ -1342,24 +1342,25 @@ class LocationServiceTest {
     }
 
     @Test
-    fun `draftMset throws when the directory holds no files at all`() {
+    fun `draftMset answers an empty set when the directory holds no files at all`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
 
-        // nothing to scan is an error, not an empty mset
-        assertThrows<NotAccessibleException> {
-            service.draftMset(location.id!!)
-        }
+        val scan = service.draftMset(location.id!!)
+
+        assertEquals(0, scan.addedFiles)
+        assertTrue(scan.mset.media.isEmpty())
     }
 
     @Test
-    fun `draftMset throws when the directory holds only subdirectories`() {
+    fun `draftMset answers an empty set when the directory holds only subdirectories`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "tn/2020").mkdirs()
 
+        val scan = service.draftMset(location.id!!)
+
         // directories produce no medium of their own, so there is nothing to scan either
-        assertThrows<NotAccessibleException> {
-            service.draftMset(location.id!!)
-        }
+        assertEquals(0, scan.addedFiles)
+        assertTrue(scan.mset.media.isEmpty())
     }
 
     // -------------------------------------------------------------------------------------
@@ -1373,7 +1374,7 @@ class LocationServiceTest {
         File(location.uri, "b.pdf").createNewFile()
         givenExistingMedia(location, "a.pdf")
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         // the draft holds what a scan would still create, a.pdf is stored already
         assertEquals(listOf("b.pdf"), mset.media.map { it.name })
@@ -1387,7 +1388,7 @@ class LocationServiceTest {
         File(location.uri, "tn/2020/jan.pdf").createNewFile()
         givenExistingMedia(location, "tn/2020/jan.pdf")
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         assertEquals(listOf("a.pdf"), mset.media.map { it.name })
     }
@@ -1402,7 +1403,7 @@ class LocationServiceTest {
         File(location.uri, "b/shot.jpg").createNewFile()
         givenExistingMedia(location, "a/shot.jpg")
 
-        val mset = service.draftMset(location.id!!)
+        val mset = service.draftMset(location.id!!).mset
 
         // a/shot.jpg is known, so only the equally named file of the other folder is created
         assertEquals(listOf("shot.jpg"), mset.media.map { it.name })
@@ -1410,41 +1411,49 @@ class LocationServiceTest {
     }
 
     @Test
-    fun `draftMset throws when every file is known`() {
+    fun `draftMset answers an empty set when every file is known`() {
+        // an unchanged directory is an answer rather than a failure, the same as an expansion: the
+        // counts are what tell a caller the directory was read and was already up to date
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
         File(location.uri, "b.pdf").createNewFile()
         givenExistingMedia(location, "a.pdf", "b.pdf")
 
-        assertThrows<NotAccessibleException> {
-            service.draftMset(location.id!!)
-        }
+        val scan = service.draftMset(location.id!!)
+
+        assertEquals(0, scan.addedFiles)
+        assertEquals(2, scan.knownFiles)
+        assertTrue(scan.mset.media.isEmpty())
+        // still named after the location, so an empty set is not an unnamed one
+        assertEquals(location.name, scan.mset.name)
     }
 
     @Test
-    fun `draftMset names the scanned subpath in the nothing to scan error`() {
+    fun `draftMset counts the files it left out of a directory with both kinds`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "tn/thumb.png").apply { parentFile.mkdirs(); createNewFile() }
+        File(location.uri, "tn/other.png").createNewFile()
         givenExistingMedia(location, "tn/thumb.png")
 
-        val e = assertThrows<NotAccessibleException> {
-            service.draftMset(location.id!!, subdir = "tn")
-        }
+        val scan = service.draftMset(location.id!!, subdir = "tn")
 
-        assertTrue(e.message!!.contains("tn"), e.message)
+        assertEquals(1, scan.addedFiles)
+        assertEquals(1, scan.knownFiles)
+        assertEquals(listOf("other.png"), scan.mset.media.map { it.name })
     }
 
     @Test
-    fun `draftMset says every file is stored already in the nothing to scan error`() {
+    fun `draftMset answers an empty set for a directory holding no files`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
-        File(location.uri, "a.pdf").createNewFile()
-        givenExistingMedia(location, "a.pdf")
+        File(location.uri, "tn").mkdirs()
 
-        val e = assertThrows<NotAccessibleException> {
-            service.draftMset(location.id!!)
-        }
+        val scan = service.draftMset(location.id!!)
 
-        assertTrue(e.message!!.contains("stored already"), e.message)
+        // a directory that is not there is still an error, see the NotFoundException tests; one that
+        // is there and holds nothing is simply empty
+        assertEquals(0, scan.addedFiles)
+        assertEquals(0, scan.knownFiles)
+        assertTrue(scan.mset.media.isEmpty())
     }
 
     @Test
@@ -1455,7 +1464,7 @@ class LocationServiceTest {
         // has to create the medium for it
         givenExistingMedia(otherLocation(LocationType.MAIN_FS), "a.pdf")
 
-        assertEquals(listOf("a.pdf"), service.draftMset(location.id!!).media.map { it.name })
+        assertEquals(listOf("a.pdf"), service.draftMset(location.id!!).mset.media.map { it.name })
     }
 
     @Test
@@ -1465,7 +1474,7 @@ class LocationServiceTest {
         File(location.uri, "b.pdf").createNewFile()
         givenExistingMedia(location, "a.pdf")
 
-        val response = service.draftMset(location.id!!).toTOwithMedia(true)
+        val response = service.draftMset(location.id!!).mset.toTOwithMedia(true)
 
         // the known file is left out entirely, so what remains is genuinely unsaved
         assertEquals(listOf("b.pdf"), response.media!!.map { it.name })
@@ -1486,10 +1495,21 @@ class LocationServiceTest {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         // storage is lateinit, so a location without one is created by simply not setting it
         val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
 
         assertThrows<NotAccessibleException> {
             service.draftMset(withoutStorage.id!!)
         }
+    }
+
+    @Test
+    fun `draftMset does not need a storage when there is nothing to scan`() {
+        // the storage is only reached to build bessources, so a directory with nothing new never gets
+        // that far: an unconfigured location is not in the way of an up to date one
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
+
+        assertEquals(0, service.draftMset(withoutStorage.id!!).addedFiles)
     }
 
     @Test
@@ -1533,8 +1553,8 @@ class LocationServiceTest {
 
         val expansion = service.expandMset(mset, location.id!!)
 
-        assertEquals(2, expansion.added.size)
-        assertEquals(listOf("a.pdf", "b.pdf"), expansion.added.map { it.name })
+        assertEquals(2, expansion.addedFiles)
+        assertEquals(listOf("a.pdf", "b.pdf"), expansion.mset.media.map { it.name })
     }
 
     @Test
@@ -1548,7 +1568,7 @@ class LocationServiceTest {
         val expansion = service.expandMset(mset, location.id!!, subdir = "tn/2020")
 
         // only what is below the subdirectory, the same rule draftMset follows
-        assertEquals(listOf("jan.pdf"), expansion.added.map { it.name })
+        assertEquals(listOf("jan.pdf"), expansion.mset.media.map { it.name })
     }
 
     @Test
@@ -1563,7 +1583,10 @@ class LocationServiceTest {
 
         // the expansion adds, it does not replace
         assertEquals(listOf("old.pdf", "a.pdf", "b.pdf"), mset.media.map { it.name })
-        assertEquals(listOf("a.pdf", "b.pdf"), expansion.added.map { it.name })
+        // the two new ones are what it added, and the count agrees
+        assertEquals(2, expansion.addedFiles)
+        // the scan answers with the set as it now stands, old media included
+        assertEquals(3, expansion.mset.media.size)
     }
 
     @Test
@@ -1576,7 +1599,7 @@ class LocationServiceTest {
         val expansion = service.expandMset(mset, location.id!!)
 
         // the same rule that keeps a rescan from creating a second medium for a known file
-        assertTrue(expansion.added.isEmpty())
+        assertEquals(0, expansion.addedFiles)
         assertTrue(mset.media.isEmpty())
     }
 
@@ -1590,15 +1613,14 @@ class LocationServiceTest {
 
         val expansion = service.expandMset(mset, location.id!!)
 
-        assertEquals(listOf("b.pdf"), expansion.added.map { it.name })
+        assertEquals(listOf("b.pdf"), expansion.mset.media.map { it.name })
         // and the known file is counted, so a caller can tell an up to date directory from a failed scan
         assertEquals(1, expansion.knownFiles)
     }
 
     @Test
     fun `answers nothing added rather than failing for an unchanged directory`() {
-        // the difference from draftMset, which refuses: there a new set was asked for and an empty one
-        // would be a lie, here nothing new is the honest answer for a directory that has not changed
+        // what draftMset does as well now: an unchanged directory is an answer, not a failure
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "a.pdf").createNewFile()
         givenExistingMedia(location, "a.pdf")
@@ -1606,7 +1628,7 @@ class LocationServiceTest {
 
         val expansion = service.expandMset(mset, location.id!!)
 
-        assertEquals(0, expansion.added.size)
+        assertEquals(0, expansion.addedFiles)
         assertEquals(1, expansion.knownFiles)
     }
 
@@ -1617,7 +1639,7 @@ class LocationServiceTest {
 
         val expansion = service.expandMset(mset, location.id!!)
 
-        assertEquals(0, expansion.added.size)
+        assertEquals(0, expansion.addedFiles)
         assertEquals(0, expansion.knownFiles)
     }
 
@@ -1630,8 +1652,8 @@ class LocationServiceTest {
         val expansion = service.expandMset(mset, location.id!!)
 
         // the link both ways, so saving the set writes the new media under it rather than orphaning them
-        assertSame(mset, expansion.added.first().mset)
-        assertSame(expansion.added.first(), expansion.added.first().bessources.first().medium)
+        assertSame(mset, expansion.mset.media.first().mset)
+        assertSame(expansion.mset.media.first(), expansion.mset.media.first().bessources.first().medium)
     }
 
     @Test
@@ -1643,7 +1665,7 @@ class LocationServiceTest {
 
         val expansion = service.expandMset(mset, location.id!!, subdir = "tn/2020")
 
-        assertEquals(listOf("tn/2020/jan.pdf"), expansion.added.flatMap { it.bessources }.map { it.name })
+        assertEquals(listOf("tn/2020/jan.pdf"), expansion.mset.media.flatMap { it.bessources }.map { it.name })
     }
 
     @Test
@@ -1702,7 +1724,7 @@ class LocationServiceTest {
         val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
         val mset = Mset().apply { id = 7 }
 
-        assertEquals(0, service.expandMset(mset, withoutStorage.id!!).added.size)
+        assertEquals(0, service.expandMset(mset, withoutStorage.id!!).addedFiles)
     }
 
     @Test
