@@ -33,4 +33,12 @@ class ExceptionAdviceTest {
         assertEquals(HttpStatus.CONFLICT, response.statusCode)
         assertEquals("location 1 is not accessible", response.body!!.error)
     }
+
+    @Test
+    fun `bad request answers 400`() {
+        val response = advice.handleBadRequest(BadRequestException("waitForSelectorState=x is not a wait state"))
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals("waitForSelectorState=x is not a wait state", response.body!!.error)
+    }
 }

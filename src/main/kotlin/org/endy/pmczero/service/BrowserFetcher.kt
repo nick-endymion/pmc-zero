@@ -7,6 +7,7 @@ import com.microsoft.playwright.Playwright
 import com.microsoft.playwright.PlaywrightException
 import com.microsoft.playwright.options.Proxy
 import com.microsoft.playwright.options.RequestOptions
+import com.microsoft.playwright.options.WaitForSelectorState
 import com.microsoft.playwright.options.WaitUntilState
 import org.endy.pmczero.exception.NotAccessibleException
 import org.springframework.beans.factory.DisposableBean
@@ -114,6 +115,12 @@ class BrowserFetcher @Autowired constructor(
      * right choice for a server rendered page and the wrong one for an application that fills itself
      * in afterwards. A selector that never appears fails the call with the timeout rather than
      * answering a half rendered dom as if it were complete
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * Null leaves the choice to playwright, which waits for the element to be visible. That is the
+     * right question for a row of a list and the wrong one for the container the rows go into: an
+     * empty wrapper has no box, so it sits in the dom forever and never becomes visible. Ask for
+     * [WaitForSelectorState.ATTACHED] on a page that puts an empty container on the page first and
+     * fills it afterwards, which is what a lazy loading gallery does. See [waitFor]
      * @param scrollTimes how often to scroll to the bottom before reading the dom. Every number
      * above zero is what a lazy loading list needs, since it appends more rows as it is approached;
      * 0 leaves the page where it landed. Stops on its own as soon as a scroll changes nothing, so a
@@ -121,11 +128,15 @@ class BrowserFetcher @Autowired constructor(
      * @throws NotAccessibleException when the browser is disabled, cannot be started, [waitForSelector]
      * does not appear in time, or the page cannot be read
      */
-    fun render(urlString: String, waitForSelector: String? = null, scrollTimes: Int = 0): String =
-        withPage { page ->
+    fun render(
+        urlString: String,
+        waitForSelector: String? = null,
+        scrollTimes: Int = 0,
+        waitForSelectorState: WaitForSelectorState? = null
+    ): String = withPage { page ->
             page.navigate(urlString, navigateOptions())
             waitForSelector?.let {
-                page.waitForSelector(it, Page.WaitForSelectorOptions().setTimeout(timeoutMs))
+                waitFor(page, it, waitForSelectorState)
             }
             scroll(page, scrollTimes)
             page.content()
@@ -148,22 +159,27 @@ class BrowserFetcher @Autowired constructor(
      * a lightbox.
      *
      * Takes a [waitForSelector] for the same reason [render] does: on a single page application the
-     * images do not exist at the load event, so collecting them without one collects the shell.
+     * images do not exist at the load event, so collecting them without one collects the shell. And a
+     * [waitForSelectorState] for the same reason [render] takes one, since the gallery container
+     * these images go into is empty and boxless until they arrive.
      *
      * @param scrollTimes how often to scroll before collecting, since lazy loading appends images
      * while scrolling rather than all at once
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * See [render]
      */
     fun imageUrls(
         urlString: String,
         scrollTimes: Int = 3,
-        waitForSelector: String? = null
+        waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null
     ): List<String> = withPage { page ->
         page.navigate(urlString, navigateOptions())
         // before the scrolls, so the scroll also waits for a container that an application only
         // builds once its data is there: scrolling an empty list moves nothing and would stop the
         // scroll loop after one round
         waitForSelector?.let {
-            page.waitForSelector(it, Page.WaitForSelectorOptions().setTimeout(timeoutMs))
+            waitFor(page, it, waitForSelectorState)
         }
         scroll(page, scrollTimes)
         // evaluated in the page rather than through a locator per image, so one round trip collects
@@ -362,6 +378,28 @@ class BrowserFetcher @Autowired constructor(
         Page.NavigateOptions()
             .setTimeout(timeoutMs)
             .setWaitUntil(WaitUntilState.LOAD)
+
+    /**
+     * Waits for [selector] on [page] to reach [state], or gives up with the navigation timeout.
+     *
+     * [state] is left unset when the caller named none, rather than being defaulted to
+     * [WaitForSelectorState.VISIBLE] here, so a caller that says nothing about the state gets
+     * exactly what playwright gives by default, which is what every caller of this class relied on
+     * before there was a state to pick.
+     *
+     * The state is the whole point of this method. Visible is not the same question as attached: an
+     * element is visible when it has a non empty bounding box and is not hidden, and the container a
+     * lazy loading gallery fills has neither of those until something is in it. A caller waiting for
+     * that container to be visible is waiting for the data and not for the page, which is a longer
+     * wait than it looks, because a gallery that has run out of items never grows that box at all.
+     * Attached asks the weaker question that "the application built this" and leaves the data to
+     * [scroll], which is the part that actually pulls the items in.
+     */
+    private fun waitFor(page: Page, selector: String, state: WaitForSelectorState?) {
+        val options = Page.WaitForSelectorOptions().setTimeout(timeoutMs)
+        state?.let { options.setState(it) }
+        page.waitForSelector(selector, options)
+    }
 
     /**
      * Scrolls [page] to its bottom [times] times, pausing in between.

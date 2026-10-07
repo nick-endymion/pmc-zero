@@ -1,5 +1,7 @@
 package org.endy.pmczero.ressource
 
+import com.microsoft.playwright.options.WaitForSelectorState
+import org.endy.pmczero.exception.BadRequestException
 import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.MediaAdder
@@ -76,11 +78,44 @@ class ScraperRessource(
      * depend on how the list is marked up. The second is the one that actually proves the data is
      * there. Both fail with a 409 rather than a silently half rendered dom if they never appear.
      *
+     * ### Visible or merely there
+     *
+     * A wait is only satisfied when the element reaches a state, and the default of that state is the
+     * one that surprises people. Without a [waitForSelectorState] the wait is for the element to be
+     * *visible*, which in the browser means it has a non empty bounding box and is not hidden. That is
+     * the right question to ask of a row of a list and the wrong one to ask of the container the rows
+     * go into: an empty wrapper has no box at all, so
+     *
+     *     waitForSelector=[data-testid=gallery-items-container]
+     *
+     * sits in the dom from the moment the application is built and is never visible until something
+     * is in it. On a lazy loading gallery that times out with
+     *
+     *     the page did not get ready within 45000ms: - waiting for locator(...) to be visible
+     *
+     * which reads like a wrong selector and is not one. Ask for the weaker state and let the scroll
+     * do the rest:
+     *
+     *     waitForSelector=[data-testid=gallery-items-container]&waitForSelectorState=attached&scrollTimes=5
+     *
+     * [waitForSelectorState] takes the four states playwright knows, in any case: `attached`,
+     * `detached`, `hidden`, `visible`. `attached` is the one for a container that is filled
+     * afterwards. `hidden` is the one for a spinner that has to go away, which is how a page that
+     * shows no marker of its own is waited for. Blank is `visible`, which is what every call did
+     * before there was a state to pick. Anything else answers 400 rather than being ignored, since a
+     * state that is quietly dropped looks exactly like the timeout it was meant to prevent.
+     *
+     * Note that a hash looking css class is not a good selector here, whatever state it is waited
+     * for: one built by css modules or a styled component changes with every deploy of the site, so
+     * a selector naming it works until it does not. `data-testid` is there to stay.
+     *
      * Answers 409 when the browser is disabled or cannot be started, see the `pmc.browser.*`
      * properties and `gradlew installPlaywrightBrowsers`.
      *
      * @param waitForSelector a css selector to wait for, i.e. an element the application renders
      * only once it is done. Leave it out for a server rendered page, where the load event is enough
+     * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
+     * for it to be visible. See above
      * @param scrollTimes how often to scroll to the bottom before answering. A lazily loading list
      * only holds its rows below the fold, so this is what gets all of them rather than the first
      * screenful. It stops on its own once a scroll changes nothing, so this can be set generously
@@ -89,8 +124,9 @@ class ScraperRessource(
     fun render(
         @RequestParam url: String,
         @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "0") scrollTimes: Int
-    ): String = browserFetcher.render(url, waitForSelector, scrollTimes)
+    ): String = browserFetcher.render(url, waitForSelector, scrollTimes, stateOf(waitForSelectorState))
 
     /**
      * Imports the images of [url] into the location with [locationId], answering what happened to
@@ -109,7 +145,9 @@ class ScraperRessource(
      * @param pattern a regex an image url has to match, e.g. to take only the full size files of a
      * page that also links to its thumbnails. Blank takes every image
      * @param waitForSelector a css selector to wait for before collecting, needed on a single page
-     * application whose images do not exist at the load event. See [render] for how to pick one
+     * application whose images do not exist at the load event. See [render]
+     * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
+     * for it to be visible. See [render]
      * @param persist false answers the draft without writing it
      * @param skipExisting leave files alone that are in the location already, so a second run over
      * the same gallery costs one query instead of another few hundred downloads
@@ -121,6 +159,7 @@ class ScraperRessource(
         @RequestParam(required = false) name: String?,
         @RequestParam(required = false) pattern: String?,
         @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "3") scrollTimes: Int,
         @RequestParam(defaultValue = "true") persist: Boolean,
         @RequestParam(defaultValue = "true") skipExisting: Boolean
@@ -131,6 +170,7 @@ class ScraperRessource(
         pattern = pattern,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
+        waitForSelectorState = stateOf(waitForSelectorState),
         persist = persist,
         skipExisting = skipExisting
     )
@@ -178,6 +218,8 @@ class ScraperRessource(
      * @param name the name of the mset and of the folder the files go into. Blank names the set after
      * the page title the scraper picks up
      * @param waitForSelector a css selector to wait for before collecting. See [render]
+     * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
+     * for it to be visible. See [render]
      * @param persist false answers the draft without writing the media to the database. The files are
      * written either way
      */
@@ -188,6 +230,7 @@ class ScraperRessource(
         @RequestParam scraper: String,
         @RequestParam(required = false) name: String?,
         @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "3") scrollTimes: Int,
         @RequestParam(defaultValue = "true") persist: Boolean
     ): ImageImportTO = scraperImageImportService.importWith(
@@ -197,6 +240,7 @@ class ScraperRessource(
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
+        waitForSelectorState = stateOf(waitForSelectorState),
         persist = persist
     )
 
@@ -217,6 +261,8 @@ class ScraperRessource(
      * that also links to its thumbnails. Blank takes every image of the page
      * @param waitForSelector a css selector to wait for before collecting, needed on a single page
      * application whose images do not exist at the load event. See [render]
+     * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
+     * for it to be visible. See [render]
      * @param scrollTimes how often the page is scrolled before its images are collected, since a
      * lazily loading gallery appends them while scrolling
      */
@@ -242,8 +288,12 @@ class ScraperRessource(
      * link of the page
      * @param pattern a regex an image url has to match on the pages that are followed. Blank takes
      * every image of them
-     * @param waitForSelector a css selector to wait for before collecting. See [render]
-     * @param scrollTimes how often a page is scrolled before its images are collected
+     * @param waitForSelector a css selector to wait for before collecting, needed on a single page
+     * application whose images do not exist at the load event. See [render]
+     * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
+     * for it to be visible. See [render]
+     * @param scrollTimes how often the page is scrolled before its images are collected, since a
+     * lazily loading gallery appends them while scrolling
      */
     @PostMapping("/scraper-image-list-level2")
     fun listScraperImagesLevel2(
@@ -251,13 +301,15 @@ class ScraperRessource(
         @RequestParam(required = false) linkClass: String?,
         @RequestParam(required = false) pattern: String?,
         @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "3") scrollTimes: Int
     ): ImageListTO = scraperImageImportService.listLevel2(
         url = url,
         linkClass = linkClass,
         pattern = pattern,
         scrollTimes = scrollTimes,
-        waitForSelector = waitForSelector
+        waitForSelector = waitForSelector,
+        waitForSelectorState = stateOf(waitForSelectorState)
     )
 
     @PostMapping("/scraper-image-list")
@@ -265,12 +317,14 @@ class ScraperRessource(
         @RequestParam url: String,
         @RequestParam(required = false) pattern: String?,
         @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "3") scrollTimes: Int
     ): ImageListTO = scraperImageImportService.list(
         url = url,
         pattern = pattern,
         scrollTimes = scrollTimes,
-        waitForSelector = waitForSelector
+        waitForSelector = waitForSelector,
+        waitForSelectorState = stateOf(waitForSelectorState)
     )
 
     @PostMapping("/scraper-images")
@@ -280,6 +334,7 @@ class ScraperRessource(
         @RequestParam(required = false) name: String?,
         @RequestParam(required = false) pattern: String?,
         @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "3") scrollTimes: Int,
         @RequestParam(defaultValue = "true") persist: Boolean
     ): ImageImportTO = scraperImageImportService.import(
@@ -289,6 +344,7 @@ class ScraperRessource(
         pattern = pattern,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
+        waitForSelectorState = stateOf(waitForSelectorState),
         persist = persist
     )
 
@@ -303,10 +359,18 @@ class ScraperRessource(
      * @param browser false reads the page over plain http, which answers a different set of elements
      * for a page that builds its dom in javascript. True by default, since that is the case the
      * browser was added for
+     * @param waitForSelector a css selector to wait for, ignored when [browser] is false. See
+     * [render]. A draft without one is the one call of this ressource that answers the shell of a
+     * single page application rather than the page, so on an application that fills itself in this
+     * is the parameter that makes the draft worth reading
+     * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
+     * for it to be visible. See [render]
      */
     @PostMapping("/draft")
     fun draft(
         @RequestParam url: String,
+        @RequestParam(required = false) waitForSelector: String?,
+        @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "true") browser: Boolean,
         @RequestParam(defaultValue = "3") scrollTimes: Int
     ): MsetTO {
@@ -322,7 +386,11 @@ class ScraperRessource(
         // with the browser the page is rendered once here and the workers parse that html, rather
         // than every worker fetching the page again: a gallery that appends images as it is scrolled
         // would otherwise be read several times, each time holding something different
-        if (browser) scraper.doWork(browserFetcher.render(url, scrollTimes = scrollTimes), baseUriOf(url), kontext)
+        if (browser) scraper.doWork(
+            browserFetcher.render(url, waitForSelector, scrollTimes, stateOf(waitForSelectorState)),
+            baseUriOf(url),
+            kontext
+        )
         else scraper.doWork(url, "", kontext)
 
         return kontext.mset?.toTOwithMedia() ?: MsetTO()
@@ -357,4 +425,32 @@ class ScraperRessource(
 
     /** the part of [url] a relative image url is resolved against, i.e. everything up to the last slash */
     private fun baseUriOf(url: String): String = url.substringBeforeLast('/') + "/"
+
+    /**
+     * The [WaitForSelectorState] a `waitForSelectorState` parameter names, null when it names none.
+     *
+     * Taken as a string rather than bound to the enum by spring, because spring's converter answers
+     * an unknown name with null rather than with an error, and on a nullable parameter that null is
+     * indistinguishable from a parameter that was not sent. A `waitForSelectorState=attaced` would
+     * then be dropped and the call would go on to wait for the default, i.e. to fail with the very
+     * timeout the parameter was meant to prevent, with nothing in the answer to say why.
+     *
+     * Blank is null rather than `visible` spelled out, so that a caller who says nothing keeps
+     * exactly the behaviour of a caller who says nothing at all: the state is left unset on the
+     * playwright options and the default of the library applies, which is what
+     * [BrowserFetcher.waitFor] documents.
+     *
+     * Case is not significant, since a url query string is written by hand far more often than it is
+     * generated, and the states are lower case in the documentation of playwright itself.
+     *
+     * @throws BadRequestException when [value] is not one of the four states
+     */
+    private fun stateOf(value: String?): WaitForSelectorState? =
+        value?.takeIf { it.isNotBlank() }?.let { raw ->
+            WaitForSelectorState.values().firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) }
+                ?: throw BadRequestException(
+                    "waitForSelectorState=$raw is not a wait state, expected one of " +
+                        WaitForSelectorState.values().joinToString(", ") { it.name.lowercase() }
+                )
+        }
 }

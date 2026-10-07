@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import com.microsoft.playwright.options.WaitForSelectorState
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.modern.Location
@@ -61,6 +62,8 @@ class ScraperImageImportService(
      * lazily loading gallery appends them while scrolling
      * @param waitForSelector a css selector to wait for before collecting, needed on a single page
      * application whose images do not exist at the load event. See [BrowserFetcher.render]
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * See [BrowserFetcher.render]
      * @param persist false answers the draft without writing the media to the database. The files are
      * written either way, the way [ImageImportService.import] does it, so a draft costs the downloads
      * but not the rows
@@ -75,6 +78,7 @@ class ScraperImageImportService(
         pattern: String? = null,
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true
     ): ImageImportTO = importWith(
         locationId = locationId,
@@ -83,6 +87,7 @@ class ScraperImageImportService(
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
+        waitForSelectorState = waitForSelectorState,
         persist = persist
     )
 
@@ -117,6 +122,7 @@ class ScraperImageImportService(
         name: String? = null,
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true
     ): ImageImportTO = importWith(
         locationId = locationId,
@@ -125,6 +131,7 @@ class ScraperImageImportService(
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
+        waitForSelectorState = waitForSelectorState,
         persist = persist
     )
 
@@ -141,6 +148,7 @@ class ScraperImageImportService(
         name: String? = null,
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true
     ): ImageImportTO {
         val location = writableLocation(locationId)
@@ -150,7 +158,7 @@ class ScraperImageImportService(
         // so lose the scroll count and the wait for a selector: a lazily loading gallery read without
         // scrolling answers only what was above the fold, and a single page application read at the load
         // event answers an empty shell
-        val html = browserFetcher.render(url, waitForSelector, scrollTimes)
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState)
 
         val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(name, url))
 
@@ -249,6 +257,8 @@ class ScraperImageImportService(
      * loading gallery appends them while scrolling
      * @param waitForSelector a css selector to wait for before collecting, needed on a single page
      * application whose images do not exist at the load event. See [BrowserFetcher.render]
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * See [BrowserFetcher.render]
      * @throws NotAccessibleException when the browser cannot be started or [waitForSelector] does not
      * appear
      */
@@ -257,9 +267,10 @@ class ScraperImageImportService(
         linkClass: String? = null,
         pattern: String? = null,
         scrollTimes: Int = 3,
-        waitForSelector: String? = null
+        waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null
     ): ImageListTO {
-        val html = browserFetcher.render(url, waitForSelector, scrollTimes)
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState)
 
         val kontext = scraperService.getNewScanningContext(
             scraperService.catchupLocation(),
@@ -297,6 +308,8 @@ class ScraperImageImportService(
      * loading gallery appends them while scrolling
      * @param waitForSelector a css selector to wait for before collecting, needed on a single page
      * application whose images do not exist at the load event. See [BrowserFetcher.render]
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * See [BrowserFetcher.render]
      * @throws NotAccessibleException when the browser cannot be started or [waitForSelector] does not
      * appear
      */
@@ -304,11 +317,12 @@ class ScraperImageImportService(
         url: String,
         pattern: String? = null,
         scrollTimes: Int = 3,
-        waitForSelector: String? = null
+        waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null
     ): ImageListTO {
         // rendered here rather than by the StructuredWorker, which would fetch the page itself and so lose
         // the scroll count and the selector wait
-        val html = browserFetcher.render(url, waitForSelector, scrollTimes)
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState)
 
         // the catchup location rather than a real one: nothing is written, so there is nothing for a
         // location to be. Its empty uri would stop a scraper that did try to write, which is the answer

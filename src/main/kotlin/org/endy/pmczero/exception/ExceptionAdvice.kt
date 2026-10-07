@@ -27,6 +27,16 @@ class ExceptionAdvice {
             .body(ErrorTO(e.message ?: "not found"))
 
     /**
+     * Thrown when a request cannot be made sense of, e.g. a parameter value that is not one of the
+     * values the ressource knows, so it maps to 400.
+     */
+    @ExceptionHandler(BadRequestException::class)
+    fun handleBadRequest(e: BadRequestException): ResponseEntity<ErrorTO> =
+        ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .body(ErrorTO(e.message ?: "bad request"))
+
+    /**
      * Thrown when something exists but cannot be used, e.g. a location whose file system path is
      * not accessible, so it maps to 409.
      */

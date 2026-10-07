@@ -448,7 +448,7 @@ class ScraperImageImportServiceTests {
 
     @Test
     fun `lets a browser failure on the index through`() {
-        whenever(browserFetcher.render(any(), anyOrNull(), any())).thenAnswer {
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenAnswer {
             throw NotAccessibleException("the browser is disabled")
         }
 
@@ -471,7 +471,7 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-links"
         )
 
-        verify(browserFetcher).render("http://example.org/index.html", "app-links", 7)
+        verify(browserFetcher).render("http://example.org/index.html", "app-links", 7, null)
     }
 
     /**
@@ -647,12 +647,12 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-images"
         )
 
-        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7)
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null)
     }
 
     @Test
     fun `lets a browser failure through when listing`() {
-        whenever(browserFetcher.render(any(), anyOrNull(), any())).thenAnswer {
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenAnswer {
             throw NotAccessibleException("the browser is disabled")
         }
 
@@ -1040,7 +1040,7 @@ class ScraperImageImportServiceTests {
     /** The browser failing is its own error, passed through rather than reported as an empty page. */
     @Test
     fun `lets a browser failure through`() {
-        whenever(browserFetcher.render(any(), anyOrNull(), any())).thenAnswer {
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenAnswer {
             throw NotAccessibleException("the browser is disabled")
         }
 
@@ -1071,7 +1071,7 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-images"
         )
 
-        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7)
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null)
         // and the workers are handed that html rather than fetching the url again
         verify(browserFetcher, never()).getAsString(any(), any())
     }
@@ -1119,7 +1119,7 @@ class ScraperImageImportServiceTests {
     private fun givenPage(html: String) {
         // anyOrNull for the selector, which is null in most tests: Mockito's any() does not match a null
         // argument, so a plain any() there would leave the stub unanswered and hand back null html
-        whenever(browserFetcher.render(any(), anyOrNull(), any())).thenReturn(html)
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenReturn(html)
     }
 
     /**

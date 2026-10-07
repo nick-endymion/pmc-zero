@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import com.microsoft.playwright.options.WaitForSelectorState
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -76,7 +77,7 @@ class ImageImportServiceTest {
     }
 
     private fun givenPage(vararg urls: String) {
-        every { browserFetcher.imageUrls(any(), any(), any()) } returns urls.toList()
+        every { browserFetcher.imageUrls(any(), any(), any(), any()) } returns urls.toList()
     }
 
     /** the file [relative] is put into the location folder beforehand, as a previous import left it */
@@ -210,7 +211,7 @@ class ImageImportServiceTest {
 
     @Test
     fun `takes only the urls matching the pattern`() {
-        every { browserFetcher.imageUrls(any(), any(), any()) } returns listOf(
+        every { browserFetcher.imageUrls(any(), any(), any(), any()) } returns listOf(
             "https://example.org/thumbs/a.jpg",
             "https://example.org/full/a.jpg",
             "https://cdn.other.org/b.jpg"
@@ -228,7 +229,7 @@ class ImageImportServiceTest {
 
     @Test
     fun `leaves out the data uris of inline images`() {
-        every { browserFetcher.imageUrls(any(), any(), any()) } returns listOf(
+        every { browserFetcher.imageUrls(any(), any(), any(), any()) } returns listOf(
             "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
             "https://example.org/a.jpg"
         )
@@ -255,7 +256,31 @@ class ImageImportServiceTest {
 
         // a single page application needs one, since without it the browser reads the dom before the
         // app has built anything; it has to reach the fetcher rather than being dropped here
-        verify { browserFetcher.imageUrls(any(), any(), ".location-row") }
+        verify { browserFetcher.imageUrls(any(), any(), ".location-row", any()) }
+    }
+
+    @Test
+    fun `hands the wait state to the browser`() {
+        givenPage("https://example.org/a.jpg")
+
+        service.import(
+            locationId = 1,
+            url = "https://example.org",
+            name = "gallery",
+            waitForSelector = "[data-testid=gallery-items-container]",
+            waitForSelectorState = WaitForSelectorState.ATTACHED
+        )
+
+        // the state is what makes an empty container waitable at all, see BrowserFetcher.waitFor, so
+        // it has to survive the trip through this service rather than being defaulted away here
+        verify {
+            browserFetcher.imageUrls(
+                any(),
+                any(),
+                "[data-testid=gallery-items-container]",
+                WaitForSelectorState.ATTACHED
+            )
+        }
     }
 
     @Test
@@ -264,6 +289,8 @@ class ImageImportServiceTest {
 
         service.import(locationId = 1, url = "https://example.org", name = "gallery")
 
-        verify { browserFetcher.imageUrls(any(), any(), null) }
+        // both null rather than a default: the fetcher leaves an unset state to playwright, which is
+        // the behaviour a caller that named no state has always got
+        verify { browserFetcher.imageUrls(any(), any(), null, null) }
     }
 }

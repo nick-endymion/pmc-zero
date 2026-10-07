@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import com.microsoft.playwright.options.WaitForSelectorState
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.LocationType
@@ -53,6 +54,10 @@ class ImageImportService(
      * @param waitForSelector a css selector to wait for before collecting, needed on a single page
      * application: its images do not exist at the load event, so without one the collection runs
      * against an empty shell and answers no images at all. See [BrowserFetcher.render]
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * [com.microsoft.playwright.options.WaitForSelectorState.ATTACHED] on a gallery whose container is
+     * empty until the images arrive, since a visible wrapper is a question about the data rather than
+     * about the page. See [BrowserFetcher.render]
      * @param persist whether to save the mset. False answers the draft, so a caller can look at what
      * a page holds before anything is stored
      * @param skipExisting whether to leave files alone that are already in the location. True by
@@ -69,6 +74,7 @@ class ImageImportService(
         pattern: String? = null,
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true,
         skipExisting: Boolean = true
     ): ImageImportTO {
@@ -78,7 +84,7 @@ class ImageImportService(
         val storageId = storage.id
             ?: throw NotAccessibleException("location $locationId sits on a storage without id")
 
-        val urls = urlsToImport(url, pattern, scrollTimes, waitForSelector)
+        val urls = urlsToImport(url, pattern, scrollTimes, waitForSelector, waitForSelectorState)
 
         // nothing to import is reported rather than answered as an empty result, so a caller cannot
         // mistake a page whose images never loaded for one that holds none, and is spared an empty set
@@ -156,11 +162,12 @@ class ImageImportService(
         url: String,
         pattern: String?,
         scrollTimes: Int,
-        waitForSelector: String?
+        waitForSelector: String?,
+        waitForSelectorState: WaitForSelectorState?
     ): List<String> {
         val matcher = pattern?.takeIf { it.isNotBlank() }?.toRegex()
 
-        return browserFetcher.imageUrls(url, scrollTimes, waitForSelector)
+        return browserFetcher.imageUrls(url, scrollTimes, waitForSelector, waitForSelectorState)
             .filter { it.startsWith("http://") || it.startsWith("https://") }
             .filter { matcher == null || matcher.containsMatchIn(it) }
     }
