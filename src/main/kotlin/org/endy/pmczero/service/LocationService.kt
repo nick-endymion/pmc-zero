@@ -237,10 +237,7 @@ class LocationService(
      */
     fun draftMset(locationId: Int, subdir: String? = null): Mset {
         val location = findById(locationId)
-        // listDirectory answers the '.', '..' and escaping subdir problems the same way as the
-        // listing itself, so the draft cannot be built for a directory that cannot be listed
-        val entries = listDirectory(locationId, subdir, recursive = true)
-            .filter { !it.isDirectory && !it.existsAlready }
+        val entries = unsavedEntries(locationId, subdir)
         // thrown before any mset is built, so a scan that finds nothing leaves no set behind
         if (entries.isEmpty()) throw NotAccessibleException(
             "nothing to scan in location $locationId" +
@@ -248,22 +245,87 @@ class LocationService(
                 ": every file is stored already"
         )
         // a bessource always references a storage, without one it cannot even be instantiated
-        val storage = location.storageOrNull()
-            ?: throw NotAccessibleException("location $locationId has no storage to build bessources against")
+        val storage = storageOf(location)
 
         val mset = Mset().apply {
             name = subdir?.takeIf { it.isNotBlank() } ?: location.name
-            // normalised to the form Mset.subpath documents, so it can be handed straight back to a
-            // later call. Empty is null rather than "", since a scan of the location root has no
-            // subpath below it
             this.locationId = location.id
-            this.subpath = subdir?.normaliseSubpath()?.takeIf { it.isNotEmpty() }
+            this.subpath = subpathOf(subdir)
         }
 
         mset.media = entries.map { entry -> mediumOf(entry, mset, storage) }.toMutableList()
 
         return mset
     }
+
+    /** What [expandMset] added to a set: the new media, and how many files it left out. */
+    data class Expansion(val added: List<Medium>, val knownFiles: Int)
+
+    /**
+     * Adds the files below [subdir] of an FS location to [mset] that have no medium yet, the same
+     * ones [draftMset] would have built a new set of, and answers what it added.
+     *
+     * The counterpart of [draftMset] for a set that exists already. Everything that decides which
+     * files count is the same and deliberately so: a file that is stored already produces no medium
+     * either way, so expanding a set twice does not create a second medium for a file the first run
+     * already stored, and expanding a set that was built from the same directory adds nothing at all.
+     *
+     * Nothing new is not an error. A scan that finds nothing has nothing to add, which is what a
+     * repeated call over an unchanged directory should look like, so this answers an empty [Expansion]
+     * rather than throwing the way [draftMset] does: there a new set is what was asked for and an
+     * empty one would be a lie, here nothing was.
+     *
+     * The media are added to [mset] in memory, not persisted: saving is the caller's, which is what
+     * [draftMset] does as well, so the two can be reviewed before they are written.
+     *
+     * @throws NotFoundException when no location with that id exists, or when [subdir] does not exist
+     * or points outside of the location
+     * @throws NotAccessibleException when the location is not an FS location or its path is not
+     * accessible, or when it has no storage and there is something to add
+     */
+    fun expandMset(mset: Mset, locationId: Int, subdir: String? = null): Expansion {
+        val location = findById(locationId)
+        val entries = listDirectory(locationId, subdir, recursive = true)
+        // the unsaved files, and the stored ones counted alongside them, since a caller expanding a
+        // directory wants to hear that it was already up to date rather than only that nothing was
+        // added
+        val unsaved = entries.filter { !it.isDirectory && !it.existsAlready }
+        val known = entries.count { !it.isDirectory && it.existsAlready }
+
+        if (unsaved.isEmpty()) return Expansion(emptyList(), known)
+
+        val storage = storageOf(location)
+        val added = unsaved.map { entry -> mediumOf(entry, mset, storage) }
+        mset.media.addAll(added)
+
+        return Expansion(added, known)
+    }
+
+    /**
+     * The files below [subdir] that a scan would still have to create a medium for, i.e. the
+     * non-directories of a recursive listing that are not stored already.
+     */
+    private fun unsavedEntries(locationId: Int, subdir: String?): List<FileSystemEntryTO> =
+        // listDirectory answers the '.', '..' and escaping subdir problems the same way as the
+        // listing itself, so no draft can be built for a directory that cannot be listed
+        listDirectory(locationId, subdir, recursive = true)
+            .filter { !it.isDirectory && !it.existsAlready }
+
+    /** the [Storage] the bessources of a medium built for [location] point at */
+    private fun storageOf(location: Location): Storage =
+        // a bessource always references a storage, without one it cannot even be instantiated
+        location.storageOrNull()
+            ?: throw NotAccessibleException(
+                "location ${location.id} has no storage to build bessources against"
+            )
+
+    /**
+     * [subdir] in the form [Mset.subpath] documents: `/` separated, no leading or trailing slash, so
+     * it can be handed straight back as the `subpath` of another call. Empty is null, since the
+     * location root has no subpath below it.
+     */
+    private fun subpathOf(subdir: String?): String? =
+        subdir?.normaliseSubpath()?.takeIf { it.isNotEmpty() }
 
     /**
      * the [Medium] for the listed file [entry], named after the file itself, with the [Bessource]
@@ -338,12 +400,9 @@ class LocationService(
     }
 
     /**
-     * [subdir] in the form [Mset.subpath] documents: `/` separated, no leading or trailing slash, so
-     * a subpath recorded on a set can be handed straight back as the `subdir` of the next call.
-     *
-     * The very normalisation [org.endy.pmczero.model.scraper.ScanPath.folderOf] applies to the folder a
-     * scraper writes into, which is what makes a set scanned by either route end up with the same
-     * value here. A `\` separator becomes `/`, so a caller on windows does not produce a path that
+     * [subdir] normalised to `/` separators without a leading or trailing slash, the very
+     * normalisation [org.endy.pmczero.model.scraper.ScanPath.folderOf] applies to the folder a scraper
+     * writes into. A `\` separator becomes `/`, so a caller on windows does not produce a path that
      * says nothing on a posix system.
      */
     private fun String.normaliseSubpath(): String =

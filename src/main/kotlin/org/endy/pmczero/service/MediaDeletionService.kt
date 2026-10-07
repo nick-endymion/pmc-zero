@@ -19,13 +19,18 @@ import java.nio.file.Files
 import javax.persistence.EntityManager
 
 /**
- * In front of the file name of a file whose medium was deleted.
+ * The folder below the uri of a location that the files of a deleted medium are moved into.
  *
- * A constant rather than a parameter because it is what makes a deletion recognisable on disk, and
- * a configurable one would mean files that cannot be told apart from the ones that were never
- * deleted.
+ * A constant rather than a parameter because it is what makes a deletion recognisable on disk, and a
+ * configurable one would mean files that cannot be told apart from the ones that were never deleted.
+ *
+ * It sits below the location rather than beside it, so a deleted file keeps its full path below the
+ * location: the name of its bessource is what it was stored under, and that is what is reproduced
+ * under this folder. A location holding `imagegap4/abc/984580928.jpg` ends up with
+ * `DELETED/imagegap4/abc/984580928.jpg`, so two media deleted out of two different folders do not
+ * collide and neither does a folder that held an `a.jpg` in more than one place.
  */
-private const val PREFIX = "deleted_"
+private const val DELETED_FOLDER = "DELETED"
 
 /**
  * Deletes a medium that has been marked deleted, for real, along with its files.
@@ -35,13 +40,14 @@ private const val PREFIX = "deleted_"
  * mark being set first.
  *
  * What is removed: the medium row, its bessources, and the files they point at. The files are not
- * erased but renamed with `deleted_` in front, so a deletion that turns out to have been a mistake
- * can still be undone by hand as long as nobody has cleaned the folder up.
+ * erased but moved below a [DELETED_FOLDER] under the uri of their location, keeping the path they
+ * were stored under, so a deletion that turns out to have been a mistake can still be undone by hand
+ * as long as nobody has cleaned the folder up.
  *
- * Only the files that can actually be located are renamed. A bessource points at a storage and a
+ * Only the files that can actually be located are moved. A bessource points at a storage and a
  * name, and only the MAIN_FS and TN_FS locations of that storage are folders on disk; a bessource on
- * an HTTP location names something that cannot be renamed here, and one whose file is gone has
- * nothing to rename. Neither stops the deletion: the row goes either way, because the point of the
+ * an HTTP location names something that cannot be moved here, and one whose file is gone has
+ * nothing to move. Neither stops the deletion: the row goes either way, because the point of the
  * call is to remove the record, and a file that cannot be found is not a reason to keep a stale one.
  */
 @Service
@@ -52,31 +58,34 @@ class MediaDeletionService(
 ) {
 
     /**
-     * One file that will be renamed, together with the name it will carry afterwards.
+     * One file that will be moved, together with the name it will carry afterwards.
      *
-     * Both are resolved before anything is touched, see [plan].
+     * Both are resolved before anything is touched, see [plan]. [label] is the destination as a path
+     * relative to the location, which is what an error message should name: an absolute path says
+     * nothing to a caller that does not know where the storage sits.
      */
-    private data class Rename(val from: File, val to: File)
+    private data class Move(val from: File, val to: File, val label: String)
 
     /**
-     * Deletes the medium with [id] and its bessources, then renames the files behind them.
+     * Deletes the medium with [id] and its bessources, then moves the files behind them below the
+     * [DELETED_FOLDER] of their location.
      *
      * Refuses a medium that is not marked deleted, see [Medium.deleted]: the mark is what separates
      * "this is not wanted any more" from "this was never resolved". An unmarked medium is not an
      * error state to be worked around, it is a request that has not been made yet.
      *
-     * The rows go before the files, which is the order asked for and also the bounded one: renaming
-     * files is not transactional, so a rename that fails afterwards cannot be rolled back. With this
-     * order the worst case is a file that kept its old name and a record that is gone, rather than
-     * a record that is gone and a file nothing points at any more.
+     * The rows go before the files, which is the order asked for and also the bounded one: moving
+     * files is not transactional, so a move that fails afterwards cannot be rolled back. With this
+     * order the worst case is a file that kept its place and a record that is gone, rather than a
+     * record that is gone and a file nothing points at any more.
      *
      * The collision check is the exception to that order. It has to run before the deletion, because
      * once the record is gone there is nothing left to answer for a file that was already there, and
-     * the caller would hold neither the old nor the new name.
+     * the caller would hold neither the old nor the new place.
      *
      * @throws NotFoundException when no medium with that id exists
      * @throws NotAccessibleException when the medium is not marked deleted, or when a file to be
-     * renamed is already there under its new name
+     * moved is already there under its new name
      */
     @Transactional
     fun deleteMarkedMedium(id: Int): MediumDeletionTO {
@@ -92,9 +101,9 @@ class MediaDeletionService(
 
         // every target is checked before anything is removed: one collision must not leave half a
         // medium deleted
-        plan.renames.firstOrNull { it.to.exists() }?.let {
+        plan.moves.firstOrNull { it.to.exists() }?.let {
             throw NotAccessibleException(
-                "cannot delete medium $id: ${it.to.name} is already there. " +
+                "cannot delete medium $id: ${it.label} is already there. " +
                     "Move that file aside first, nothing was deleted."
             )
         }
@@ -104,64 +113,61 @@ class MediaDeletionService(
         mediaRepository.delete(medium)
         // flushed rather than left to the commit: the delete has to have reached the database before
         // the files move, otherwise a failure here rolls the transaction back and the files are
-        // renamed for a record that is still there
+        // moved for a record that is still there
         entityManager.flush()
 
-        val renamed = plan.renames.count { move(it, id) }
+        val moved = plan.moves.count { move(it, id) }
 
         return MediumDeletionTO(
             mediumId = id,
             name = medium.name,
-            renamedFiles = renamed,
-            // everything that was no rename: no folder to rename it in, no file behind the
-            // bessource, a name already marked, and the rare case of a rename that failed
-            skippedFiles = plan.skipped + (plan.renames.size - renamed)
+            movedFiles = moved,
+            // everything that was no move: no folder to move it in, no file behind the bessource, a
+            // name that is already below the DELETED folder, and the rare case of a move that failed
+            skippedFiles = plan.skipped + (plan.moves.size - moved)
         )
     }
 
     /** What [plan] resolved: the files to move, and the count of ones it left out. */
-    private data class Plan(val renames: List<Rename>, val skipped: Int)
+    private data class Plan(val moves: List<Move>, val skipped: Int)
 
     /**
-     * The files behind [medium] that can be renamed, resolved before anything is deleted.
+     * The files behind [medium] that can be moved, resolved before anything is deleted.
      *
-     * A file that cannot be located is left out rather than reported: there is nothing to rename for
-     * it, and the deletion is not blocked by its absence. A file that is already carrying the
-     * `deleted_` is left out too, so a second call does not grow the name further.
+     * A file that cannot be located is left out rather than reported: there is nothing to move for
+     * it, and the deletion is not blocked by its absence. A file that already sits below the
+     * [DELETED_FOLDER] is left out too, so a second pass does not pile the folder up on itself.
      */
     private fun plan(medium: Medium): Plan {
         // read eagerly: the bessources are gone once the medium is deleted
         val bessources = medium.bessources.toList()
-        val renames = mutableListOf<Rename>()
+        val moves = mutableListOf<Move>()
         // counted rather than dropped silently, so the answer can say that a bessource was left
         // alone instead of leaving the caller to wonder where its file went
         var skipped = 0
 
         for (bessource in bessources) {
-            val rename = renameOf(bessource)
-            if (rename == null) skipped++ else renames.add(rename)
+            val move = moveOf(bessource)
+            if (move == null) skipped++ else moves.add(move)
         }
 
-        return Plan(renames, skipped)
+        return Plan(moves, skipped)
     }
 
     /**
-     * The rename [bessource] calls for, or null when there is nothing to rename: no folder on disk
-     * for it, a name that does not stay inside that folder, no file behind it, or a name that
-     * already carries the mark.
+     * The move [bessource] calls for, or null when there is nothing to move: no folder on disk for
+     * it, a name that does not stay inside that folder, no file behind it, or a name that is already
+     * below the [DELETED_FOLDER].
      */
-    private fun renameOf(bessource: Bessource): Rename? {
+    private fun moveOf(bessource: Bessource): Move? {
         val location = locationOf(bessource) ?: return null
         val relative = bessource.name ?: return null
         val from = fileIn(location, relative) ?: return null
         if (!from.isFile) return null
 
-        val marked = prefixed(relative)
-        // already carrying the prefix, so there is nothing to add and a second pass must not grow
-        // the name further
-        if (marked == relative) return null
+        val parked = parked(relative) ?: return null
 
-        return Rename(from, fileIn(location, marked) ?: return null)
+        return Move(from, fileIn(location, parked) ?: return null, parked)
     }
 
     /**
@@ -187,45 +193,47 @@ class MediaDeletionService(
     }
 
     /**
-     * The name [relative] carries once it is marked deleted: `deleted_` in front of the file name,
-     * keeping the directory and the extension where they are.
+     * The name [relative] carries once it is moved below the [DELETED_FOLDER], or null when there is
+     * nothing to move it to: the name is blank, or it already sits below that folder.
      *
-     * `tn/2020/shot.jpg` becomes `tn/2020/deleted_shot.jpg`, not `deleted_tn/2020/shot.jpg`: the
-     * prefix belongs to the file, and pushing it into the directory would name the directory instead.
+     * The whole name is kept below the folder, directories included, so the destination reproduces the
+     * path the file was stored under rather than flattening it. `tn/2020/shot.jpg` becomes
+     * `DELETED/tn/2020/shot.jpg`, which is what tells two files of the same name in different
+     * folders apart after they are gone from where they were.
      *
-     * The extension is kept so the file still opens in whatever handles that extension, and so a
-     * half deleted folder stays legible.
+     * Separators are normalised to `/`, the same way a bessource name is everywhere else in this
+     * application, so a name that was written on windows does not become one directory named after a
+     * backslash on a posix system.
+     *
+     * A name that already starts with the folder is refused rather than moved, which is what keeps a
+     * second pass over the same medium from producing `DELETED/DELETED/...`. It is the counterpart of
+     * what the file name check used to do when a deletion was expressed as a prefix on the name.
      */
-    private fun prefixed(relative: String): String {
-        val normalised = relative.replace('\\', '/')
-        val directory = normalised.substringBeforeLast('/', "")
-        val fileName = normalised.substringAfterLast('/')
-        // the stem is what the prefix belongs on: a file already carrying it must not grow a second
-        // one, so the check is on the stem rather than on the whole name, where `deleted_` would also
-        // match a file whose extension happens to start that way
-        if (fileName.startsWith(PREFIX)) return normalised
+    private fun parked(relative: String): String? {
+        val normalised = relative.replace('\\', '/').trim('/')
+        if (normalised.isBlank()) return null
+        if (normalised == DELETED_FOLDER || normalised.startsWith("$DELETED_FOLDER/")) return null
 
-        val extension = fileName.substringAfterLast('.', "")
-        val stem = if (extension.isEmpty()) fileName else fileName.dropLast(extension.length + 1)
-        val marked = "$PREFIX$stem" + if (extension.isEmpty()) "" else ".$extension"
-
-        return if (directory.isEmpty()) marked else "$directory/$marked"
+        return "$DELETED_FOLDER/$normalised"
     }
 
     /**
-     * Moves [rename] into place, answering whether it happened.
+     * Moves [move] into place, answering whether it happened.
      *
      * A failure is reported rather than thrown: the record is gone by now, so there is nothing left
      * to roll back to, and refusing to answer would hide a deletion that did in fact happen. The
      * file stays where it was, under its old name.
      */
-    private fun move(rename: Rename, mediumId: Int): Boolean = try {
+    private fun move(move: Move, mediumId: Int): Boolean = try {
+        // the destination is a folder that does not exist until the first file goes into it, and one
+        // that nests the whole path of the file, so every folder on the way has to be made here
+        move.to.parentFile?.mkdirs()
         // via Files.move rather than File.renameTo, which refuses to replace an existing file on
         // windows; the collision was ruled out above, so nothing is overwritten here either
-        Files.move(rename.from.toPath(), rename.to.toPath())
+        Files.move(move.from.toPath(), move.to.toPath())
         true
     } catch (e: IOException) {
-        println("could not rename ${rename.from.path} to ${rename.to.path} for medium $mediumId: ${e.message}")
+        println("could not move ${move.from.path} to ${move.to.path} for medium $mediumId: ${e.message}")
         false
     }
 
@@ -233,7 +241,7 @@ class MediaDeletionService(
      * [relative] inside the folder of the FS [location], null when it would escape that folder.
      *
      * Canonicalised before the comparison, which is what rules out `..` and symlinks: a bessource
-     * name is free text and a rename must never reach outside the location it belongs to.
+     * name is free text and a move must never reach outside the location it belongs to.
      */
     private fun fileIn(location: Location, relative: String?): File? {
         val root = File(location.uri ?: return null).canonicalFile
@@ -242,4 +250,3 @@ class MediaDeletionService(
         return if (file.path.startsWith(root.path + File.separator)) file else null
     }
 }
-

@@ -14,12 +14,15 @@ import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.MsetRepository
 import org.endy.pmczero.repository.StorageRepository
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -40,12 +43,21 @@ class MsetServiceTest {
 
     private lateinit var service: MsetService
 
+    /** mocked, since the scan behind an expansion is LocationService's and is tested there */
+    private val locationService: LocationService = mock()
+
+    /** the subpath the last expansion was asked to scan, which is what the subpath tests read */
+    private var askedSubpath: String? = null
+
     @BeforeEach
     fun setUp() {
-        val locationService = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
-        val mediaService = MediaService(mediaRepository, bessourceRepository, locationService)
-        service = MsetService(mediaRepository, msetRepository, mediaService, StorageService(storageRepository))
-    }
+        val realLocationService = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
+        val mediaService = MediaService(mediaRepository, bessourceRepository, realLocationService)
+        service = MsetService(
+            mediaRepository, msetRepository, mediaService, StorageService(storageRepository), locationService
+        )
+
+        }
 
     @Test
     fun `fills the primary and thumbnail url from the physical locations`() {
@@ -222,6 +234,178 @@ class MsetServiceTest {
     // with its generated id, so the mock echoes its argument here
     private fun givenMsetIsSaved() {
         whenever(msetRepository.save(any<Mset>())).thenAnswer { it.getArgument(0) }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Expanding a set
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `expands the set named by its id`() {
+        val mset = Mset().apply { id = 5; name = "scanned"; subpath = "tn/2020" }
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(mset)
+        expansionFor(1, "tn/2020", "tn/2020/jan.pdf")
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals(5, result.msetId)
+        assertEquals("scanned", result.mset.name)
+        verify(msetRepository).save(any<Mset>())
+    }
+
+    @Test
+    fun `expands a set from the subpath it records when none is given`() {
+        // a set knows the directory it was built from, so a caller expanding it need not repeat it
+        val mset = Mset().apply { id = 5; subpath = "tn/2020" }
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(mset)
+
+        val expansion = expansionFor(1, "tn/2020/jan.pdf")
+        service.expandMset(5, locationId = 1)
+
+        assertEquals("tn/2020", askedSubpath)
+        assertEquals(1, expansion.added.size)
+        assertEquals(listOf("jan.pdf"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `expands a set from a subpath the caller names instead`() {
+        val mset = Mset().apply { id = 5; subpath = "tn/2020" }
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(mset)
+
+        val expansion = expansionFor(1, "2021/sep.pdf")
+        service.expandMset(5, locationId = 1, subdir = "2021")
+
+        // the parameter wins, which is what makes this usable for a set whose directory moved
+        assertEquals("2021", askedSubpath)
+        assertEquals(1, expansion.added.size)
+        assertEquals(listOf("sep.pdf"), mset.media.map { it.name })
+    }
+
+    @Test
+    fun `expands a set from the location root when it records no subpath`() {
+        // a set scanned from the root itself has no subpath, so that is what the scan looks at
+        val mset = Mset().apply { id = 5 }
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(mset)
+
+        val expansion = expansionFor(1, "a.pdf")
+        service.expandMset(5, locationId = 1)
+
+        assertNull(askedSubpath)
+        assertEquals(1, expansion.added.size)
+    }
+
+    @Test
+    fun `saves the set even when the scan added nothing`() {
+        // a repeated call over an unchanged directory has to be harmless, so this is a save of the set
+        // as it was rather than a refusal
+        val mset = Mset().apply { id = 5; subpath = "tn/2020" }
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(mset)
+        // a scan that finds nothing, which is the state of a directory that has not changed
+        expansionFor(1)
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals(0, result.addedFiles)
+        verify(msetRepository).save(mset)
+    }
+
+    @Test
+    fun `answers how many files were stored already`() {
+        // so a caller can tell an up to date directory from a scan that found nothing at all
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(Mset().apply { id = 5 })
+        whenever(locationService.expandMset(any(), eq(1), anyOrNull()))
+            .thenReturn(LocationService.Expansion(emptyList(), 4))
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals(4, result.knownFiles)
+        assertEquals(0, result.addedFiles)
+    }
+
+    @Test
+    fun `answers the subpath that was scanned`() {
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(
+            Mset().apply { id = 5; subpath = "tn/2020" }
+        )
+        expansionFor(1, "tn/2020/jan.pdf")
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals("tn/2020", result.subpath)
+    }
+
+    @Test
+    fun `answers the set with its media so a caller sees the new ones`() {
+        givenMsetIsSaved()
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(Mset().apply { id = 5 })
+        expansionFor(1, "a.pdf")
+
+        val result = service.expandMset(5, locationId = 1)
+
+        assertEquals(listOf("a.pdf"), result.mset.media!!.map { it.name })
+    }
+
+    @Test
+    fun `throws NotFoundException for an unknown mset`() {
+        whenever(msetRepository.findByIdOrNullWithMedia(99)).thenReturn(null)
+
+        assertThrows<NotFoundException> {
+            service.expandMset(99, locationId = 1)
+        }
+    }
+
+    @Test
+    fun `does not expand a set that has to be read with its media`() {
+        // the media have to be loaded before anything is added to them, so the plain find is not enough
+        whenever(msetRepository.findByIdOrNullWithMedia(5)).thenReturn(Mset().apply { id = 5 })
+        givenMsetIsSaved()
+        expansionFor(1)
+
+        service.expandMset(5, locationId = 1)
+
+        verify(msetRepository).findByIdOrNullWithMedia(5)
+        verify(msetRepository, never()).findById(any())
+    }
+
+    /**
+     * a stubbed scan of location [locationId] that finds [names] and adds a medium for each
+     *
+     * The subpath is left to whatever the call passes, so a test can read it off [askedSubpath]
+     * instead of asserting on a stubbed matcher, which is what the tests about which directory is
+     * scanned need. The scan itself is covered by LocationServiceTest.
+     */
+    private fun expansionFor(locationId: Int, vararg names: String): LocationService.Expansion {
+        val expansion = LocationService.Expansion(
+            names.map { name ->
+                Medium().apply {
+                    this.name = name.substringAfterLast('/')
+                    bessources = mutableListOf(
+                        Bessource().apply {
+                            this.name = name
+                            // the response is mapped through the bessource, which reads its storage
+                            storage = Storage().apply { id = 1 }
+                        }
+                    )
+                }
+            },
+            0
+        )
+        // answered rather than returned, so the media are added to the set the way the real service
+        // adds them: this method hands back what it added, it does not put it there itself
+        whenever(locationService.expandMset(any(), eq(locationId), anyOrNull()))
+            .thenAnswer { invocation ->
+                askedSubpath = invocation.getArgument<String?>(2)
+                invocation.getArgument<Mset>(0).media.addAll(expansion.added)
+                expansion
+            }
+        return expansion
     }
 
     // -------------------------------------------------------------------------------------

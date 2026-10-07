@@ -8,6 +8,7 @@ import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.to.FileSystemEntryTO
 import org.endy.pmczero.to.LocationTO
+import org.endy.pmczero.to.MsetExpansionTO
 import org.endy.pmczero.to.MsetTO
 import org.springframework.web.bind.annotation.*
 
@@ -98,6 +99,38 @@ class LocationRessource(
         val saved = msetService.save(locationService.draftMset(id, subpath))
         // re-read so the response carries the generated ids and timestamps of the saved rows
         return msetService.findById(saved.id!!, withMedia = true).toTOwithMedia(true)
+    }
+
+    /**
+     * Adds the files of a directory of this location that have no medium yet to an mset that exists
+     * already, answering what was added and the set as it was saved.
+     *
+     * The same scan as POST on [createMsetFromDirectory], the same rules about which files count, but
+     * into the set named by [msetId] rather than into a new one. So a directory that has grown since
+     * its set was created is picked up without producing a second set for the same directory, which is
+     * what scanning it again through that endpoint would do.
+     *
+     * The media already in the set are left alone, and so is the location the set records: that is
+     * where it came from, not where it is being extended to.
+     *
+     * Nothing new is answered rather than refused, since that is the normal state of a directory that
+     * has not changed. Read [MsetExpansionTO.addedFiles] to tell it from a scan that did something.
+     *
+     * Answers 404 when the mset does not exist and when the subpath does not exist or points outside
+     * of the location, and 409 when the location cannot be listed or has no storage to build bessources
+     * against.
+     *
+     * @param msetId the set to add the media to
+     * @param subpath directory relative to the location, the directory the set itself records when
+     * omitted
+     */
+    @PostMapping("/{id}/fs-mset/expand")
+    fun expandMset(
+        @PathVariable("id") id: Int,
+        @RequestParam("msetId") msetId: Int,
+        @RequestParam(name = "subpath", required = false) subpath: String?
+    ): MsetExpansionTO {
+        return msetService.expandMset(msetId, id, subpath)
     }
 
     @PostMapping("/default")

@@ -7,7 +7,9 @@ import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.MsetRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
+import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.modern.Mset
+import org.endy.pmczero.to.MsetExpansionTO
 import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.transaction.annotation.Transactional
 
@@ -16,7 +18,8 @@ class MsetService(
     private val mediaRepository: MediaRepository,
     private val msetRepository: MsetRepository,
     private val mediaService: MediaService,
-    private val storageService: StorageService
+    private val storageService: StorageService,
+    private val locationService: LocationService
 ) {
 
     /**
@@ -53,6 +56,51 @@ class MsetService(
             }
         }
         return msetRepository.save(mset)
+    }
+
+    /**
+     * Adds the files below [subdir] of the location with [locationId] to the mset with [msetId] that
+     * have no medium yet, answering what was added and the set as it was saved.
+     *
+     * The counterpart of [LocationService.draftMset] for a set that exists already: the same scan, the
+     * same rules about which files count, but into that set rather than into a new one. So a set whose
+     * directory has grown picks the new files up without producing a second set for the same directory,
+     * which is what scanning it again through the draft endpoint would do.
+     *
+     * [subdir] defaults to the subpath the set already records, see [Mset.subpath]: a set knows the
+     * directory it was built from, so a caller expanding it need not repeat that. An explicit [subdir]
+     * wins, which is what makes this usable for a set whose directory moved.
+     *
+     * Nothing new is answered rather than refused, since that is the normal state of a directory that
+     * has not changed and repeating the call has to stay harmless.
+     *
+     * The media that were already there are left untouched, and so is the [Mset.locationId] of the set:
+     * it is where the set came from, not where it is being extended to.
+     *
+     * @throws NotFoundException when no mset with that id exists
+     * @throws NotAccessibleException when the location is not an accessible FS location, or has no
+     * storage and there is something to add
+     * @throws org.endy.pmczero.exception.NotFoundException when [subdir] does not exist or points
+     * outside of the location
+     */
+    @Transactional
+    fun expandMset(msetId: Int, locationId: Int, subdir: String? = null): MsetExpansionTO {
+        val mset = findById(msetId, withMedia = true)
+        // the set's own directory when the caller names none, which is why it is read before the scan:
+        // the scan needs the subpath, and there is no call afterwards that could tell what was used
+        val scanned = subdir?.takeIf { it.isNotBlank() } ?: mset.subpath
+
+        val expansion = locationService.expandMset(mset, locationId, scanned)
+
+        val saved = save(mset)
+
+        return MsetExpansionTO(
+            msetId = saved.id!!,
+            addedFiles = expansion.added.size,
+            knownFiles = expansion.knownFiles,
+            subpath = saved.subpath,
+            mset = saved.toTOwithMedia(true)
+        )
     }
 
     /**

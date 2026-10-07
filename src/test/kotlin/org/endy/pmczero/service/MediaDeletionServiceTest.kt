@@ -32,8 +32,8 @@ import javax.persistence.EntityManager
  * Unit tests for [MediaDeletionService.deleteMarkedMedium].
  *
  * Real files are written into a temp directory and a real [StorageService] over a mocked repository
- * backs the storage lookup, because the behaviour under test is a file on disk being renamed: the
- * name it ends up with is the whole point, and a mock could only assert which calls were made.
+ * backs the storage lookup, because the behaviour under test is a file on disk being moved: the path
+ * it ends up at is the whole point, and a mock could only assert which calls were made.
  */
 class MediaDeletionServiceTest {
 
@@ -119,13 +119,13 @@ class MediaDeletionServiceTest {
     }
 
     @Test
-    fun `deletes the row before the files are renamed`() {
-        // the rename is not transactional: if it happened first and the delete failed afterwards,
-        // the files would carry the prefix for a record that is still there
+    fun `deletes the row before the files are moved`() {
+        // the move is not transactional: if it happened first and the delete failed afterwards, the
+        // files would sit below DELETED for a record that is still there
         givenMarkedMedium(primaryName = "shot.jpg")
         val file = File(mainFs, "shot.jpg").apply { createNewFile() }
-        // whether the file was still under its old name at the moment the row was deleted, which is what
-        // makes the order observable: a rename that came first would have already moved it
+        // whether the file was still at its old place at the moment the row was deleted, which is what
+        // makes the order observable: a move that came first would have already shifted it
         val existedAtDelete = mutableListOf<Boolean>()
         doAnswer { existedAtDelete.add(file.exists()) }
             .`when`(mediaRepository).delete(any<Medium>())
@@ -151,80 +151,102 @@ class MediaDeletionServiceTest {
     // -------------------------------------------------------------------------------------
 
     @Test
-    fun `renames the primary file with deleted_ in front`() {
+    fun `moves the primary file below the DELETED folder`() {
         givenMarkedMedium(primaryName = "shot.jpg")
         val file = File(mainFs, "shot.jpg").apply { createNewFile() }
 
         val result = service.deleteMarkedMedium(10)
 
-        assertEquals(1, result.renamedFiles)
+        assertEquals(1, result.movedFiles)
         assertFalse(file.exists())
-        assertTrue(File(mainFs, "deleted_shot.jpg").isFile)
+        assertTrue(File(mainFs, "DELETED/shot.jpg").isFile)
     }
 
     @Test
-    fun `renames the thumbnail in the TN location`() {
+    fun `moves the thumbnail below the DELETED folder of the TN location`() {
+        // the folder is per location, so the thumbnail goes below the one of the location that holds it
         givenMarkedMedium(primaryName = "shot.jpg", tnName = "shot.jpg")
         File(mainFs, "shot.jpg").createNewFile()
         File(tnFs, "shot.jpg").createNewFile()
 
         val result = service.deleteMarkedMedium(10)
 
-        assertEquals(2, result.renamedFiles)
-        assertTrue(File(tnFs, "deleted_shot.jpg").isFile)
+        assertEquals(2, result.movedFiles)
+        assertTrue(File(tnFs, "DELETED/shot.jpg").isFile)
+        assertTrue(File(mainFs, "DELETED/shot.jpg").isFile)
     }
 
     @Test
-    fun `keeps the subdirectory the file sits in`() {
-        givenMarkedMedium(primaryName = "2020/jan.pdf")
-        File(mainFs, "2020").mkdirs()
-        File(mainFs, "2020/jan.pdf").createNewFile()
+    fun `keeps the whole path the file was stored under`() {
+        givenMarkedMedium(primaryName = "imagegap4/abc/984580928.jpg")
+        File(mainFs, "imagegap4/abc").mkdirs()
+        File(mainFs, "imagegap4/abc/984580928.jpg").createNewFile()
 
         service.deleteMarkedMedium(10)
 
-        // the prefix belongs to the file, not to the directory it lives in
-        assertTrue(File(mainFs, "2020/deleted_jan.pdf").isFile)
+        // the path is reproduced below the folder rather than flattened, so two files of one name in
+        // two folders do not land on top of each other
+        assertTrue(File(mainFs, "DELETED/imagegap4/abc/984580928.jpg").isFile)
     }
 
     @Test
-    fun `keeps the extension so the file still opens`() {
-        givenMarkedMedium(primaryName = "movie.mkv")
-        File(mainFs, "movie.mkv").createNewFile()
+    fun `creates the folders the path below the location needs`() {
+        givenMarkedMedium(primaryName = "2020/august/jan.pdf")
+        File(mainFs, "2020/august").mkdirs()
+        File(mainFs, "2020/august/jan.pdf").createNewFile()
 
-        service.deleteMarkedMedium(10)
+        val result = service.deleteMarkedMedium(10)
 
-        assertTrue(File(mainFs, "deleted_movie.mkv").isFile)
+        // neither DELETED nor the folders below it exist before the move
+        assertEquals(1, result.movedFiles)
+        assertTrue(File(mainFs, "DELETED/2020/august/jan.pdf").isFile)
     }
 
     @Test
-    fun `handles a file name without an extension`() {
+    fun `moves a file without an extension`() {
         givenMarkedMedium(primaryName = "README")
         File(mainFs, "README").createNewFile()
 
         service.deleteMarkedMedium(10)
 
-        assertTrue(File(mainFs, "deleted_README").isFile)
+        assertTrue(File(mainFs, "DELETED/README").isFile)
     }
 
     @Test
-    fun `does not prefix a file twice`() {
-        givenMarkedMedium(primaryName = "deleted_shot.jpg")
-        val file = File(mainFs, "deleted_shot.jpg").apply { createNewFile() }
+    fun `reads a bessource name written with backslashes`() {
+        givenMarkedMedium(primaryName = "imagegap4\\abc\\984580928.jpg")
+        File(mainFs, "imagegap4/abc").mkdirs()
+        File(mainFs, "imagegap4/abc/984580928.jpg").createNewFile()
 
         val result = service.deleteMarkedMedium(10)
 
-        // a second pass must not grow the name further
-        assertEquals(0, result.renamedFiles)
-        assertTrue(file.isFile)
+        // one path on every platform: a name written on windows must not become a single directory
+        // named after a backslash
+        assertEquals(1, result.movedFiles)
+        assertTrue(File(mainFs, "DELETED/imagegap4/abc/984580928.jpg").isFile)
     }
 
     @Test
-    fun `deletes the record even when no file could be renamed`() {
+    fun `does not move a file that already sits below the DELETED folder`() {
+        // the counterpart of the old prefix check: a second pass must not produce DELETED/DELETED/...
+        givenMarkedMedium(primaryName = "DELETED/shot.jpg")
+        File(mainFs, "DELETED").mkdirs()
+        val file = File(mainFs, "DELETED/shot.jpg").apply { createNewFile() }
+
+        val result = service.deleteMarkedMedium(10)
+
+        assertEquals(0, result.movedFiles)
+        assertTrue(file.isFile)
+        assertFalse(File(mainFs, "DELETED/DELETED/shot.jpg").exists())
+    }
+
+    @Test
+    fun `deletes the record even when no file could be moved`() {
         val medium = givenMarkedMedium(primaryName = null)
 
         val result = service.deleteMarkedMedium(10)
 
-        assertEquals(0, result.renamedFiles)
+        assertEquals(0, result.movedFiles)
         verify(mediaRepository).delete(medium)
     }
 
@@ -234,7 +256,7 @@ class MediaDeletionServiceTest {
 
         val result = service.deleteMarkedMedium(10)
 
-        assertEquals(0, result.renamedFiles)
+        assertEquals(0, result.movedFiles)
         // counted, not dropped: the caller can see the bessource pointed at nothing
         assertEquals(1, result.skippedFiles)
     }
@@ -247,7 +269,7 @@ class MediaDeletionServiceTest {
 
         val result = service.deleteMarkedMedium(10)
 
-        assertEquals(1, result.renamedFiles)
+        assertEquals(1, result.movedFiles)
         assertEquals(1, result.skippedFiles)
     }
 
@@ -256,10 +278,11 @@ class MediaDeletionServiceTest {
     // -------------------------------------------------------------------------------------
 
     @Test
-    fun `refuses to delete when a file with the new name is already there`() {
+    fun `refuses to delete when a file is already there at the destination`() {
         givenMarkedMedium(primaryName = "shot.jpg")
         val file = File(mainFs, "shot.jpg").apply { createNewFile() }
-        val taken = File(mainFs, "deleted_shot.jpg").apply { createNewFile() }
+        File(mainFs, "DELETED").mkdirs()
+        val taken = File(mainFs, "DELETED/shot.jpg").apply { createNewFile() }
 
         assertThrows<NotAccessibleException> {
             service.deleteMarkedMedium(10)
@@ -274,7 +297,8 @@ class MediaDeletionServiceTest {
         givenMarkedMedium(primaryName = "shot.jpg", tnName = "shot.jpg")
         File(mainFs, "shot.jpg").createNewFile()
         File(tnFs, "shot.jpg").createNewFile()
-        File(tnFs, "deleted_shot.jpg").createNewFile()
+        File(tnFs, "DELETED").mkdirs()
+        File(tnFs, "DELETED/shot.jpg").createNewFile()
 
         assertThrows<NotAccessibleException> {
             service.deleteMarkedMedium(10)
@@ -285,16 +309,19 @@ class MediaDeletionServiceTest {
     }
 
     @Test
-    fun `names the file that collided in the error`() {
+    fun `names the path that collided in the error`() {
         givenMarkedMedium(primaryName = "shot.jpg")
         File(mainFs, "shot.jpg").createNewFile()
-        File(mainFs, "deleted_shot.jpg").createNewFile()
+        File(mainFs, "DELETED").mkdirs()
+        File(mainFs, "DELETED/shot.jpg").createNewFile()
 
         val e = assertThrows<NotAccessibleException> {
             service.deleteMarkedMedium(10)
         }
 
-        assertTrue(e.message!!.contains("deleted_shot.jpg"), e.message)
+        // relative to the location rather than absolute, which would say nothing to a caller that does
+        // not know where the storage sits
+        assertTrue(e.message!!.contains("DELETED/shot.jpg"), e.message)
     }
 
     // -------------------------------------------------------------------------------------
@@ -302,21 +329,21 @@ class MediaDeletionServiceTest {
     // -------------------------------------------------------------------------------------
 
     @Test
-    fun `does not rename a bessource that is not on the file system`() {
-        // a url bessource names something that cannot be renamed on disk
+    fun `does not move a bessource that is not on the file system`() {
+        // a url bessource names something that cannot be moved on disk
         val medium = givenMarkedMedium(primaryName = "shot.jpg", picName = "http://example.org/shot.jpg")
         File(mainFs, "shot.jpg").createNewFile()
 
         val result = service.deleteMarkedMedium(10)
 
         // only the primary moved, the url bessource was left alone
-        assertEquals(1, result.renamedFiles)
+        assertEquals(1, result.movedFiles)
         assertEquals(1, result.skippedFiles)
         assertEquals(2, medium.bessources.size)
     }
 
     @Test
-    fun `does not rename outside the location`() {
+    fun `does not move outside the location`() {
         // a name that escapes the folder must not reach the file system at all
         givenMarkedMedium(primaryName = "../outside.jpg")
         val outside = File(tempDir, "outside.jpg").apply { createNewFile() }
@@ -327,13 +354,13 @@ class MediaDeletionServiceTest {
     }
 
     @Test
-    fun `does not rename when the storage has no FS location`() {
+    fun `does not move when the storage has no FS location`() {
         val medium = givenMarkedMedium(primaryName = "shot.jpg", withoutFsLocations = true)
         File(mainFs, "shot.jpg").createNewFile()
 
         val result = service.deleteMarkedMedium(10)
 
-        assertEquals(0, result.renamedFiles)
+        assertEquals(0, result.movedFiles)
         verify(mediaRepository).delete(medium)
     }
 

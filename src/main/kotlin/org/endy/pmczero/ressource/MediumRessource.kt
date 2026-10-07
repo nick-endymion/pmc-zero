@@ -75,19 +75,23 @@ class MediumRessource(
     }
 
     /**
-     * Deletes this medium for good, together with its bessources, and renames the files behind them
-     * with `deleted_` in front of the file name.
+     * Deletes this medium for good, together with its bessources, and moves the files behind them
+     * below a `DELETED` folder under the uri of their location.
+     *
+     * The files keep the path they were stored under, so a file recorded as
+     * `imagegap4/abc/984580928.jpg` in a location at `s:/locations/loc` ends up at
+     * `s:/locations/loc/DELETED/imagegap4/abc/984580928.jpg`.
      *
      * Only a medium that is marked deleted may be deleted this way, see [MediaService.setDeleted].
      * A medium that is not marked is refused with 409 rather than deleted, because the mark is the
      * step that separates a deliberate removal from a request that has not been made yet.
      *
-     * The files are renamed, not erased, so a deletion that was a mistake can still be undone by
-     * hand as long as nobody has cleaned the folder up. Files that cannot be located, or whose
-     * location is not a folder on disk, are left as they are; the record goes either way.
+     * The files are moved, not erased, so a deletion that was a mistake can still be undone by hand
+     * as long as nobody has cleaned the folder up. Files that cannot be located, or whose location is
+     * not a folder on disk, are left as they are; the record goes either way.
      *
      * Answers 404 for an unknown medium and 409 when the medium is not marked deleted, or when one of
-     * the files to be renamed is already there under its new name, in which case nothing is deleted
+     * the files to be moved is already there under its new name, in which case nothing is deleted
      * at all.
      */
     @DeleteMapping("/{id}")

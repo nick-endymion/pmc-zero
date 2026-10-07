@@ -7,6 +7,8 @@ import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Medium
+import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.LocationRepository
@@ -1515,6 +1517,219 @@ class LocationServiceTest {
 
         assertThrows<NotFoundException> {
             service.draftMset(99)
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Expanding a set that exists already
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `expands a set with the files below the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        val mset = Mset().apply { id = 7; name = "set" }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        assertEquals(2, expansion.added.size)
+        assertEquals(listOf("a.pdf", "b.pdf"), expansion.added.map { it.name })
+    }
+
+    @Test
+    fun `expands a set from the subdirectory it names`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+        File(location.uri, "outside.pdf").createNewFile()
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!, subdir = "tn/2020")
+
+        // only what is below the subdirectory, the same rule draftMset follows
+        assertEquals(listOf("jan.pdf"), expansion.added.map { it.name })
+    }
+
+    @Test
+    fun `keeps the media a set already had`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        val existing = Medium().apply { id = 3; name = "old.pdf" }
+        val mset = Mset().apply { id = 7; media = mutableListOf(existing) }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        // the expansion adds, it does not replace
+        assertEquals(listOf("old.pdf", "a.pdf", "b.pdf"), mset.media.map { it.name })
+        assertEquals(listOf("a.pdf", "b.pdf"), expansion.added.map { it.name })
+    }
+
+    @Test
+    fun `adds nothing for a file that is stored already`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        // the same rule that keeps a rescan from creating a second medium for a known file
+        assertTrue(expansion.added.isEmpty())
+        assertTrue(mset.media.isEmpty())
+    }
+
+    @Test
+    fun `adds only what is new when a directory holds both known and unknown files`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        File(location.uri, "b.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        assertEquals(listOf("b.pdf"), expansion.added.map { it.name })
+        // and the known file is counted, so a caller can tell an up to date directory from a failed scan
+        assertEquals(1, expansion.knownFiles)
+    }
+
+    @Test
+    fun `answers nothing added rather than failing for an unchanged directory`() {
+        // the difference from draftMset, which refuses: there a new set was asked for and an empty one
+        // would be a lie, here nothing new is the honest answer for a directory that has not changed
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        givenExistingMedia(location, "a.pdf")
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        assertEquals(0, expansion.added.size)
+        assertEquals(1, expansion.knownFiles)
+    }
+
+    @Test
+    fun `answers nothing added for a directory holding no files at all`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        assertEquals(0, expansion.added.size)
+        assertEquals(0, expansion.knownFiles)
+    }
+
+    @Test
+    fun `links every added medium back to the set it was added to`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!)
+
+        // the link both ways, so saving the set writes the new media under it rather than orphaning them
+        assertSame(mset, expansion.added.first().mset)
+        assertSame(expansion.added.first(), expansion.added.first().bessources.first().medium)
+    }
+
+    @Test
+    fun `names a bessource relative to the location so its url resolves`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+        val mset = Mset().apply { id = 7 }
+
+        val expansion = service.expandMset(mset, location.id!!, subdir = "tn/2020")
+
+        assertEquals(listOf("tn/2020/jan.pdf"), expansion.added.flatMap { it.bessources }.map { it.name })
+    }
+
+    @Test
+    fun `expands a set without touching its name`() {
+        // a set that exists already was named by whatever created it, and a rescan is not the place to
+        // rename it
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020/jan.pdf").apply { parentFile.mkdirs() }
+        val mset = Mset().apply { id = 7; name = "my gallery" }
+
+        service.expandMset(mset, location.id!!, subdir = "tn/2020")
+
+        assertEquals("my gallery", mset.name)
+    }
+
+    @Test
+    fun `expands a set without touching the location it records`() {
+        // Mset.locationId says where the set came from, which a later expansion does not rewrite
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        val mset = Mset().apply { id = 7; locationId = 42 }
+
+        service.expandMset(mset, location.id!!)
+
+        assertEquals(42, mset.locationId)
+    }
+
+    @Test
+    fun `expandMset throws NotAccessibleException for an HTTP location`() {
+        val location = givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+        val mset = Mset().apply { id = 7 }
+
+        assertThrows<NotAccessibleException> {
+            service.expandMset(mset, location.id!!)
+        }
+    }
+
+    @Test
+    fun `expandMset throws NotAccessibleException when the location has no storage`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        // storage is lateinit, so a location without one is created by simply not setting it
+        val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+        val mset = Mset().apply { id = 7 }
+
+        assertThrows<NotAccessibleException> {
+            service.expandMset(mset, withoutStorage.id!!)
+        }
+    }
+
+    @Test
+    fun `expandMset does not need a storage when there is nothing to add`() {
+        // the storage is only reached to build a bessource, so a directory with nothing new never gets
+        // that far and an unconfigured location is not in the way of an up to date one
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        val withoutStorage = givenLocation(location.uri!!, LocationType.MAIN_FS)
+        val mset = Mset().apply { id = 7 }
+
+        assertEquals(0, service.expandMset(mset, withoutStorage.id!!).added.size)
+    }
+
+    @Test
+    fun `expandMset throws NotFoundException when the subdirectory is missing`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+
+        assertThrows<NotFoundException> {
+            service.expandMset(Mset().apply { id = 7 }, location.id!!, subdir = "no-such-dir")
+        }
+    }
+
+    @Test
+    fun `expandMset throws NotFoundException when the subdirectory escapes the location`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(tempDir, "outside").mkdir()
+
+        assertThrows<NotFoundException> {
+            service.expandMset(Mset().apply { id = 7 }, location.id!!, subdir = "../outside")
+        }
+    }
+
+    @Test
+    fun `expandMset throws NotFoundException for an unknown location id`() {
+        whenever(locationRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.expandMset(Mset().apply { id = 7 }, 99)
         }
     }
 
