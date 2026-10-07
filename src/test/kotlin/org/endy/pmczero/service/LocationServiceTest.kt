@@ -1162,6 +1162,49 @@ class LocationServiceTest {
     }
 
     @Test
+    fun `draftMset records the location it was drafted for`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        assertEquals(location.id, service.draftMset(location.id!!).locationId)
+    }
+
+    @Test
+    fun `draftMset records the scanned subpath`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        val mset = service.draftMset(location.id!!, subdir = "tn/2020")
+
+        assertEquals("tn/2020", mset.subpath)
+    }
+
+    @Test
+    fun `draftMset records no subpath for a scan of the location root`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "a.pdf").createNewFile()
+
+        // the location root has no subpath below it, and a blank subdir means the same thing
+        assertNull(service.draftMset(location.id!!).subpath)
+        assertNull(service.draftMset(location.id!!, subdir = "  ").subpath)
+        assertNull(service.draftMset(location.id!!, subdir = "/").subpath)
+    }
+
+    @Test
+    fun `draftMset normalises the recorded subpath so it can be handed back as one`() {
+        val location = givenExistingLocation(LocationType.MAIN_FS)
+        File(location.uri, "tn/2020").mkdirs()
+        File(location.uri, "tn/2020/jan.pdf").createNewFile()
+
+        // the same folder three ways, all of them resolving to it above, so all of them are recorded
+        // as the one path it can be asked for by
+        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "/tn/2020/").subpath)
+        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "tn\\2020").subpath)
+        assertEquals("tn/2020", service.draftMset(location.id!!, subdir = "tn/2020").subpath)
+    }
+
+    @Test
     fun `draftMset leaves out directories and the dot entries`() {
         val location = givenExistingLocation(LocationType.MAIN_FS)
         File(location.uri, "tn/2020").mkdirs()

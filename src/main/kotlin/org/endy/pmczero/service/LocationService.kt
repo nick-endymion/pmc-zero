@@ -207,7 +207,9 @@ class LocationService(
      * points at the file. It is the draft counterpart of [listDirectory], so a caller can review
      * what a scan would create, and change it, before saving it via [MsetService.save].
      *
-     * The mset is named after [subdir], or after the location when that is blank. A [Medium] is
+     * The mset is named after [subdir], or after the location when that is blank, and records where it
+     * came from in [Mset.locationId] and [Mset.subpath], so the draft already says which location and
+     * which directory below it the set is about. A [Medium] is
      * named after the file name alone, so two files of the same name in different subdirectories
      * end up as two equally named media, while its [Bessource] is named after the file relative to
      * the location, which is the form [url] needs to build a working url. The type of a medium is
@@ -251,6 +253,11 @@ class LocationService(
 
         val mset = Mset().apply {
             name = subdir?.takeIf { it.isNotBlank() } ?: location.name
+            // normalised to the form Mset.subpath documents, so it can be handed straight back to a
+            // later call. Empty is null rather than "", since a scan of the location root has no
+            // subpath below it
+            this.locationId = location.id
+            this.subpath = subdir?.normaliseSubpath()?.takeIf { it.isNotEmpty() }
         }
 
         mset.media = entries.map { entry -> mediumOf(entry, mset, storage) }.toMutableList()
@@ -329,6 +336,18 @@ class LocationService(
             return null
         return if (folder.isDirectory) folder else null
     }
+
+    /**
+     * [subdir] in the form [Mset.subpath] documents: `/` separated, no leading or trailing slash, so
+     * a subpath recorded on a set can be handed straight back as the `subdir` of the next call.
+     *
+     * The very normalisation [org.endy.pmczero.model.scraper.ScanPath.folderOf] applies to the folder a
+     * scraper writes into, which is what makes a set scanned by either route end up with the same
+     * value here. A `\` separator becomes `/`, so a caller on windows does not produce a path that
+     * says nothing on a posix system.
+     */
+    private fun String.normaliseSubpath(): String =
+        replace('\\', '/').trim('/').let { if (it.isBlank()) "" else it }
 
     /** path of this file relative to [folder], always with '/' as separator */
     private fun File.pathIn(folder: File): String =

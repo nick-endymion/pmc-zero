@@ -1,12 +1,15 @@
 package org.endy.pmczero.repository
 
+import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Bookmark
+import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -176,6 +179,59 @@ class MsetPersistenceTest {
         givenSet("scanned", storage, withBessource = false)
 
         assertTrue(msetRepository.findByStorageId(storage.id!!).isEmpty())
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Where a set came from
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `keeps the location, the subpath and the url of a set`() {
+        givenLocation("C:\\bilder", LocationType.MAIN_FS)
+        entityManager.persist(
+            Mset().apply {
+                name = "august 2020"
+                locationId = 1
+                subpath = "2020/august"
+                url = "http://example.org/galerie.html"
+            }
+        )
+        entityManager.flush()
+        entityManager.clear()
+
+        val stored = msetRepository.findAll().single()
+        assertEquals(1, stored.locationId)
+        assertEquals("2020/august", stored.subpath)
+        assertEquals("http://example.org/galerie.html", stored.url)
+    }
+
+    @Test
+    fun `keeps a set with none of them, they are all optional`() {
+        // a set built by hand or migrated from a legacy folder knows none of the three
+        entityManager.persist(Mset().apply { name = "empty" })
+        entityManager.flush()
+        entityManager.clear()
+
+        val stored = msetRepository.findAll().single()
+        assertNull(stored.locationId)
+        assertNull(stored.subpath)
+        assertNull(stored.url)
+    }
+
+    @Test
+    fun `deleting the location of a set leaves the set alone`() {
+        // Mset.locationId is a plain id, not a relation with a cascade, so a location can go while a
+        // set still names it. The set is not deleted along with it
+        givenLocation("C:\\bilder", LocationType.MAIN_FS)
+        entityManager.persist(Mset().apply { name = "august 2020"; locationId = 1 })
+        entityManager.flush()
+        entityManager.clear()
+
+        entityManager.remove(entityManager.find(Location::class.java, 1))
+        entityManager.flush()
+
+        assertEquals(1, msetRepository.count())
+        assertEquals(1, msetRepository.findAll().single().locationId)
     }
 
     // -------------------------------------------------------------------------------------
@@ -351,6 +407,23 @@ class MsetPersistenceTest {
     private fun givenStorage(name: String): Storage =
         Storage().apply { this.name = name }
             .also { entityManager.persist(it); entityManager.flush() }
+
+    /**
+     * a persisted FS location, so an mset can point at a real `a_locations` row rather than at an id
+     * that names nothing
+     */
+    private fun givenLocation(uri: String, locationType: LocationType): Location =
+        Location().apply {
+            this.uri = uri
+            this.locationType = locationType.i
+            inuse = 1
+            this.storage = Storage().apply { name = "storage" }
+        }.also {
+            // a location cannot be persisted without its storage, it holds a reference to one
+            entityManager.persist(it.storage)
+            entityManager.persist(it)
+            entityManager.flush()
+        }
 
     /**
      * a persisted mset named [name] with [mediumCount] media, each with one primary bessource on
