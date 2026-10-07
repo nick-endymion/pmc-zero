@@ -27,6 +27,37 @@ class MsetRessource(
         return msetService.findById(id).toTO()
     }
 
+    /**
+     * The set following this one in id order, i.e. the one with the smallest id greater than [id].
+     *
+     * For stepping through the sets one at a time. The order is the order the rows were created in,
+     * which is the only order a set has of its own; nothing about a name or a directory takes part in
+     * it, so two sets scanned from the same directory are neighbours if nothing else was created
+     * between them.
+     *
+     * The id does not have to name a set, so the set after a deleted one is still reachable. It does
+     * not have to be the last one either.
+     *
+     * Answers 404 when no set has a greater id, which is how a caller learns it has reached the end.
+     * See [MsetService.findAbove].
+     */
+    @GetMapping("/{id}/up")
+    fun getNextMset(@PathVariable id: Int): MsetTO {
+        return msetService.findAbove(id).toTO()
+    }
+
+    /**
+     * The set preceding this one in id order, i.e. the one with the largest id smaller than [id].
+     *
+     * The counterpart of [getNextMset] in the other direction, and the same in every respect but the
+     * way it steps: a deleted id is still answered with the set before it, and 404 means the
+     * beginning has been reached. See [MsetService.findBelow].
+     */
+    @GetMapping("/{id}/down")
+    fun getprevMset(@PathVariable id: Int): MsetTO {
+        return msetService.findBelow(id).toTO()
+    }
+
     @GetMapping("/{id}/media")
     fun getMsetWithMedia(@PathVariable id: Int): MsetTO {
         return msetService.findById(id).toTOwithMedia(true)

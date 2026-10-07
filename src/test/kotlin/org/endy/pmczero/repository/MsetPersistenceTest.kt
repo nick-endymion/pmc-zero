@@ -182,6 +182,115 @@ class MsetPersistenceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // Stepping through the sets in id order
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finds the set with the smallest id above the given one`() {
+        givenSets("first", "second", "third", "fourth")
+
+        assertEquals("second", msetRepository.findFirstAboveId(firstId())?.name)
+    }
+
+    @Test
+    fun `finds the set with the largest id below the given one`() {
+        givenSets("first", "second", "third", "fourth")
+
+        assertEquals("third", msetRepository.findFirstBelowId(fourthId())?.name)
+    }
+
+    @Test
+    fun `skips over ids that no set has`() {
+        // a deleted set leaves a gap, and the step has to be across it rather than stuck on it
+        givenSets("first", "second", "third", "fourth")
+        msetRepository.deleteById(secondId())
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals("third", msetRepository.findFirstAboveId(firstId())?.name)
+        assertEquals("first", msetRepository.findFirstBelowId(thirdId())?.name)
+    }
+
+    @Test
+    fun `answers the neighbour across a gap of more than one id`() {
+        // several sets deleted between two, so the step is not merely over a single hole
+        val ids = givenSets("first", "second", "third", "fourth", "fifth")
+        msetRepository.deleteById(ids[1])
+        msetRepository.deleteById(ids[2])
+        msetRepository.deleteById(ids[3])
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals("fifth", msetRepository.findFirstAboveId(ids[0])?.name)
+        assertEquals("first", msetRepository.findFirstBelowId(ids[4])?.name)
+    }
+
+    @Test
+    fun `answers the neighbour of an id that no longer names a set`() {
+        // only the direction matters, so the set after a deleted one is still reachable
+        val ids = givenSets("first", "second", "third")
+        val (first, second, third) = ids
+        msetRepository.deleteById(second)
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals("third", msetRepository.findFirstAboveId(second)?.name)
+        assertEquals("first", msetRepository.findFirstBelowId(third)?.name)
+        // the step from the sets that are still there lands next to the gap rather than on it
+        assertEquals(third, msetRepository.findFirstAboveId(first)?.id)
+        assertEquals(first, msetRepository.findFirstBelowId(third)?.id)
+    }
+
+    @Test
+    fun `finds no set above the highest one`() {
+        givenSets("first", "second")
+
+        assertNull(msetRepository.findFirstAboveId(secondId()))
+    }
+
+    @Test
+    fun `finds no set below the lowest one`() {
+        givenSets("first", "second")
+
+        assertNull(msetRepository.findFirstBelowId(firstId()))
+    }
+
+    @Test
+    fun `finds no set on either side of an id beyond the ones that exist`() {
+        givenSets("first", "second")
+
+        assertNull(msetRepository.findFirstAboveId(secondId() + 99))
+        assertNull(msetRepository.findFirstBelowId(firstId() - 99))
+    }
+
+    @Test
+    fun `finds no set on either side when there are none at all`() {
+        assertNull(msetRepository.findFirstAboveId(1))
+        assertNull(msetRepository.findFirstBelowId(1))
+    }
+
+    /**
+     * the ids of four sets persisted under [names] in that order, so a test can talk about their
+     * positions rather than hardcoding ids
+     *
+     * Read back from the database rather than off the entities, since the identity generator decides
+     * the ids and a test that assumed 1, 2, 3, 4 would pass on h2 and fail on the mysql of
+     * application.properties.
+     */
+    private fun givenSets(vararg names: String): List<Int> =
+        names.map { name ->
+            entityManager.persist(Mset().apply { this.name = name })
+            entityManager.flush()
+            entityManager.clear()
+            msetRepository.findAllByNameContaining(name).single().id!!
+        }
+
+    private fun firstId(): Int = msetRepository.findAllByNameContaining("first").single().id!!
+    private fun secondId(): Int = msetRepository.findAllByNameContaining("second").single().id!!
+    private fun thirdId(): Int = msetRepository.findAllByNameContaining("third").single().id!!
+    private fun fourthId(): Int = msetRepository.findAllByNameContaining("fourth").single().id!!
+
+    // -------------------------------------------------------------------------------------
     // Where a set came from
     // -------------------------------------------------------------------------------------
 

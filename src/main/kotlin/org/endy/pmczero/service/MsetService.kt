@@ -48,6 +48,34 @@ class MsetService(
         return msetRepository.findAllByNameContaining(searchTerm)
     }
 
+    /**
+     * The mset following the one with [id] in id order, i.e. the one with the smallest id greater
+     * than it. See [MsetRepository.findFirstAboveId].
+     *
+     * For stepping through the sets one at a time, rather than for finding one by name: it says
+     * nothing about [Mset.name] or [Mset.subpath], so the order it walks is the order the rows were
+     * created in. That is the only order a set has of its own.
+     *
+     * The id handed in is not required to name a set. A caller asking for the set after a deleted one
+     * still gets the set that follows it numerically, which is what a list that is one row out of date
+     * needs.
+     *
+     * @throws NotFoundException when no mset has a greater id, i.e. this is the last one. There is no
+     * set above it to answer, and answering something else would leave a caller unable to tell the
+     * end of the collection from a set it had already seen
+     */
+    fun findAbove(id: Int): Mset =
+        msetRepository.findFirstAboveId(id) ?: throw NotFoundException()
+
+    /**
+     * The mset preceding the one with [id] in id order, i.e. the one with the largest id smaller
+     * than it. See [findAbove], of which this is the counterpart in the other direction.
+     *
+     * @throws NotFoundException when no mset has a smaller id, i.e. this is the first one
+     */
+    fun findBelow(id: Int): Mset =
+        msetRepository.findFirstBelowId(id) ?: throw NotFoundException()
+
     fun save(mset: Mset): Mset {
         mset.media.forEach {
             it.mset = mset

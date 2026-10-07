@@ -14,6 +14,34 @@ interface MsetRepository : CrudRepository<Mset, Int> {
     fun findAllByNameContaining(searchTerm: String) : List<Mset>
 
     /**
+     * the mset with the smallest id that is greater than [id], null when there is none
+     *
+     * The neighbour above [id] in id order, which is what paging through the sets one at a time is.
+     *
+     * The `min` over a subquery rather than an `order by id asc` over the whole table, because a
+     * query that answers a single [Mset] is held to answering exactly one row: an ordered query with
+     * a condition alone would match every set above [id] and fail on all but the first. The subquery
+     * states outright which one is meant, and the database still only has to look at the index.
+     */
+    @Query(
+        "select mset from Mset mset " +
+            "where mset.id = (select min(above.id) from Mset above where above.id > :id)"
+    )
+    fun findFirstAboveId(@Param("id") id: Int): Mset?
+
+    /**
+     * the mset with the largest id that is smaller than [id], null when there is none
+     *
+     * The counterpart of [findFirstAboveId], so the two step through the sets in the same order in
+     * either direction, and for the same reason it is a `max` subquery rather than an ordered query.
+     */
+    @Query(
+        "select mset from Mset mset " +
+            "where mset.id = (select max(below.id) from Mset below where below.id < :id)"
+    )
+    fun findFirstBelowId(@Param("id") id: Int): Mset?
+
+    /**
      * the msets that hold at least one medium with a bessource in [storageId]
      *
      * An mset carries no storage of its own, so the only way from a set to a storage runs through

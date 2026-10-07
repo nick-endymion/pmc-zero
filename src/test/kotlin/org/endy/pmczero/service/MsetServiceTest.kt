@@ -237,6 +237,77 @@ class MsetServiceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // Stepping through the sets in id order
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finds the set above the given one`() {
+        givenNeighbour(above = 9)
+
+        assertEquals(9, service.findAbove(5).id)
+    }
+
+    @Test
+    fun `finds the set below the given one`() {
+        givenNeighbour(below = 2)
+
+        assertEquals(2, service.findBelow(5).id)
+    }
+
+    @Test
+    fun `asks the repository for the set above`() {
+        // the ordering itself is the query's business, which is covered by the persistence test; what
+        // belongs here is that this hands the id to it unchanged
+        givenNeighbour(above = 9)
+
+        service.findAbove(5)
+
+        verify(msetRepository).findFirstAboveId(5)
+    }
+
+    @Test
+    fun `asks the repository for the set below`() {
+        givenNeighbour(below = 2)
+
+        service.findBelow(5)
+
+        verify(msetRepository).findFirstBelowId(5)
+    }
+
+    @Test
+    fun `answers the neighbour of an id no set has`() {
+        // only the direction matters, so a list one row out of date still steps correctly
+        givenNeighbour(above = 9)
+
+        assertEquals(9, service.findAbove(5).id)
+    }
+
+    @Test
+    fun `throws NotFoundException when there is no set above`() {
+        // the end of the collection, which a caller has to be able to tell from a set it has seen
+        whenever(msetRepository.findFirstAboveId(5)).thenReturn(null)
+
+        assertThrows<NotFoundException> {
+            service.findAbove(5)
+        }
+    }
+
+    @Test
+    fun `throws NotFoundException when there is no set below`() {
+        whenever(msetRepository.findFirstBelowId(5)).thenReturn(null)
+
+        assertThrows<NotFoundException> {
+            service.findBelow(5)
+        }
+    }
+
+    /** a set standing in for the neighbour the repository answers */
+    private fun givenNeighbour(above: Int? = null, below: Int? = null) {
+        whenever(msetRepository.findFirstAboveId(any())).thenReturn(above?.let { Mset().apply { id = it } })
+        whenever(msetRepository.findFirstBelowId(any())).thenReturn(below?.let { Mset().apply { id = it } })
+    }
+
+    // -------------------------------------------------------------------------------------
     // Expanding a set
     // -------------------------------------------------------------------------------------
 
