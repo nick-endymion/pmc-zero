@@ -25,7 +25,7 @@ class MsetMapperTests {
         subpath = "2020/august"
         url = "http://example.org/artikel/4711/fotos"
         supplierId = "4711"
-        scannnerId = "job-2026-10-08-17"
+        scannnerId = 12
     }
 
     @Test
@@ -48,11 +48,11 @@ class MsetMapperTests {
      * not the other is a field that looks like it is there sometimes.
      */
     @Test
-    fun `the supplier and the scan are on the TO of a set with media as well`() {
+    fun `the supplier and the scanner are on the TO of a set with media as well`() {
         assertEquals("4711", mset().toTO().supplierId)
         assertEquals("4711", mset().toTOwithMedia().supplierId)
-        assertEquals("job-2026-10-08-17", mset().toTO().scannerId)
-        assertEquals("job-2026-10-08-17", mset().toTOwithMedia().scannerId)
+        assertEquals(12, mset().toTO().scannerId)
+        assertEquals(12, mset().toTOwithMedia().scannerId)
     }
 
     /**
@@ -60,7 +60,7 @@ class MsetMapperTests {
      * storable rather than rejected.
      */
     @Test
-    fun `carries a set without a supplier and without a scan`() {
+    fun `carries a set without a supplier and without a scanner`() {
         val original = mset().also {
             it.supplierId = null
             it.scannnerId = null
@@ -72,16 +72,27 @@ class MsetMapperTests {
         assertNull(original.toTO().toEntity().scannnerId)
     }
 
-    /** A blank is kept as it is rather than dropped, so what was recorded is what is read back. */
+    /**
+     * The two ids are different things, so neither may be read as the other: a supplier is whatever a
+     * site calls the thing its url belongs to, a scanner is a row of this application's own table.
+     */
     @Test
-    fun `carries a blank supplier and a blank scan as they are`() {
-        val original = mset().also {
-            it.supplierId = "  "
-            it.scannnerId = "  "
-        }
+    fun `keeps the supplier and the scanner apart`() {
+        val to = mset().toTO()
 
-        val roundTripped = original.toTO().toEntity()
-        assertEquals("  ", roundTripped.supplierId)
-        assertEquals("  ", roundTripped.scannnerId)
+        assertEquals("4711", to.supplierId)
+        assertEquals(12, to.scannerId)
+    }
+
+    /**
+     * A blank supplier is kept as it is rather than dropped, so what was recorded is what is read back.
+     *
+     * No such case for the scanner, which is an id and so has nothing between empty and set.
+     */
+    @Test
+    fun `carries a blank supplier as it is`() {
+        val original = mset().also { it.supplierId = "  " }
+
+        assertEquals("  ", original.toTO().toEntity().supplierId)
     }
 }

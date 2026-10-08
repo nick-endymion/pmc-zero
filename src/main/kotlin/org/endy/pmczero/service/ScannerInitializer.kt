@@ -40,10 +40,12 @@ import org.springframework.stereotype.Component
  *    the pages behind them at level 2, which is a gallery whose images are not on its index page.
  * 7. **Sequence Image Scraper** - the same scraper as the first one, written with a
  *    [SequenceWorker] rather than with two branches.
+ * 8. **Category Link Collector** - the words of the links under one block of a page, e.g. the gallery
+ *    categories a page lists in one `div`.
  *
  * Only the first, the fifth and the seventh download anything, so only those three can be run through
  * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
- * [ScraperImageImportService.importWithStoredScanner]. The other three are collectors and belong to
+ * [ScraperImageImportService.importWithStoredScanner]. The others are collectors and belong to
  * `POST /api/scanners/{id}/scan`.
  */
 @Component
@@ -64,7 +66,8 @@ class ScannerInitializer(
             buildTitleExtractor(),
             buildFullPageScraper(),
             buildGalleryIndexLister(),
-            buildSequenceImageScraper()
+            buildSequenceImageScraper(),
+            buildCategoryLinkCollector()
         )
 
         for (scanner in scanners) {
@@ -168,6 +171,66 @@ class ScannerInitializer(
         return Scanner().apply {
             name = "Sequence Image Scraper"
             regex = "testing"
+            example = "https://example.com/gallery"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+     * The words of the links under one block of a page, at level 1.
+     *
+     * For a page that lists a handful of things in a block of its own, which is what a gallery does
+     * with its categories:
+     *
+     *     <div id="cnt_cats">Gallery Categories:<br><br>
+     *       <a href="/pics/2/amateur.php">Amateur</a>,
+     *       <a href="/pics/20/matti.php">matti</a>,
+     *       <a href="/pics/25/aces.php">Aces</a>
+     *     </div>
+     *
+     * answers `Amateur`, `matti`, `Aces`.
+     *
+     * The selector is on the links and not on the block, which is the whole point. `#cnt_cats` with a
+     * blank attribute would answer the text of the block as one element, `"Gallery Categories: Amateur,
+     * matti, Aces"`, since a [DomParser] reads one value per matched element and the block is one
+     * element. `#cnt_cats a` matches the links themselves, so each word is a finding of its own and a
+     * page with one category, with three, or with none needs nothing changed here.
+     *
+     * The words and not the links, because the label is what a person reads and what a caller storing
+     * these wants to show. A blank attribute is the switch to text, see
+     * [org.endy.pmczero.model.scraper.DomParser], and `it.text()` normalises the whitespace a page
+     * writes between and inside the tags, so a category spread over three lines arrives as one word.
+     *
+     * `a` rather than `a[href]`, which is what makes this work on a page with a typo in one of its
+     * tags: a link without an href still has a label, and a selector that demanded the href would drop
+     * that category silently. The same page read as links rather than words would lose it instead,
+     * since a missing attribute reads as an empty string and the regex of [DomParser] does not match
+     * one. To get both, add a second branch to the [StructuredWorker] with a parser of its own reading
+     * `abs:href`; a [SequenceWorker] cannot do it, since it hands the same element to every one of its
+     * workers and the parser is what chooses between text and attribute.
+     *
+     * `#cnt_cats a` is a descendant selector, so a category nested in a `div` of its own inside the
+     * block would be collected as well. `#cnt_cats > a` is the one to store instead if the page ever
+     * nests them, since it takes only the direct children.
+     */
+    private fun buildCategoryLinkCollector(): Scanner {
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(
+                        DomParser("(.+)", "#cnt_cats a", ""),
+                        FoundElementsWorker(1)
+                    )
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Category Link Collector"
+            regex = "(.*)"
             example = "https://example.com/gallery"
             serialization = scannerService.serialize(scraper)
             valid = true

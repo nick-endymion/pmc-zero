@@ -1324,44 +1324,15 @@ class ScraperImageImportServiceTests {
     }
 
     // -------------------------------------------------------------------------------------
-    // Which run the set belongs to
+    // Which scanner the set came from
     // -------------------------------------------------------------------------------------
 
-    /** The whole point of the parameter: the run the caller named ends up on the set. */
+    /**
+     * The stored scanner this import ran is what the set records, so a set can be traced back to the
+     * scanner that built it without keeping the json of that scanner anywhere.
+     */
     @Test
-    fun `records the scan it was given on the set it saves`() {
-        givenPage(page)
-        givenScannerWith(4, service.scraperOf(null))
-
-        service.importWithStoredScanner(
-            scannerId = 4,
-            locationId = 7,
-            url = "http://example.org/galerie.html",
-            scanId = "job-2026-10-08-17"
-        )
-
-        assertEquals("job-2026-10-08-17", savedMset().scannnerId)
-    }
-
-    /** A run is named by whoever is running it, so the value is kept as it came in. */
-    @Test
-    fun `records a scan id that is not a number`() {
-        givenPage(page)
-        givenScannerWith(4, service.scraperOf(null))
-
-        service.importWithStoredScanner(
-            scannerId = 4,
-            locationId = 7,
-            url = "http://example.org/galerie.html",
-            scanId = "7f3a-91"
-        )
-
-        assertEquals("7f3a-91", savedMset().scannnerId)
-    }
-
-    /** Optional, so a caller that says nothing stores no run rather than an empty one. */
-    @Test
-    fun `records no scan when none was given`() {
+    fun `records the scanner it ran on the set it saves`() {
         givenPage(page)
         givenScannerWith(4, service.scraperOf(null))
 
@@ -1371,49 +1342,48 @@ class ScraperImageImportServiceTests {
             url = "http://example.org/galerie.html"
         )
 
-        assertNull(savedMset().scannnerId)
+        assertEquals(4, savedMset().scannnerId)
     }
 
-    /** A blank parameter said nothing, and an empty run id is a value nothing should have to tell apart. */
+    /** The id of the scanner that was given, not a fixed one, which is what says it is recorded at all. */
     @Test
-    fun `records no scan for a blank one`() {
+    fun `records the scanner it was given rather than another one`() {
         givenPage(page)
-        givenScannerWith(4, service.scraperOf(null))
+        givenScannerWith(11, service.scraperOf(null))
+        givenScannerWith(12, service.scraperOf(null))
 
         service.importWithStoredScanner(
-            scannerId = 4,
+            scannerId = 12,
             locationId = 7,
-            url = "http://example.org/galerie.html",
-            scanId = "   "
+            url = "http://example.org/galerie.html"
         )
 
-        assertNull(savedMset().scannnerId)
+        assertEquals(12, savedMset().scannnerId)
     }
 
     /**
-     * A [SetCreator] replaces the set the kontext started with, so the run has to be put on afterwards
-     * or it is gone by the time the set is saved.
+     * A [SetCreator] replaces the set the kontext started with, so the scanner has to be put on
+     * afterwards or it is gone by the time the set is saved.
      */
     @Test
-    fun `records the scan on a set the scraper created itself`() {
+    fun `records the scanner on a set the scraper created itself`() {
         givenPage(page)
         givenScannerWith(4, service.scraperOf(null))
 
         service.importWithStoredScanner(
             scannerId = 4,
             locationId = 7,
-            url = "http://example.org/galerie.html",
-            scanId = "job-1"
+            url = "http://example.org/galerie.html"
         )
 
         // the set was built by the SetCreator of the scraper, not by the kontext
         assertEquals("Galerie", savedMset().name)
-        assertEquals("job-1", savedMset().scannnerId)
+        assertEquals(4, savedMset().scannnerId)
     }
 
-    /** A draft is a set as well, so the run is on it even though no row is written. */
+    /** A draft is a set as well, so the scanner is on it even though no row is written. */
     @Test
-    fun `records the scan on a draft, which is not saved`() {
+    fun `records the scanner on a draft, which is not saved`() {
         givenPage(page)
         givenScannerWith(4, service.scraperOf(null))
 
@@ -1421,17 +1391,16 @@ class ScraperImageImportServiceTests {
             scannerId = 4,
             locationId = 7,
             url = "http://example.org/galerie.html",
-            scanId = "job-1",
             persist = false
         )
 
-        assertEquals("job-1", lastKontext().mset?.scannnerId)
+        assertEquals(4, lastKontext().mset?.scannnerId)
         verify(msetService, never()).save(any())
     }
 
-    /** The two are told apart, so naming a supplier does not put a run on the set as well. */
+    /** The two are told apart, so a supplier does not put a scanner on the set as well. */
     @Test
-    fun `records the scan and the supplier side by side`() {
+    fun `records the scanner and the supplier side by side`() {
         givenPage(page)
         givenScannerWith(4, service.scraperOf(null))
 
@@ -1439,20 +1408,19 @@ class ScraperImageImportServiceTests {
             scannerId = 4,
             locationId = 7,
             url = "http://example.org/artikel/4711/fotos",
-            supplierId = "4711",
-            scanId = "job-1"
+            supplierId = "4711"
         )
 
         assertEquals("4711", savedMset().supplierId)
-        assertEquals("job-1", savedMset().scannnerId)
+        assertEquals(4, savedMset().scannnerId)
     }
 
     /**
-     * Only the stored scanner path names a run: a caller that only posts a scraper is not running a
-     * scan of its own, so the json import has no way to be told one and records none.
+     * Only the stored scanner path can say which scanner it was: a caller that posted a scraper as json
+     * is not running one of the stored ones, so there is nothing to record.
      */
     @Test
-    fun `records no scan on an import of a scraper handed in as json`() {
+    fun `records no scanner on an import of a scraper handed in as json`() {
         givenPage(page)
 
         service.importWith(
