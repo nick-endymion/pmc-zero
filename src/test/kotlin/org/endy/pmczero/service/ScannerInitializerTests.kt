@@ -133,14 +133,14 @@ class ScannerInitializerTests {
         val html = """
             <html><body>
             <div id="cnt_cats">			Gallery Categories:<br><br>
-            			<a href="/pics/2/amateur.php">Amateur</a>, 			<a href="/pics/20/matti.php">matti</a>,
+            			<a href="/pics/2/Hearts.php">Hearts</a>, 			<a href="/pics/20/matti.php">matti</a>,
             <a ef="/pics/25/aces.php">Aces</a>		</div>
             </body></html>
         """.trimIndent()
 
         assertEquals(
             listOf(
-                FoundElement(1, "Amateur"),
+                FoundElement(1, "Hearts"),
                 FoundElement(1, "matti"),
                 FoundElement(1, "Aces")
             ),
@@ -151,9 +151,9 @@ class ScannerInitializerTests {
     /** A page with one category needs nothing changed, which is the point of a selector over the links. */
     @Test
     fun `collects a single word`() {
-        val html = """<html><body><div id="cnt_cats"><a href="/a.php">Amateur</a></div></body></html>"""
+        val html = """<html><body><div id="cnt_cats"><a href="/a.php">Hearts</a></div></body></html>"""
 
-        assertEquals(listOf(FoundElement(1, "Amateur")), runOver("Category Link Collector", html))
+        assertEquals(listOf(FoundElement(1, "Hearts")), runOver("Category Link Collector", html))
     }
 
     /** A page without that block answers nothing rather than failing, since nothing to collect is a result. */
@@ -169,10 +169,10 @@ class ScannerInitializerTests {
     @Test
     fun `trims the whitespace a page writes around a word`() {
         val html = """<html><body><div id="cnt_cats"><a href="/a.php">
-              Amateur
+              Hearts
             </a></div></body></html>"""
 
-        assertEquals(listOf(FoundElement(1, "Amateur")), runOver("Category Link Collector", html))
+        assertEquals(listOf(FoundElement(1, "Hearts")), runOver("Category Link Collector", html))
     }
 
     /**
@@ -194,11 +194,11 @@ class ScannerInitializerTests {
         val html = """
             <html><body>
             <a href="/nav.html">Impressum</a>
-            <div id="cnt_cats"><a href="/a.php">Amateur</a></div>
+            <div id="cnt_cats"><a href="/a.php">Hearts</a></div>
             </body></html>
         """.trimIndent()
 
-        assertEquals(listOf(FoundElement(1, "Amateur")), runOver("Category Link Collector", html))
+        assertEquals(listOf(FoundElement(1, "Hearts")), runOver("Category Link Collector", html))
     }
 
     /** The block is picked by its id, so a second block of the same page is left alone. */
@@ -207,11 +207,11 @@ class ScannerInitializerTests {
         val html = """
             <html><body>
             <div id="cnt_nav"><a href="/a.php">Impressum</a><a href="/b.php">Kontakt</a></div>
-            <div id="cnt_cats"><a href="/c.php">Amateur</a></div>
+            <div id="cnt_cats"><a href="/c.php">Hearts</a></div>
             </body></html>
         """.trimIndent()
 
-        assertEquals(listOf(FoundElement(1, "Amateur")), runOver("Category Link Collector", html))
+        assertEquals(listOf(FoundElement(1, "Hearts")), runOver("Category Link Collector", html))
     }
 
     /** The selector is on the links rather than on the block, which is the one thing to get right here. */

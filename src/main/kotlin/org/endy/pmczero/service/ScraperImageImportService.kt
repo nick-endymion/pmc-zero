@@ -172,9 +172,10 @@ class ScraperImageImportService(
      * written either way
      * @param supplierId the id of the supplier [url] belongs to, recorded on the set this builds. See
      * [org.endy.pmczero.model.modern.Mset.supplierId]
-     * @param scanId the id of the run this is, recorded on the set this builds. See
-     * [org.endy.pmczero.model.modern.Mset.scannnerId]. Only this import takes one, since it is the one
-     * whose caller is the thing running a scan
+     * @param scannerId also recorded on the set, see
+     * [org.endy.pmczero.model.modern.Mset.scannnerId], so a set can be traced back to the scanner that
+     * built it. This import knows it, which the one over a posted scraper does not: a caller that only
+     * hands in a scraper is not running one of the stored ones
      * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
      * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
      * when it holds no worker that downloads the files of the media it records, when the location
@@ -233,9 +234,9 @@ class ScraperImageImportService(
      * [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator]. Blank is null, so a caller that
      * sends an empty parameter stores no supplier rather than an empty one, which would be a value
      * nothing should have to tell apart from none
-     * @param scannerId the id of the run this is, recorded on the set, and blank is null for the same
-     * reason. Left null by [importWith] over a scraper handed in as json, so the run is named by the
-     * caller that is running it and not by one that only posted a scraper
+     * @param scannerId the id of the stored scanner this runs, recorded on the set, see
+     * [org.endy.pmczero.model.modern.Mset.scannnerId]. Null when the caller is running no stored
+     * scanner, which is the case for [importWith] over a scraper handed in as json
      */
     fun importWith(
         locationId: Int,

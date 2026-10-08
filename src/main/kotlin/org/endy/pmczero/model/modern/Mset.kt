@@ -96,6 +96,38 @@ class Mset {
     @Column(name = "scanner_id", nullable = true)
     var scannnerId: Int? = null
 
+    /**
+     * Words describing this set, e.g. the categories a gallery belongs to, stored as a collection of
+     * plain strings in `a.set_tags` rather than as a column.
+     *
+     * A collection and not a joined string because the number is not fixed and nobody asks for the
+     * eighth one by name: the usual question is whether a set carries a given tag, which a row per tag
+     * answers without every set being rewritten when a new separator is thought of. A delimiter inside
+     * a tag would also be unrepresentable, and tags come from pages.
+     *
+     * No id and no [org.endy.pmczero.model.modern.Medium] behind a tag: a tag is a word, so a tag of
+     * its own would be a table of words and a relation to say which set has which, which is what the
+     * rows of `a.set_tags` already are. Nothing merges tags either, so `Hearts` and `Hearts` are two
+     * tags and the caller decides how a site spells them.
+     *
+     * Deleted with the set, the default of a collection, since a tag of a set that no longer exists is
+     * a word about nothing. Duplicates are kept as they are given: two identical rows are a fact of
+     * what was recorded, and dropping one of them would be a rule nobody asked for.
+     *
+     * Fetched eagerly, unlike the [media] of this set. A set is handed out by the api long after the
+     * session that read it closed, and a lazy collection of a detached set cannot be read at all; the
+     * media are lazt because they are large and are joined in deliberately, see
+     * [org.endy.pmczero.repository.MsetRepository], while a handful of words on a set is not worth the
+     * second query that would avoid.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+        name = "a.set_tags",
+        joinColumns = [JoinColumn(name = "mset_id", nullable = false)]
+    )
+    @Column(name = "tag", nullable = false)
+    var tags: MutableList<String> = mutableListOf()
+
     @Column(name = "name", nullable = true)
     var name: String? = null
 

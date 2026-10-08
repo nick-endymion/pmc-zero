@@ -184,15 +184,15 @@ class ScannerInitializer(
      * with its categories:
      *
      *     <div id="cnt_cats">Gallery Categories:<br><br>
-     *       <a href="/pics/2/amateur.php">Amateur</a>,
+     *       <a href="/pics/2/Hearts.php">Hearts</a>,
      *       <a href="/pics/20/matti.php">matti</a>,
      *       <a href="/pics/25/aces.php">Aces</a>
      *     </div>
      *
-     * answers `Amateur`, `matti`, `Aces`.
+     * answers `Hearts`, `matti`, `Aces`.
      *
      * The selector is on the links and not on the block, which is the whole point. `#cnt_cats` with a
-     * blank attribute would answer the text of the block as one element, `"Gallery Categories: Amateur,
+     * blank attribute would answer the text of the block as one element, `"Gallery Categories: Hearts,
      * matti, Aces"`, since a [DomParser] reads one value per matched element and the block is one
      * element. `#cnt_cats a` matches the links themselves, so each word is a finding of its own and a
      * page with one category, with three, or with none needs nothing changed here.

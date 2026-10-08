@@ -26,6 +26,7 @@ class MsetMapperTests {
         url = "http://example.org/artikel/4711/fotos"
         supplierId = "4711"
         scannnerId = 12
+        tags = mutableListOf("Hearts", "Aces", "matti")
     }
 
     @Test
@@ -41,6 +42,42 @@ class MsetMapperTests {
         assertEquals(original.url, roundTripped.url)
         assertEquals(original.supplierId, roundTripped.supplierId)
         assertEquals(original.scannnerId, roundTripped.scannnerId)
+        assertEquals(original.tags, roundTripped.tags)
+    }
+
+    /**
+     * The tags of a set are written in the order they were given, since a caller that puts them in
+     * order is showing them in order.
+     */
+    @Test
+    fun `keeps the tags in the order they were given`() {
+        assertEquals(listOf("Hearts", "Aces", "matti"), mset().toTO().tags)
+        assertEquals(listOf("Hearts", "Aces", "matti"), mset().toTOwithMedia().tags)
+    }
+
+    /** A set nobody described has no tags rather than none of the field, so a caller can read one list. */
+    @Test
+    fun `carries a set without tags`() {
+        val original = mset().also { it.tags = mutableListOf() }
+
+        assertEquals(emptyList(), original.toTO().tags)
+        assertEquals(emptyList(), original.toTO().toEntity().tags)
+    }
+
+    /**
+     * The list of the TO is copied rather than shared, since a TO may be mapped to two sets and the
+     * second one must not end up writing the tags of the first.
+     */
+    @Test
+    fun `does not share its tag list with the set it built`() {
+        val to = mset().toTO()
+
+        val first = to.toEntity()
+        val second = to.toEntity()
+
+        first.tags.add("spaet")
+
+        assertEquals(listOf("Hearts", "Aces", "matti"), second.tags)
     }
 
     /**
@@ -64,12 +101,14 @@ class MsetMapperTests {
         val original = mset().also {
             it.supplierId = null
             it.scannnerId = null
+            it.tags = mutableListOf()
         }
 
         assertNull(original.toTO().supplierId)
         assertNull(original.toTOwithMedia().scannerId)
         assertNull(original.toTO().toEntity().supplierId)
         assertNull(original.toTO().toEntity().scannnerId)
+        assertEquals(emptyList(), original.toTO().toEntity().tags)
     }
 
     /**

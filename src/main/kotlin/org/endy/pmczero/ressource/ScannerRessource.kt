@@ -109,7 +109,10 @@ class ScannerRessource(
      * location cannot receive files or the browser cannot be started.
      *
      * @param id the scanner to run, i.e. the row of `a.serialized.scanner` whose serialization holds
-     * the scraper
+     * the scraper. Also recorded on the set this call builds, see
+     * [org.endy.pmczero.model.modern.Mset.scannnerId], so a set can be traced back to the scanner that
+     * produced it without keeping the json of that scanner anywhere. No other import records it, since
+     * a caller that only posts a scraper is not running one of the stored ones
      * @param url the page to run it over
      * @param locationId the MAIN_FS location the files are written into, since there has to be a
      * directory to write them into
@@ -131,11 +134,6 @@ class ScannerRessource(
      * per scanner as a
      * [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator], and whatever the caller read out
      * of the url is what gets stored
-     * @param scanId the id of the run this is, recorded on the set this call builds, see
-     * [org.endy.pmczero.model.modern.Mset.scannnerId]. The caller's own name for the run, so a caller
-     * driving a gallery from a list of jobs can find the set a job produced afterwards. Blank leaves
-     * the set without one. No other import takes this: a caller that only posts a scraper is not
-     * running a scan of its own
      */
     @PostMapping("/{id}/scrape")
     fun scrape(

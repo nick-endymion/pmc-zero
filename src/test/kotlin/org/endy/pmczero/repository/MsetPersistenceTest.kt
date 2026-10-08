@@ -327,10 +327,94 @@ class MsetPersistenceTest {
         assertNull(stored.url)
     }
 
+    // -------------------------------------------------------------------------------------
+    // Tags of a set
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `keeps the tags of a set`() {
+        entityManager.persist(
+            Mset().apply {
+                name = "Hearts"
+                tags = mutableListOf("Hearts", "Aces", "matti")
+            }
+        )
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(
+            listOf("Hearts", "Aces", "matti"),
+            msetRepository.findAll().single().tags
+        )
+    }
+
+    /** A set with no words on it is a set nobody described, which is the normal case and not a failure. */
+    @Test
+    fun `keeps a set with no tags`() {
+        entityManager.persist(Mset().apply { name = "empty" })
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(emptyList<String>(), msetRepository.findAll().single().tags)
+    }
+
+    /**
+     * A tag of a set that no longer exists is a word about nothing.
+     *
+     * The default of a collection, so the rows go with the set. What this mostly rules out is the
+     * delete failing: the tag table names its set, so without the cascade the foreign key would refuse
+     * it and a set could never be deleted once it had been described.
+     */
+    @Test
+    fun `deleting a set deletes its tags`() {
+        entityManager.persist(
+            Mset().apply {
+                name = "Hearts"
+                tags = mutableListOf("Hearts", "Aces")
+            }
+        )
+        entityManager.flush()
+        entityManager.clear()
+
+        val id = msetRepository.findAll().single().id!!
+
+        msetRepository.deleteById(id)
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(0, msetRepository.count())
+    }
+
+    /** Two sets keep their own words apart, which is the whole reason the tags are rows and not a column. */
+    @Test
+    fun `keeps the tags of two sets apart`() {
+        entityManager.persist(Mset().apply { name = "first"; tags = mutableListOf("Hearts") })
+        entityManager.persist(Mset().apply { name = "second"; tags = mutableListOf("Aces", "matti") })
+        entityManager.flush()
+        entityManager.clear()
+
+        val stored = msetRepository.findAll().associateBy { it.name }
+        assertEquals(listOf("Hearts"), stored["first"]!!.tags)
+        assertEquals(listOf("Aces", "matti"), stored["second"]!!.tags)
+    }
+
+    /** Tags written after the set was stored, which is the order a caller adds them in. */
+    @Test
+    fun `keeps a tag added to a set that is already stored`() {
+        entityManager.persist(Mset().apply { name = "Hearts" })
+        entityManager.flush()
+        entityManager.clear()
+
+        val stored = msetRepository.findAll().single()
+        stored.tags.add("Hearts")
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(listOf("Hearts"), msetRepository.findAll().single().tags)
+    }
+
     @Test
     fun `deleting the location of a set leaves the set alone`() {
-        // Mset.locationId is a plain id, not a relation with a cascade, so a location can go while a
-        // set still names it. The set is not deleted along with it
         givenLocation("C:\\bilder", LocationType.MAIN_FS)
         entityManager.persist(Mset().apply { name = "august 2020"; locationId = 1 })
         entityManager.flush()

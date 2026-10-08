@@ -36,6 +36,12 @@ data class MsetTO (
      */
     var scannerId: Int? = null,
 
+    /**
+     * Words describing this set, in the order they were recorded. See
+     * [org.endy.pmczero.model.modern.Mset.tags]
+     */
+    val tags: List<String> = emptyList(),
+
     var created_at: LocalDateTime? = null,
     var updated_at: LocalDateTime? = null,
     val media: List<MediumTO>? =  mutableListOf<MediumTO>()
