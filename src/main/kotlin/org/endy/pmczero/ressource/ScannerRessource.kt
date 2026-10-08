@@ -41,6 +41,25 @@ class ScannerRessource(
         return scannerService.save(scannerTO.toEntity()).toTO()
     }
 
+    /**
+     * The scanner with [id], stored again as a new one, answered as the new scanner.
+     *
+     * For a scraper that is worth tweaking rather than rebuilding: the copy is the one to change a
+     * regex or a selector on, so the scanner it came from stays as it is and keeps answering for the
+     * pages it was made for. Nothing of the original is touched.
+     *
+     * A POST rather than a GET, since it writes a row, which for the same reason as the rest of this
+     * application means a crawler or a prefetch would not fire it off by following a link.
+     *
+     * Answers 404 when no scanner has that id.
+     *
+     * @param id the scanner to copy
+     * @param name the name of the copy, "<name> (copy)" when blank
+     */
+    @PostMapping("/{id}/copy")
+    fun copyScanner(@PathVariable id: Int, @RequestParam(required = false) name: String?): ScannerTO =
+        scannerService.copy(id, name).toTO()
+
     @DeleteMapping("/{id}")
     fun deleteserializedScanner(@PathVariable id: Int) {
         return scannerService.delete(id)

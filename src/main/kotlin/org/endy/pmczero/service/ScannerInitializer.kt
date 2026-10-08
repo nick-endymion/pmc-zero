@@ -35,6 +35,13 @@ import org.springframework.stereotype.Component
  * 4. **Title Extractor** - extracts the page title only, useful for quick page identification.
  * 5. **Full Page Scraper** - downloads all images and records all links, combining both collection
  *    and download in one pass.
+ * 6. **Gallery Index Lister** - collects the links of an index page at level 1 and the image urls of
+ *    the pages behind them at level 2, which is a gallery whose images are not on its index page.
+ *
+ * Only the first and the fifth download anything, so only those two can be run through
+ * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
+ * [ScraperImageImportService.importWithStoredScanner]. The other four are collectors and belong to
+ * `POST /api/scanners/{id}/scan`.
  */
 @Component
 class ScannerInitializer(
@@ -52,7 +59,8 @@ class ScannerInitializer(
             buildLinkCollector(),
             buildImageLister(),
             buildTitleExtractor(),
-            buildFullPageScraper()
+            buildFullPageScraper(),
+            buildGalleryIndexLister()
         )
 
         for (scanner in scanners) {
@@ -180,6 +188,63 @@ class ScannerInitializer(
             name = "Title Extractor"
             regex = "(.*)"
             example = "https://example.com/page"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+     * The links of an index page at level 1, and the image urls of the pages behind them at level 2.
+     *
+     * The scraper of [ScraperImageImportService.level2ScraperOf] with the defaults it takes, i.e. no
+     * [ScraperImageImportService.listLevel2] `linkClass` and no `pattern`: every `a[href]` of the
+     * index is followed and every image of the page behind it is collected.
+     *
+     * The nesting is what makes this a two level answer, and the nesting does the work: the outer
+     * [StructuredWorker] has already been handed the index html, while the inner one carries
+     * `download = true` and so reads each linked page over the fetcher of the kontext before picking
+     * its images. That inner worker is why the two levels are pages rather than elements of one page,
+     * and it is also what costs a fetch per linked link.
+     *
+     * Nothing is downloaded, so this collects rather than imports: run it through
+     * `POST /api/scanners/{id}/scan` and look at the two levels before committing to a gallery, which
+     * is what `/api/scrape/scraper-image-list-level2` answers for the same page without a stored
+     * scanner. A run against a real index page follows its navigation links as well as its gallery
+     * ones, since there is no class to tell them apart here, so it is worth watching what it costs
+     * before pointing it at a large site.
+     */
+    private fun buildGalleryIndexLister(): Scanner {
+        val linksOfIndex = DomParser("(.*)", "a[href]", "abs:href")
+
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    // the links themselves, so the answer shows what was linked as well as what was found
+                    Scraper(linksOfIndex, FoundElementsWorker(1)),
+                    // and each linked page read for its images: the inner worker downloads, since it is
+                    // handed a url rather than the html of a page. Recovery wraps it, so one dead link
+                    // ends that branch and not every page with it
+                    Scraper(
+                        linksOfIndex,
+                        RecoveryWorker(
+                            StructuredWorker(
+                                download = true,
+                                scrapers = listOf(
+                                    Scraper(DomParser("(.+)", "img[src]", "abs:src"), FoundElementsWorker(2))
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Gallery Index Lister"
+            regex = "(.*)"
+            example = "https://example.com/index"
             serialization = scannerService.serialize(scraper)
             valid = true
         }

@@ -62,6 +62,42 @@ class ScannerService(
     }
 //----------------
 
+    /**
+     * The scanner stored as [id], stored again as a new scanner, answered as the new one.
+     *
+     * For a scraper that is worth tweaking rather than rebuilding: the copy is the one to change a
+     * regex or a selector on, so the scanner it came from stays as it was and keeps answering for the
+     * pages it was made for. Copying the json and storing it is the whole of it, since a scanner is a
+     * name, a url regex, an example and a serialized scraper, with no row of its own to reconcile.
+     *
+     * The copy goes through [save] rather than straight to the repository, so its serialization is
+     * deserialized and written back as [save] writes every scanner's: a copy of a scraper that this
+     * application cannot read is refused here rather than stored and failing on its first run.
+     *
+     * The new scanner has no id until the database gives it one, which is what makes this a copy rather
+     * than an edit of the original. Nothing of the original is touched.
+     *
+     * @param name the name of the copy, "<name> (copy)" when blank. A name is free text, so a copy may
+     * well end up sharing one with another scanner, which is what [ScannerInitializer] looks at to
+     * decide whether a default is already there
+     * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
+     */
+    @JvmOverloads
+    fun copy(id: Int, name: String? = null): Scanner {
+        val original = findById(id)
+
+        val copy = Scanner().also {
+            it.name = name?.takeIf { given -> given.isNotBlank() } ?: "${original.name} (copy)"
+            it.regex = original.regex
+            it.example = original.example
+            it.serialization = original.serialization
+        }
+
+        return save(copy)
+    }
+
+//----------------
+
     fun deserializeAndSerialize(scanner: Scanner): Scanner {
         println(scanner.serialization)
         val scraper = deserialize(scanner.serialization!!)
