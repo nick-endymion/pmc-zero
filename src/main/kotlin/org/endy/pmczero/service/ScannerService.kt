@@ -38,8 +38,9 @@ class ScannerService(
         return serializedScannerRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
-    fun findByUrl(url: String): List<ScannerShort> {
-        scannerShorts = serializedScannerRepository.findAllByValid(true) //todo
+    fun findByUrl(url: String?): List<ScannerShort> {
+        scannerShorts = serializedScannerRepository.findAllByValid(true)
+        if (url == null) return scannerShorts
         return scannerShorts.filter { it.getRegex().toRegex().matches(url) }
     }
 

@@ -51,10 +51,9 @@ class ScannerRessource(
 //    }
 
     @GetMapping("/")
-    fun getserializedScanner(@RequestParam searchTerm: String, @RequestParam id: Int?): List<ScannerShortTO> {
+    fun getserializedScanner(@RequestParam searchTerm: String?): List<ScannerShortTO> {
         return scannerService.findByUrl(searchTerm).map { it.toTO() }
     }
-
 
     @GetMapping("/{id}/scan")
     fun scan(@PathVariable id: Int, @RequestParam url: String): ScanningResultTO {
