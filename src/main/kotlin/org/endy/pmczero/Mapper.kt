@@ -137,6 +137,7 @@ fun ScannerTO.toEntity(): Scanner {
         it.name = name
         it.example = example
         it.regex = regex
+        it.supplierIdentifcator = supplierIdentifcator
         it.serialization = serialization
         it.valid = valid
     }
@@ -147,6 +148,7 @@ fun Scanner.toTO(): ScannerTO {
         id = id,
         name = name,
         regex = regex,
+        supplierIdentifcator = supplierIdentifcator,
         example = example,
         serialization = serialization,
         valid = valid

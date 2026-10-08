@@ -56,6 +56,7 @@ class ScannerServiceTests {
         it.id = id
         it.name = name
         it.regex = "https://example\\.org/.*"
+        it.supplierIdentifcator = "https://example\\.org/artikel/([0-9]+)/.*"
         it.example = "https://example.org/gallery"
         it.serialization = service.serialize(imageScraper())
         it.valid = true
@@ -138,6 +139,20 @@ class ScannerServiceTests {
         givenStoredScanner(3, "Image Scraper")
 
         assertEquals("https://example.org/gallery", service.copy(3).example)
+    }
+
+    /**
+     * A copy that lost this would be a scanner nobody can tell what a url of it belongs to, which is
+     * the one thing a copy of a scanner is for.
+     */
+    @Test
+    fun `carries the supplier identifcator of the original over`() {
+        givenStoredScanner(3, "Image Scraper")
+
+        assertEquals(
+            "https://example\\.org/artikel/([0-9]+)/.*",
+            service.copy(3).supplierIdentifcator
+        )
     }
 
     /** A copy that came back invalid would not be offered by findByUrl, so it would be unreachable. */

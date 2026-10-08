@@ -67,8 +67,9 @@ class ScannerService(
      *
      * For a scraper that is worth tweaking rather than rebuilding: the copy is the one to change a
      * regex or a selector on, so the scanner it came from stays as it was and keeps answering for the
-     * pages it was made for. Copying the json and storing it is the whole of it, since a scanner is a
-     * name, a url regex, an example and a serialized scraper, with no row of its own to reconcile.
+     * pages it was made for. Every field is carried over, the scraper json included, since a scanner is
+     * a name, a url regex, a [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator], an example
+     * and a serialized scraper, with no row of its own to reconcile.
      *
      * The copy goes through [save] rather than straight to the repository, so its serialization is
      * deserialized and written back as [save] writes every scanner's: a copy of a scraper that this
@@ -89,6 +90,7 @@ class ScannerService(
         val copy = Scanner().also {
             it.name = name?.takeIf { given -> given.isNotBlank() } ?: "${original.name} (copy)"
             it.regex = original.regex
+            it.supplierIdentifcator = original.supplierIdentifcator
             it.example = original.example
             it.serialization = original.serialization
         }
