@@ -53,6 +53,7 @@ class ScraperImageImportServiceTests {
     private val browserFetcher: BrowserFetcher = mock()
     private val locationService: LocationService = mock()
     private val msetService: MsetService = mock()
+    private val scannerService: ScannerService = mock()
 
     private lateinit var service: ScraperImageImportService
     private lateinit var location: Location
@@ -70,7 +71,13 @@ class ScraperImageImportServiceTests {
 
     @BeforeEach
     fun setUp() {
-        service = ScraperImageImportService(scraperService, browserFetcher, locationService, msetService)
+        service = ScraperImageImportService(
+            scraperService,
+            browserFetcher,
+            locationService,
+            msetService,
+            scannerService
+        )
 
         location = Location().also {
             it.id = 7
@@ -897,6 +904,242 @@ class ScraperImageImportServiceTests {
         // the regex of the parser survived, so the same image is picked as before
         assertEquals(1, result.imported)
         assertEquals(listOf("zweites.jpg"), result.media.map { it.name })
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Over the scraper stored as a scanner
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The scanner holding [scraper], so a test can arrange what is stored without a database.
+     *
+     * A [org.endy.pmczero.model.modern.Scanner] rather than a scraper, since the row is what the
+     * service reads: the id names the row and the serialization names the scraper, and a test that
+     * stubbed the scraper directly would skip the one thing worth checking here.
+     */
+    private fun givenScannerWith(id: Int, scraper: Scraper) {
+        whenever(scannerService.findById(id)).thenReturn(
+            org.endy.pmczero.model.modern.Scanner().also {
+                it.id = id
+                it.serialization = ScanFormat.json.encodeToString(scraper)
+            }
+        )
+    }
+
+    /** The whole point of the endpoint: the scraper of the scanner, not the one this service builds. */
+    @Test
+    fun `imports with the scraper stored under the given id`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "G"
+        )
+
+        assertEquals(3, result.imported)
+        assertEquals(listOf("G/drittes.png", "G/erstes.jpg", "G/zweites.jpg"), writtenRelativeTo(tempDir))
+    }
+
+    /**
+     * A stored scraper can pick something the built one cannot, which is the reason to store one.
+     *
+     * A pdf behind a link, picked with a DomParser of its own, so the answer cannot be reached by the
+     * standard `img[src]` scraper this service would otherwise fall back on.
+     */
+    @Test
+    fun `imports what a stored scraper picks rather than the images of the page`() {
+        givenPage(
+            """
+            <html><head><title>Dokumente</title></head><body>
+            <a href="/files/bericht.pdf">Bericht</a>
+            <img src="/bilder/erstes.jpg">
+            </body></html>
+            """.trimIndent()
+        )
+        givenScannerWith(
+            4,
+            Scraper(
+                PassThroughParser(),
+                StructuredWorker(
+                    download = false,
+                    scrapers = listOf(
+                        Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                        Scraper(DomParser("(.*)", "a", "abs:href"), MediaAdder()),
+                        Scraper(
+                            DomParser("(.*)", "a", "abs:href"),
+                            RecoveryWorker(FileDownloader())
+                        )
+                    )
+                )
+            )
+        )
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "Doku"
+        )
+
+        assertEquals(1, result.imported)
+        assertEquals(listOf("Doku/bericht.pdf"), writtenRelativeTo(tempDir))
+    }
+
+    @Test
+    fun `reads the scanner of the id it was given`() {
+        givenPage(page)
+        givenScannerWith(11, service.scraperOf(null))
+        givenScannerWith(12, service.scraperOf(".*zweites.*"))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 12,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "G"
+        )
+
+        // the scraper of scanner 12 rather than that of 11, which is the difference between the two ids
+        assertEquals(listOf("G/zweites.jpg"), writtenRelativeTo(tempDir))
+        assertEquals(1, result.imported)
+    }
+
+    /** The draft of a stored scraper writes its files and its media, but no row. */
+    @Test
+    fun `writes the files of a stored scraper but no rows when persist is false`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "G",
+            persist = false
+        )
+
+        assertNull(result.msetId)
+        assertEquals(3, result.media.size)
+        assertEquals(3, writtenRelativeTo(tempDir).size)
+        verify(msetService, never()).save(any())
+    }
+
+    @Test
+    fun `renders the page once for a stored scraper, with the given scroll count and selector`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scrollTimes = 7,
+            waitForSelector = "app-images"
+        )
+
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null)
+    }
+
+    /** A scanner that records media without writing them would answer with urls that all 404. */
+    @Test
+    fun `refuses a stored scraper that does not download its files`() {
+        givenPage(page)
+        givenScannerWith(
+            4,
+            Scraper(
+                PassThroughParser(),
+                StructuredWorker(
+                    download = false,
+                    scrapers = listOf(
+                        Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                        Scraper(DomParser("(.+)", "img[src]", "abs:src"), MediaAdder())
+                    )
+                )
+            )
+        )
+
+        val e = assertThrows<NotAccessibleException> {
+            service.importWithStoredScanner(
+                scannerId = 4,
+                locationId = 7,
+                url = "http://example.org/galerie.html"
+            )
+        }
+
+        assertTrue(e.message!!.contains("no FileDownloader"))
+        assertEquals(emptyList(), writtenRelativeTo(tempDir), "nothing was written")
+    }
+
+    /** A stored scraper this application cannot read is a 409 with the reason, not a bare 500. */
+    @Test
+    fun `answers a stored scraper this application cannot read as not accessible`() {
+        givenPage(page)
+        whenever(scannerService.findById(4)).thenReturn(
+            org.endy.pmczero.model.modern.Scanner().also { it.serialization = "{ not json" }
+        )
+
+        val e = assertThrows<NotAccessibleException> {
+            service.importWithStoredScanner(
+                scannerId = 4,
+                locationId = 7,
+                url = "http://example.org/galerie.html"
+            )
+        }
+
+        assertTrue(e.message!!.contains("not a scraper this application knows"))
+    }
+
+    /** The serialization column is nullable, so a row without one is a state the call has to survive. */
+    @Test
+    fun `answers a scanner holding no scraper as not accessible`() {
+        givenPage(page)
+        whenever(scannerService.findById(4)).thenReturn(
+            org.endy.pmczero.model.modern.Scanner().also { it.id = 4; it.serialization = null }
+        )
+
+        val e = assertThrows<NotAccessibleException> {
+            service.importWithStoredScanner(
+                scannerId = 4,
+                locationId = 7,
+                url = "http://example.org/galerie.html"
+            )
+        }
+
+        assertTrue(e.message!!.contains("holds no scraper"))
+    }
+
+    @Test
+    fun `answers not found for an unknown scanner`() {
+        whenever(scannerService.findById(99)).thenAnswer {
+            throw org.endy.pmczero.exception.NotFoundException()
+        }
+
+        assertThrows<org.endy.pmczero.exception.NotFoundException> {
+            service.importWithStoredScanner(
+                scannerId = 99,
+                locationId = 7,
+                url = "http://example.org/galerie.html"
+            )
+        }
+    }
+
+    /** A page the stored scraper finds nothing on is refused the same way the built one is. */
+    @Test
+    fun `refuses a page without anything the stored scraper picks`() {
+        givenPage("<html><body><p>nur Text</p></body></html>")
+        givenScannerWith(4, service.scraperOf(null))
+
+        val e = assertThrows<NotAccessibleException> {
+            service.importWithStoredScanner(
+                scannerId = 4,
+                locationId = 7,
+                url = "http://example.org/galerie.html"
+            )
+        }
+
+        assertTrue(e.message!!.contains("no images found"))
     }
 
     // -------------------------------------------------------------------------------------

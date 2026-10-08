@@ -48,7 +48,8 @@ class ScraperImageImportService(
     private val scraperService: ScraperService,
     private val browserFetcher: BrowserFetcher,
     private val locationService: LocationService,
-    private val msetService: MsetService
+    private val msetService: MsetService,
+    private val scannerService: ScannerService
 ) {
 
     /**
@@ -127,13 +128,83 @@ class ScraperImageImportService(
     ): ImageImportTO = importWith(
         locationId = locationId,
         url = url,
-        scraper = scraperOrFail(scrapeSerializable(scraper)),
+        scraper = if(persist) scraperOrFail(scrapeSerializable(scraper)) else scrapeSerializable(scraper),
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
         waitForSelectorState = waitForSelectorState,
         persist = persist
     )
+
+    /**
+     * The same import as [import], over the scraper stored as the scanner with [scannerId].
+     *
+     * The endpoint for a scraper that is worth keeping: stored once through
+     * [org.endy.pmczero.service.ScannerService.save] and run from here on every page that fits it,
+     * rather than written out per call. The counterpart of [import] among the two, since [import] is
+     * the one whose scraper is built here from a `pattern` and thrown away with the call.
+     *
+     * No pattern, because a stored scraper brings its own: any tag, any attribute, a `data-` one, a
+     * css selector, any nesting of them, see [importWith]. A regex over `img[src]` has nothing left
+     * to narrow.
+     *
+     * The scraper is read rather than built, so the two checks of [importWith] are made here too: the
+     * serialization has to be a scraper this application knows, and it has to write the files of the
+     * media it records. A stored scraper is the more likely of the two to fail the second, since it
+     * may have been stored to collect urls rather than to download anything, and answering that with a
+     * set of media pointing at files that are not there is the state this class exists to prevent.
+     *
+     * @param scannerId the scanner to run, i.e. the row whose serialization holds the scraper
+     * @param name the name of the mset and of the folder the files go into. Blank names the set after
+     * the page title the scraper picks up
+     * @param scrollTimes how often the page is scrolled before collecting. See [import]
+     * @param waitForSelector a css selector to wait for before collecting. See [import]
+     * @param waitForSelectorState what "appears" has to mean for [waitForSelector] to be satisfied.
+     * See [import]
+     * @param persist false answers the draft without writing the media to the database. The files are
+     * written either way
+     * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
+     * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
+     * when it holds no worker that downloads the files of the media it records, when the location
+     * cannot receive files, when the browser cannot be started, when [waitForSelector] does not
+     * appear, or when the page holds nothing the scraper picks
+     */
+    fun importWithStoredScanner(
+        scannerId: Int,
+        locationId: Int,
+        url: String,
+        name: String? = null,
+        scrollTimes: Int = 3,
+        waitForSelector: String? = null,
+        waitForSelectorState: WaitForSelectorState? = null,
+        persist: Boolean = true
+    ): ImageImportTO = importWith(
+        locationId = locationId,
+        url = url,
+        // read as json rather than through ScannerService.getScanner, so that a stored serialization
+        // this application cannot read is answered with its reason rather than as an unhandled
+        // SerializationException, which would reach the caller as a bare 500
+        scraper = storedSerializationOrFail(scannerId),
+        name = name,
+        scrollTimes = scrollTimes,
+        waitForSelector = waitForSelector,
+        waitForSelectorState = waitForSelectorState,
+        persist = persist
+    )
+
+    /**
+     * The serialization of the scanner with [scannerId], or the failure that says there is none.
+     *
+     * A scanner row can hold no serialization at all: the column is nullable and nothing forces it to
+     * be filled, so a row that was written without one would deserialize as a `null` argument rather
+     * than as a scraper. That is said here rather than left to fail somewhere further down, where the
+     * message would name the page rather than the scanner.
+     */
+    private fun storedSerializationOrFail(scannerId: Int): String =
+        scannerService.findById(scannerId).serialization?.takeIf { it.isNotBlank() }
+            ?: throw NotAccessibleException(
+                "scanner $scannerId holds no scraper, so there is nothing to run"
+            )
 
     /**
      * The same import as [import], over a scraper that is already an object.
@@ -166,7 +237,7 @@ class ScraperImageImportService(
 
         // no image at all is reported rather than answered as an empty result, so a caller cannot mistake
         // a page whose images never loaded for one that holds none, and is spared an empty set
-        if (kontext.mset?.media.isNullOrEmpty())
+        if (persist && kontext.mset?.media.isNullOrEmpty())
             throw NotAccessibleException("no images found on $url, so nothing to import")
 
         val media = kontext.mset!!.media
@@ -190,6 +261,7 @@ class ScraperImageImportService(
             locationId = locationId,
             url = url,
             storageId = storageId,
+            mset = kontext.mset?.toTO(),
             msetId = saved?.id,
             found = media.size,
             imported = media.size,
@@ -197,6 +269,7 @@ class ScraperImageImportService(
             skipped = 0,
             failed = kontext.failures.size,
             media = media.map { it.toTO() },
+            foundElements = kontext.foundElements.map { FoundElementTO(it.level, it.element) },
             failures = kontext.failures.map { ImageImportFailureTO(it.element, it.reason) }
         )
     }

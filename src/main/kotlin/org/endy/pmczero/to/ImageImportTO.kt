@@ -38,6 +38,10 @@ data class ImageImportTO(
     /** how many could not be fetched or written */
     val failed: Int = 0,
 
+    val foundElements: List<FoundElementTO> = emptyList(),
+
+    val mset: MsetTO? = null,
+
     /** the imported media, so a caller sees what was created without a second call */
     val media: List<MediumTO> = emptyList(),
 

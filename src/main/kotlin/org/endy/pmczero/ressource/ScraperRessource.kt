@@ -1,7 +1,5 @@
 package org.endy.pmczero.ressource
 
-import com.microsoft.playwright.options.WaitForSelectorState
-import org.endy.pmczero.exception.BadRequestException
 import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.MediaAdder
@@ -126,7 +124,7 @@ class ScraperRessource(
         @RequestParam(required = false) waitForSelector: String?,
         @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "0") scrollTimes: Int
-    ): String = browserFetcher.render(url, waitForSelector, scrollTimes, stateOf(waitForSelectorState))
+    ): String = browserFetcher.render(url, waitForSelector, scrollTimes, waitStateOf(waitForSelectorState))
 
     /**
      * Imports the images of [url] into the location with [locationId], answering what happened to
@@ -170,7 +168,7 @@ class ScraperRessource(
         pattern = pattern,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
-        waitForSelectorState = stateOf(waitForSelectorState),
+        waitForSelectorState = waitStateOf(waitForSelectorState),
         persist = persist,
         skipExisting = skipExisting
     )
@@ -240,7 +238,7 @@ class ScraperRessource(
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
-        waitForSelectorState = stateOf(waitForSelectorState),
+        waitForSelectorState = waitStateOf(waitForSelectorState),
         persist = persist
     )
 
@@ -309,7 +307,7 @@ class ScraperRessource(
         pattern = pattern,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
-        waitForSelectorState = stateOf(waitForSelectorState)
+        waitForSelectorState = waitStateOf(waitForSelectorState)
     )
 
     @PostMapping("/scraper-image-list")
@@ -324,7 +322,7 @@ class ScraperRessource(
         pattern = pattern,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
-        waitForSelectorState = stateOf(waitForSelectorState)
+        waitForSelectorState = waitStateOf(waitForSelectorState)
     )
 
     @PostMapping("/scraper-images")
@@ -344,7 +342,7 @@ class ScraperRessource(
         pattern = pattern,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
-        waitForSelectorState = stateOf(waitForSelectorState),
+        waitForSelectorState = waitStateOf(waitForSelectorState),
         persist = persist
     )
 
@@ -387,7 +385,7 @@ class ScraperRessource(
         // than every worker fetching the page again: a gallery that appends images as it is scrolled
         // would otherwise be read several times, each time holding something different
         if (browser) scraper.doWork(
-            browserFetcher.render(url, waitForSelector, scrollTimes, stateOf(waitForSelectorState)),
+            browserFetcher.render(url, waitForSelector, scrollTimes, waitStateOf(waitForSelectorState)),
             baseUriOf(url),
             kontext
         )
@@ -431,32 +429,4 @@ class ScraperRessource(
 
     /** the part of [url] a relative image url is resolved against, i.e. everything up to the last slash */
     private fun baseUriOf(url: String): String = url.substringBeforeLast('/') + "/"
-
-    /**
-     * The [WaitForSelectorState] a `waitForSelectorState` parameter names, null when it names none.
-     *
-     * Taken as a string rather than bound to the enum by spring, because spring's converter answers
-     * an unknown name with null rather than with an error, and on a nullable parameter that null is
-     * indistinguishable from a parameter that was not sent. A `waitForSelectorState=attaced` would
-     * then be dropped and the call would go on to wait for the default, i.e. to fail with the very
-     * timeout the parameter was meant to prevent, with nothing in the answer to say why.
-     *
-     * Blank is null rather than `visible` spelled out, so that a caller who says nothing keeps
-     * exactly the behaviour of a caller who says nothing at all: the state is left unset on the
-     * playwright options and the default of the library applies, which is what
-     * [BrowserFetcher.waitFor] documents.
-     *
-     * Case is not significant, since a url query string is written by hand far more often than it is
-     * generated, and the states are lower case in the documentation of playwright itself.
-     *
-     * @throws BadRequestException when [value] is not one of the four states
-     */
-    private fun stateOf(value: String?): WaitForSelectorState? =
-        value?.takeIf { it.isNotBlank() }?.let { raw ->
-            WaitForSelectorState.values().firstOrNull { it.name.equals(raw.trim(), ignoreCase = true) }
-                ?: throw BadRequestException(
-                    "waitForSelectorState=$raw is not a wait state, expected one of " +
-                        WaitForSelectorState.values().joinToString(", ") { it.name.lowercase() }
-                )
-        }
 }
