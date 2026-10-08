@@ -4,19 +4,10 @@ import com.microsoft.playwright.options.WaitForSelectorState
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.modern.Location
-import org.endy.pmczero.model.scraper.DomParser
-import org.endy.pmczero.model.scraper.FileDownloader
-import org.endy.pmczero.model.scraper.FoundElementsWorker
-import org.endy.pmczero.model.scraper.MediaAdder
-import org.endy.pmczero.model.scraper.PassThroughParser
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
-import org.endy.pmczero.model.scraper.RecoveryWorker
-import org.endy.pmczero.model.scraper.ScanFormat
-import org.endy.pmczero.model.scraper.Scraper
+import org.endy.pmczero.model.scraper.*
 import org.endy.pmczero.model.scraper.SetCreator
-import org.endy.pmczero.model.scraper.StructuredWorker
-import org.endy.pmczero.model.scraper.Worker
 import org.endy.pmczero.to.FoundElementTO
 import org.endy.pmczero.to.ImageImportFailureTO
 import org.endy.pmczero.to.ImageImportTO
@@ -245,7 +236,7 @@ class ScraperImageImportService(
         // only when one was asked for: the [org.endy.pmczero.model.scraper.SetCreator] of the scraper has
         // already named the set after the page title, and overwriting that with the url would throw away
         // the one name that says what the images are of
-        kontext.mset?.name = name?.takeIf { it.isNotBlank() } ?: kontext.mset?.name ?: url
+        kontext.mset?.name =  kontext.mset?.name ?: name?.takeIf { it.isNotBlank() } ?:  url
 
         // after the scraper ran rather than on the mset the kontext was built with: a [SetCreator] in
         // the scraper replaces that mset with one of its own, so anything set on it before the run is
@@ -544,6 +535,7 @@ class ScraperImageImportService(
         is FileDownloader -> true
         is RecoveryWorker -> worker.writesFiles()
         is StructuredWorker -> scrapers.any { it.worker.writesFiles() }
+        is SequenceWorker -> workers.any { it.writesFiles() }
         else -> false
     }
 

@@ -7,6 +7,7 @@ import org.endy.pmczero.model.scraper.FoundElementsWorker
 import org.endy.pmczero.model.scraper.MediaAdder
 import org.endy.pmczero.model.scraper.PassThroughParser
 import org.endy.pmczero.model.scraper.RecoveryWorker
+import org.endy.pmczero.model.scraper.SequenceWorker
 import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
@@ -37,10 +38,12 @@ import org.springframework.stereotype.Component
  *    and download in one pass.
  * 6. **Gallery Index Lister** - collects the links of an index page at level 1 and the image urls of
  *    the pages behind them at level 2, which is a gallery whose images are not on its index page.
+ * 7. **Sequence Image Scraper** - the same scraper as the first one, written with a
+ *    [SequenceWorker] rather than with two branches.
  *
- * Only the first and the fifth download anything, so only those two can be run through
+ * Only the first, the fifth and the seventh download anything, so only those three can be run through
  * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
- * [ScraperImageImportService.importWithStoredScanner]. The other four are collectors and belong to
+ * [ScraperImageImportService.importWithStoredScanner]. The other three are collectors and belong to
  * `POST /api/scanners/{id}/scan`.
  */
 @Component
@@ -60,7 +63,8 @@ class ScannerInitializer(
             buildImageLister(),
             buildTitleExtractor(),
             buildFullPageScraper(),
-            buildGalleryIndexLister()
+            buildGalleryIndexLister(),
+            buildSequenceImageScraper()
         )
 
         for (scanner in scanners) {
@@ -105,6 +109,64 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Image Scraper"
+            regex = "(.*)"
+            example = "https://example.com/gallery"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+     * The same scraper as [buildImageScraper], written with a [SequenceWorker].
+     *
+     * Identical in what it does, and stored as a second scanner rather than in place of the first so
+     * that both spellings of the same thing can be looked at in a list and run against a page to see
+     * that they agree. The one that is not the [org.endy.pmczero.service.ScraperImageImportService.scraperOf]
+     * of the code is kept as [Image Scraper], since that is the one being read by every other part of
+     * the application.
+     *
+     * What changes is the shape, not the outcome. The image scraper is a [StructuredWorker] over three
+     * scrapers, of which two carry the same [DomParser] because both [MediaAdder] and [FileDownloader]
+     * work on the same element and a [StructuredWorker] hands each of its scrapers a set of its own.
+     * This puts those two in a [SequenceWorker] instead, so there is one scraper over the images and
+     * the steps over one element are listed in it:
+     *
+     *     Scraper(DomParser("(.+)", "img[src]", "abs:src"), MediaAdder())
+     *     Scraper(DomParser("(.+)", "img[src]", "abs:src"), RecoveryWorker(FileDownloader()))
+     *
+     * against
+     *
+     *     Scraper(
+     *         DomParser("(.+)", "img[src]", "abs:src"),
+     *         SequenceWorker(listOf(MediaAdder(), RecoveryWorker(FileDownloader())))
+     *     )
+     *
+     * The [RecoveryWorker] stays around the download and not around the sequence, which is the part
+     * that has to keep behaving as it did: a file that cannot be fetched is recorded in
+     * [org.endy.pmczero.model.ScanningKontext.failures] and the run goes on, rather than ending and
+     * taking every image that would have worked with it.
+     *
+     * Worth having as a scanner of its own because it is the shape to reach for when a scraper grows a
+     * step: "record it, then download it, then also list it" is one more entry in a sequence, where it
+     * would be one more scraper with a parser that has to be kept in step with the others.
+     */
+    private fun buildSequenceImageScraper(): Scanner {
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                    Scraper(
+                        DomParser("(.+)", "img[src]", "abs:src"),
+                        SequenceWorker(listOf(MediaAdder(), RecoveryWorker(FileDownloader())))
+                    )
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Sequence Image Scraper"
             regex = "(.*)"
             example = "https://example.com/gallery"
             serialization = scannerService.serialize(scraper)
