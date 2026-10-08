@@ -62,6 +62,40 @@ class Mset {
     @Column(name = "url", nullable = true)
     var url: String? = null
 
+    /**
+     * The id of the supplier this set holds the files of, e.g. `4711` for the article
+     * `https://example.org/artikel/4711/fotos`, or null when there is none.
+     *
+     * Free text rather than an id into a table, since nothing in this application knows what a supplier
+     * is: the [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator] that says how to take it out
+     * of a url is a regex a caller configures, and the value it yields is whatever that site calls the
+     * thing. A uuid on one site and a numeric id on another both belong here, which is why it is not a
+     * relation and why there is no table to join it against.
+     *
+     * Handed over by the import that builds the set, so the sets of one supplier can be found again
+     * after the run without working the url out a second time. Optional, since a set is not always the
+     * result of an import: one built by hand, one from a location scan and one from the legacy folders
+     * all have no supplier behind them.
+     */
+    @Column(name = "supplier_id", nullable = true)
+    var supplierId: String? = null
+
+    /**
+     * The id of the run that built this set, as the caller named it, or null when there is none.
+     *
+     * Free text for the same reason as [supplierId], and for a second reason besides: who names a run
+     * is the caller, since a run is a thing in the caller's world and not in this application's. A
+     * caller driving a gallery from its own list of jobs can put its job id in here and find the set
+     * that run produced afterwards, without this application having to hand out ids of its own.
+     *
+     * Only set by an import that was given one, see
+     * [org.endy.pmczero.ressource.ScannerRessource.scrape]. A set built by hand, by a location scan or
+     * out of the legacy folders has none, and so does a set of an import that was not told which run it
+     * is part of.
+     */
+    @Column(name = "scanner_id", nullable = true)
+    var scannnerId: Int? = null
+
     @Column(name = "name", nullable = true)
     var name: String? = null
 

@@ -115,17 +115,33 @@ class ScraperImageImportService(
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
         waitForSelectorState: WaitForSelectorState? = null,
-        persist: Boolean = true
+        persist: Boolean = true,
+        supplierId: String? = null
     ): ImageImportTO = importWith(
         locationId = locationId,
         url = url,
-        scraper = if(persist) scraperOrFail(scrapeSerializable(scraper)) else scrapeSerializable(scraper),
+        scraper = scraperToRun(scraper, persist),
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
         waitForSelectorState = waitForSelectorState,
-        persist = persist
+        persist = persist,
+        supplierId = supplierId
     )
+
+    /**
+     * The scraper in [serialized], ready to be run by [importWith].
+     *
+     * Checked for a downloader only when the run is going to be stored, since a draft records nothing
+     * that a file that was never written would be found by, and a caller asking to see what a page
+     * holds should not be refused over a property of the scraper that only matters once it is saved.
+     *
+     * Here rather than inlined at each caller so that the stored scraper and the posted one are run
+     * under the same rule: they are the same import, and the only thing that differs between them is
+     * where the json came from.
+     */
+    private fun scraperToRun(serialized: String, persist: Boolean): Scraper =
+        if (persist) scraperOrFail(scrapeSerializable(serialized)) else scrapeSerializable(serialized)
 
     /**
      * The same import as [import], over the scraper stored as the scanner with [scannerId].
@@ -154,6 +170,11 @@ class ScraperImageImportService(
      * See [import]
      * @param persist false answers the draft without writing the media to the database. The files are
      * written either way
+     * @param supplierId the id of the supplier [url] belongs to, recorded on the set this builds. See
+     * [org.endy.pmczero.model.modern.Mset.supplierId]
+     * @param scanId the id of the run this is, recorded on the set this builds. See
+     * [org.endy.pmczero.model.modern.Mset.scannnerId]. Only this import takes one, since it is the one
+     * whose caller is the thing running a scan
      * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
      * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
      * when it holds no worker that downloads the files of the media it records, when the location
@@ -168,19 +189,22 @@ class ScraperImageImportService(
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
         waitForSelectorState: WaitForSelectorState? = null,
-        persist: Boolean = true
+        persist: Boolean = true,
+        supplierId: String? = null,
     ): ImageImportTO = importWith(
         locationId = locationId,
         url = url,
         // read as json rather than through ScannerService.getScanner, so that a stored serialization
         // this application cannot read is answered with its reason rather than as an unhandled
         // SerializationException, which would reach the caller as a bare 500
-        scraper = storedSerializationOrFail(scannerId),
+        scraper = scraperToRun(storedSerializationOrFail(scannerId), persist),
         name = name,
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
         waitForSelectorState = waitForSelectorState,
-        persist = persist
+        persist = persist,
+        supplierId = supplierId,
+        scannerId = scannerId
     )
 
     /**
@@ -202,6 +226,16 @@ class ScraperImageImportService(
      *
      * The one place the import actually runs, so [import], [importWith] and a caller that holds a
      * scraper cannot drift apart in what they do with a page.
+     *
+     * @param supplierId the id of the supplier [url] belongs to, recorded on the set. Taken as it is
+     * rather than worked out of the url, since what an id looks like is a property of the site and is
+     * configured per scanner as a
+     * [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator]. Blank is null, so a caller that
+     * sends an empty parameter stores no supplier rather than an empty one, which would be a value
+     * nothing should have to tell apart from none
+     * @param scannerId the id of the run this is, recorded on the set, and blank is null for the same
+     * reason. Left null by [importWith] over a scraper handed in as json, so the run is named by the
+     * caller that is running it and not by one that only posted a scraper
      */
     fun importWith(
         locationId: Int,
@@ -211,7 +245,9 @@ class ScraperImageImportService(
         scrollTimes: Int = 3,
         waitForSelector: String? = null,
         waitForSelectorState: WaitForSelectorState? = null,
-        persist: Boolean = true
+        persist: Boolean = true,
+        supplierId: String? = null,
+        scannerId: Int? = null
     ): ImageImportTO {
         val location = writableLocation(locationId)
         val storageId = location.storageOrNull()?.id
@@ -244,6 +280,10 @@ class ScraperImageImportService(
         kontext.mset?.apply {
             this.locationId = locationId
             this.url = url
+            // the two fields that are never overwritten by a scraper: no worker sets them, so whatever
+            // the caller said is what the set records, and blank is stored as none
+            this.supplierId = supplierId?.takeIf { it.isNotBlank() }
+            this.scannnerId = scannerId
         }
 
         val saved = if (persist) msetService.save(kontext.mset!!) else null

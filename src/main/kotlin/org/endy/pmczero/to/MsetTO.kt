@@ -24,6 +24,18 @@ data class MsetTO (
      */
     var url: String? = null,
 
+    /**
+     * The id of the supplier this set holds the files of, or null when there is none. See
+     * [org.endy.pmczero.model.modern.Mset.supplierId]
+     */
+    var supplierId: String? = null,
+
+    /**
+     * The id of the run that built this set, as the caller named it, or null when there is none. See
+     * [org.endy.pmczero.model.modern.Mset.scannnerId]
+     */
+    var scannerId: Int? = null,
+
     var created_at: LocalDateTime? = null,
     var updated_at: LocalDateTime? = null,
     val media: List<MediumTO>? =  mutableListOf<MediumTO>()

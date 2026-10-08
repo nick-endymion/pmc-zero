@@ -109,7 +109,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Image Scraper"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/gallery"
             serialization = scannerService.serialize(scraper)
             valid = true
@@ -167,7 +167,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Sequence Image Scraper"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/gallery"
             serialization = scannerService.serialize(scraper)
             valid = true
@@ -193,7 +193,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Link Collector"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/index"
             serialization = scannerService.serialize(scraper)
             valid = true
@@ -222,7 +222,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Image Lister"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/gallery"
             serialization = scannerService.serialize(scraper)
             valid = true
@@ -248,7 +248,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Title Extractor"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/page"
             serialization = scannerService.serialize(scraper)
             valid = true
@@ -305,7 +305,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Gallery Index Lister"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/index"
             serialization = scannerService.serialize(scraper)
             valid = true
@@ -335,7 +335,7 @@ class ScannerInitializer(
 
         return Scanner().apply {
             name = "Full Page Scraper"
-            regex = "(.*)"
+            regex = "testing"
             example = "https://example.com/gallery"
             serialization = scannerService.serialize(scraper)
             valid = true

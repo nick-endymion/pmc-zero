@@ -12,6 +12,8 @@ fun Mset.toTO(): MsetTO {
         locationId = locationId,
         subpath = subpath,
         url = url,
+        supplierId = supplierId,
+        scannerId = scannnerId,
         created_at = created_at,
         updated_at = updated_at
     )
@@ -44,6 +46,8 @@ fun Mset.toTOwithMedia(withBessources: Boolean = false): MsetTO {
         locationId = locationId,
         subpath = subpath,
         url = url,
+        supplierId = supplierId,
+        scannerId = scannnerId,
         created_at = created_at,
         updated_at = updated_at,
         media = media.map { it.toTO(withBessources) })
@@ -56,6 +60,8 @@ fun MsetTO.toEntity(): Mset {
         mset.locationId = locationId
         mset.subpath = subpath
         mset.url = url
+        mset.supplierId = supplierId
+        mset.scannnerId = scannerId
         if (media != null)
             mset.media = media.map { it.toEntity(mset) }.toMutableList()
     }

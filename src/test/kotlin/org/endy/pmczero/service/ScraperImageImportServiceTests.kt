@@ -32,7 +32,6 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.File
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -1182,6 +1181,287 @@ class ScraperImageImportServiceTests {
         val drafted = lastKontext().mset!!
         assertEquals(7, drafted.locationId)
         assertEquals("http://example.org/galerie.html", drafted.url)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Which supplier the set belongs to
+    // -------------------------------------------------------------------------------------
+
+    /** The whole point of the parameter: the id of the supplier ends up on the set. */
+    @Test
+    fun `records the supplier it was given on the set it saves`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/artikel/4711/fotos",
+            supplierId = "4711"
+        )
+
+        assertEquals("4711", savedMset().supplierId)
+    }
+
+    /** A supplier is whatever the site calls it, so the value is stored as it came in. */
+    @Test
+    fun `records a supplier id that is not a number`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/artikel/4711/fotos",
+            supplierId = "kunde-7f3a-91"
+        )
+
+        assertEquals("kunde-7f3a-91", savedMset().supplierId)
+    }
+
+    /** Optional, so a caller that says nothing stores no supplier rather than an empty one. */
+    @Test
+    fun `records no supplier when none was given`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html"
+        )
+
+        assertNull(savedMset().supplierId)
+    }
+
+    /**
+     * A blank parameter is a parameter that said nothing, and an empty supplier id would be a value
+     * nothing should have to tell apart from no supplier at all.
+     */
+    @Test
+    fun `records no supplier for a blank one`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            supplierId = "   "
+        )
+
+        assertNull(savedMset().supplierId)
+    }
+
+    /**
+     * A [SetCreator] replaces the set the kontext started with, so the supplier has to be put on
+     * afterwards or it is gone by the time the set is saved.
+     */
+    @Test
+    fun `records the supplier on a set the scraper created itself`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            supplierId = "4711"
+        )
+
+        // the set was built by the SetCreator of the scraper, not by the kontext
+        assertEquals("Galerie", savedMset().name)
+        assertEquals("4711", savedMset().supplierId)
+    }
+
+    /** A draft is a set as well, so the supplier is on it even though no row is written. */
+    @Test
+    fun `records the supplier on a draft, which is not saved`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            supplierId = "4711",
+            persist = false
+        )
+
+        assertEquals("4711", lastKontext().mset?.supplierId)
+        verify(msetService, never()).save(any())
+    }
+
+    /** Taken as it comes rather than worked out of the url: what an id is is a property of the site. */
+    @Test
+    fun `records the supplier it was given and not one out of the url`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/artikel/4711/fotos",
+            supplierId = "whatever-the-caller-read"
+        )
+
+        assertEquals("whatever-the-caller-read", savedMset().supplierId)
+    }
+
+    /** The other import path takes the supplier too, so a scraper handed in as json records the same. */
+    @Test
+    fun `records the supplier on an import of a scraper handed in as json`() {
+        givenPage(page)
+
+        service.importWith(
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scraper = imageScraperJson(),
+            supplierId = "4711"
+        )
+
+        assertEquals("4711", savedMset().supplierId)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Which run the set belongs to
+    // -------------------------------------------------------------------------------------
+
+    /** The whole point of the parameter: the run the caller named ends up on the set. */
+    @Test
+    fun `records the scan it was given on the set it saves`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scanId = "job-2026-10-08-17"
+        )
+
+        assertEquals("job-2026-10-08-17", savedMset().scannnerId)
+    }
+
+    /** A run is named by whoever is running it, so the value is kept as it came in. */
+    @Test
+    fun `records a scan id that is not a number`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scanId = "7f3a-91"
+        )
+
+        assertEquals("7f3a-91", savedMset().scannnerId)
+    }
+
+    /** Optional, so a caller that says nothing stores no run rather than an empty one. */
+    @Test
+    fun `records no scan when none was given`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html"
+        )
+
+        assertNull(savedMset().scannnerId)
+    }
+
+    /** A blank parameter said nothing, and an empty run id is a value nothing should have to tell apart. */
+    @Test
+    fun `records no scan for a blank one`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scanId = "   "
+        )
+
+        assertNull(savedMset().scannnerId)
+    }
+
+    /**
+     * A [SetCreator] replaces the set the kontext started with, so the run has to be put on afterwards
+     * or it is gone by the time the set is saved.
+     */
+    @Test
+    fun `records the scan on a set the scraper created itself`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scanId = "job-1"
+        )
+
+        // the set was built by the SetCreator of the scraper, not by the kontext
+        assertEquals("Galerie", savedMset().name)
+        assertEquals("job-1", savedMset().scannnerId)
+    }
+
+    /** A draft is a set as well, so the run is on it even though no row is written. */
+    @Test
+    fun `records the scan on a draft, which is not saved`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scanId = "job-1",
+            persist = false
+        )
+
+        assertEquals("job-1", lastKontext().mset?.scannnerId)
+        verify(msetService, never()).save(any())
+    }
+
+    /** The two are told apart, so naming a supplier does not put a run on the set as well. */
+    @Test
+    fun `records the scan and the supplier side by side`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/artikel/4711/fotos",
+            supplierId = "4711",
+            scanId = "job-1"
+        )
+
+        assertEquals("4711", savedMset().supplierId)
+        assertEquals("job-1", savedMset().scannnerId)
+    }
+
+    /**
+     * Only the stored scanner path names a run: a caller that only posts a scraper is not running a
+     * scan of its own, so the json import has no way to be told one and records none.
+     */
+    @Test
+    fun `records no scan on an import of a scraper handed in as json`() {
+        givenPage(page)
+
+        service.importWith(
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            scraper = imageScraperJson()
+        )
+
+        assertNull(savedMset().scannnerId)
     }
 
     // -------------------------------------------------------------------------------------

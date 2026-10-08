@@ -124,6 +124,18 @@ class ScannerRessource(
      * gallery appends its images while scrolling
      * @param persist false answers the draft without writing the media to the database. The files are
      * written either way
+     * @param supplierId the id of the supplier this page belongs to, e.g. the `4711` of
+     * `https://example.org/artikel/4711/fotos`. Recorded on the set this call builds, see
+     * [org.endy.pmczero.model.modern.Mset.supplierId]. Blank leaves the set without one, and the value
+     * is not worked out of the url here: what an id looks like is a property of the site, configured
+     * per scanner as a
+     * [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator], and whatever the caller read out
+     * of the url is what gets stored
+     * @param scanId the id of the run this is, recorded on the set this call builds, see
+     * [org.endy.pmczero.model.modern.Mset.scannnerId]. The caller's own name for the run, so a caller
+     * driving a gallery from a list of jobs can find the set a job produced afterwards. Blank leaves
+     * the set without one. No other import takes this: a caller that only posts a scraper is not
+     * running a scan of its own
      */
     @PostMapping("/{id}/scrape")
     fun scrape(
@@ -134,7 +146,8 @@ class ScannerRessource(
         @RequestParam(required = false) waitForSelector: String?,
         @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "3") scrollTimes: Int,
-        @RequestParam(defaultValue = "true") persist: Boolean
+        @RequestParam(defaultValue = "true") persist: Boolean,
+        @RequestParam(required = false) supplierId: String?,
     ): ImageImportTO = scraperImageImportService.importWithStoredScanner(
         scannerId = id,
         locationId = locationId,
@@ -143,7 +156,8 @@ class ScannerRessource(
         scrollTimes = scrollTimes,
         waitForSelector = waitForSelector,
         waitForSelectorState = waitStateOf(waitForSelectorState),
-        persist = persist
+        persist = persist,
+        supplierId = supplierId
     )
 
     @PostMapping("/{id}/scan")
