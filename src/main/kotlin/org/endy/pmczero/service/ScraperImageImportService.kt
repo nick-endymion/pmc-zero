@@ -258,7 +258,7 @@ class ScraperImageImportService(
         // event answers an empty shell
         val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState)
 
-        val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(name, url))
+        val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(supplierId, name, url))
 
         scraper.doWork(html, baseUriOf(url), kontext)
 
@@ -604,8 +604,8 @@ class ScraperImageImportService(
      * anything at all, and the folder is derived from one. One folder per import, so a second gallery
      * cannot overwrite the files of the first one.
      */
-    private fun folderFor(name: String?, url: String): String {
-        val raw = name?.takeIf { it.isNotBlank() } ?: url
+    private fun folderFor(supplierId: String?, name: String?, url: String): String {
+        val raw = supplierId?.takeIf { it.isNotBlank() } ?: name?.takeIf {it.isNotBlank()} ?: url
         return sanitise(raw).ifBlank { "import" }
     }
 
