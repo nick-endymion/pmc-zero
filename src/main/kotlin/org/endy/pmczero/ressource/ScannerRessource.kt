@@ -105,6 +105,25 @@ class ScannerRessource(
      * with a 409 rather than answered with a set whose every url points at a file that was never
      * written.
      *
+     * ### Fetching the files later
+     *
+     * `noDownload` runs the whole import and fetches none of the files, for a gallery whose files are
+     * not to be had yet: behind a login, on a slow host, or because they are to be fetched by hand.
+     * The page is rendered, the set is named, the media are recorded and the set is saved exactly as
+     * it would be otherwise, so a caller sees what the page holds and the set is there to fetch into
+     * later.
+     *
+     * What differs is the files: each element the [org.endy.pmczero.model.scraper.FileDownloader] was
+     * asked for goes into [ImageImportTO.failures] with the reason `Download excluded. Need to be done
+     * manually`, one entry per file, and [ImageImportTO.failed] counts them. Nothing is thrown and the
+     * run does not fail, which is the point: a file that was not fetched is a known gap rather than a
+     * broken call. It is reported where a download that 404s is reported, since a caller cannot act on
+     * the two differently and would otherwise have to read the reason to tell them apart.
+     *
+     * The media are recorded either way, so their bessources name the files as they will be once they
+     * are fetched. A set saved this way therefore points at files that are not on disk yet, which is
+     * what makes it worth a second run of the same call without it later.
+     *
      * Answers 404 when no scanner has that id or when the location does not exist, and 409 when the
      * location cannot receive files or the browser cannot be started.
      *
@@ -134,6 +153,7 @@ class ScannerRessource(
      * per scanner as a
      * [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator], and whatever the caller read out
      * of the url is what gets stored
+     * @param noDownload true runs the whole import and fetches none of the files. See above
      */
     @PostMapping("/{id}/scrape")
     fun scrape(
@@ -146,6 +166,7 @@ class ScannerRessource(
         @RequestParam(defaultValue = "3") scrollTimes: Int,
         @RequestParam(defaultValue = "true") persist: Boolean,
         @RequestParam(required = false) supplierId: String?,
+        @RequestParam(defaultValue = "false") noDownload: Boolean
     ): ImageImportTO = scraperImageImportService.importWithStoredScanner(
         scannerId = id,
         locationId = locationId,
@@ -155,7 +176,8 @@ class ScannerRessource(
         waitForSelector = waitForSelector,
         waitForSelectorState = waitStateOf(waitForSelectorState),
         persist = persist,
-        supplierId = supplierId
+        supplierId = supplierId,
+        noDownload = noDownload
     )
 
     @PostMapping("/{id}/scan")

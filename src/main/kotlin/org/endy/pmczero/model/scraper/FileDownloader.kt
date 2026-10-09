@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.model.LocationType
+import org.endy.pmczero.model.ScanFailure
 import org.endy.pmczero.model.ScanningKontext
 import java.io.File
 
@@ -38,6 +39,15 @@ import java.io.File
 class FileDownloader : Worker() {
 
     override fun applya(element: String, scanningKontext: ScanningKontext) {
+        // a scan that was told to leave the files where they are records the element and says why,
+        // rather than fetching it and staying quiet about it. Reported the same way a download that
+        // failed is, since a caller reads both out of the same list and cannot act on one of them any
+        // differently: see [org.endy.pmczero.to.ImageImportTO.failures]
+        if (scanningKontext.skipDownloads) {
+            scanningKontext.failures.add(ScanFailure(element, DOWNLOAD_EXCLUDED))
+            return
+        }
+
         val root = writableFolderOf(scanningKontext)
         val relative = ScanPath.bessourceNameOf(element, scanningKontext)
         val target = ScanPath.fileIn(root, relative)
@@ -76,5 +86,16 @@ class FileDownloader : Worker() {
             throw NotAccessibleException("the path $uri of location ${location.id} is not a writable directory")
 
         return root
+    }
+
+    private companion object {
+        /**
+         * Why an element was not downloaded, when the scan was told to leave the files where they are.
+         *
+         * One constant rather than the text at the place it is written, since a caller reads this out
+         * of `ImageImportTO.failures` to decide whether the file is still to be had, and a wording
+         * change is then something it has to recognise.
+         */
+        const val DOWNLOAD_EXCLUDED = "Download excluded. Need to be done manually"
     }
 }

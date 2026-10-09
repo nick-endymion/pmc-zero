@@ -1142,6 +1142,165 @@ class ScraperImageImportServiceTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // Fetching the files later
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The whole of it: the import runs, and every file it would have written is reported as one that
+     * has to be fetched by hand.
+     */
+    @Test
+    fun `reports every file it did not download`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            noDownload = true
+        )
+
+        assertEquals(3, result.failed)
+        assertEquals(
+            listOf(
+                "http://example.org/bilder/erstes.jpg",
+                "http://example.org/zweites.jpg",
+                "https://cdn.de/drittes.png"
+            ),
+            result.failures.map { it.url }
+        )
+        assertTrue(
+            result.failures.all { it.reason == "Download excluded. Need to be done manually" },
+            "every one says why it was left alone: ${result.failures.map { it.reason }}"
+        )
+    }
+
+    @Test
+    fun `writes no file when downloads are excluded`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "G",
+            noDownload = true
+        )
+
+        assertEquals(emptyList(), writtenRelativeTo(tempDir), "nothing was written")
+    }
+
+    /**
+     * The set is saved as it would be otherwise, since what is wanted is a set to fetch into later
+     * rather than no set at all.
+     */
+    @Test
+    fun `saves the set and its media even though no file was written`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            noDownload = true
+        )
+
+        // through the saved set rather than through msetId, since the id is the database's to hand out
+        // and the mock save answers the set it was given
+        verify(msetService).save(any())
+        val saved = savedMset()
+        assertEquals(3, saved.media.size)
+        assertEquals(7, saved.locationId)
+        assertEquals("http://example.org/galerie.html", saved.url)
+    }
+
+    /**
+     * The bessources name the files as they will be, so the set points at what is still to be had.
+     * That is also why a set like this is worth keeping rather than discarding: a second run of the
+     * same call without the exclusion writes exactly these files.
+     */
+    @Test
+    fun `records the media with the paths the files will have`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "G",
+            noDownload = true
+        )
+
+        // a bessource name is nullable, so the sort goes through a non null key
+        assertEquals(
+            listOf("G/drittes.png", "G/erstes.jpg", "G/zweites.jpg"),
+            savedMset().media.map { it.bessources.single().name }.sortedBy { it.orEmpty() }
+        )
+    }
+
+    /** Everything else is the run it would have been: the page is read and the set is named the same way. */
+    @Test
+    fun `runs the rest of the import as it would have run`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            supplierId = "4711",
+            noDownload = true
+        )
+
+        assertEquals(3, result.found)
+        assertEquals("4711", savedMset().supplierId)
+        assertEquals(4, savedMset().scannnerId)
+        assertEquals("Galerie", savedMset().name)
+    }
+
+    /** Nothing is reported when nothing was excluded, so a normal run answers an empty list as before. */
+    @Test
+    fun `reports no failure when downloads are not excluded`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html"
+        )
+
+        assertEquals(0, result.failed)
+        assertEquals(emptyList(), result.failures)
+        assertEquals(3, writtenRelativeTo(tempDir).size)
+    }
+
+    /**
+     * A draft of a run whose files are excluded is a draft of a set with no files, so nothing is
+     * written twice over.
+     */
+    @Test
+    fun `records the excluded files on a draft as well`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val result = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            noDownload = true,
+            persist = false
+        )
+
+        assertEquals(3, result.failed)
+        verify(msetService, never()).save(any())
+    }
+
+    // -------------------------------------------------------------------------------------
     // Where the set came from
     // -------------------------------------------------------------------------------------
 

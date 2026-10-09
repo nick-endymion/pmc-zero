@@ -94,5 +94,19 @@ data class ScanningKontext(
      * worker is only handed one element at a time. It also keeps two workers of one scraper, which run
      * over the same elements, from each having to hand a result back to whoever called them.
      */
-    var foundElements: MutableList<FoundElement> = mutableListOf()
+    var foundElements: MutableList<FoundElement> = mutableListOf(),
+    /**
+     * Whether the files of this scan are left on the page, i.e. whether
+     * [org.endy.pmczero.model.scraper.FileDownloader] is to fetch nothing and record why instead.
+     *
+     * A property of the scan rather than of the scraper, for the same reason the fetcher and the
+     * location path are: the same scraper definition serves a run that writes its files and a run that
+     * only records what a page holds, and a caller can ask for the second without the scraper being
+     * rebuilt. See
+     * [org.endy.pmczero.ressource.ScannerRessource.scrape] for the parameter that sets it.
+     *
+     * False by default, so a scan that says nothing downloads what it found, which is what every scan
+     * did before there was anything to say otherwise.
+     */
+    var skipDownloads: Boolean = false
 )

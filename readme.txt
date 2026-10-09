@@ -7,4 +7,4 @@ Starting Opera with remote debugging enabled allows you to control the browser p
 "C:\Program Files\Opera\launcher.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\Peter\AppData\Local\Temp\opencode\getty-debug-profile" --no-first-run --no-default-browser-check
 
 
-C:\Users\Peter\AppData\Local\Programs\Opera\opera.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\Peter\AppData\Local\Temp\opencode\getty-debug-profile" --no-first-run --no-default-browser-check
+"C:\Users\Peter\AppData\Local\Programs\Opera\opera.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\Peter\AppData\Local\Temp\opencode\test-debug-proeefile" --no-first-run --no-default-browser-check

@@ -176,6 +176,10 @@ class ScraperImageImportService(
      * [org.endy.pmczero.model.modern.Mset.scannnerId], so a set can be traced back to the scanner that
      * built it. This import knows it, which the one over a posted scraper does not: a caller that only
      * hands in a scraper is not running one of the stored ones
+     * @param noDownload true runs the whole import and fetches none of the files. Every file the
+     * downloader would have written is reported in [org.endy.pmczero.to.ImageImportTO.failures]
+     * instead, with the reason it was left alone, so a caller still sees what the page holds and which
+     * of it is still to be had. See [org.endy.pmczero.model.ScanningKontext.skipDownloads]
      * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
      * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
      * when it holds no worker that downloads the files of the media it records, when the location
@@ -192,6 +196,7 @@ class ScraperImageImportService(
         waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true,
         supplierId: String? = null,
+        noDownload: Boolean = false
     ): ImageImportTO = importWith(
         locationId = locationId,
         url = url,
@@ -205,7 +210,8 @@ class ScraperImageImportService(
         waitForSelectorState = waitForSelectorState,
         persist = persist,
         supplierId = supplierId,
-        scannerId = scannerId
+        scannerId = scannerId,
+        noDownload = noDownload
     )
 
     /**
@@ -237,6 +243,10 @@ class ScraperImageImportService(
      * @param scannerId the id of the stored scanner this runs, recorded on the set, see
      * [org.endy.pmczero.model.modern.Mset.scannnerId]. Null when the caller is running no stored
      * scanner, which is the case for [importWith] over a scraper handed in as json
+     * @param noDownload true runs the whole import and fetches none of the files, see
+     * [org.endy.pmczero.model.ScanningKontext.skipDownloads]. Every element the downloader was asked
+     * for is reported in [org.endy.pmczero.to.ImageImportTO.failures] with the reason it was left
+     * alone, so the answer is the same shape as one where the downloads failed
      */
     fun importWith(
         locationId: Int,
@@ -248,7 +258,8 @@ class ScraperImageImportService(
         waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true,
         supplierId: String? = null,
-        scannerId: Int? = null
+        scannerId: Int? = null,
+        noDownload: Boolean = false
     ): ImageImportTO {
         val location = writableLocation(locationId)
         val storageId = location.storageOrNull()?.id
@@ -260,6 +271,11 @@ class ScraperImageImportService(
         val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState)
 
         val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(supplierId, name, url))
+
+        // on the kontext rather than in the scraper, so the same stored scraper serves a run that
+        // writes its files and one that only records what the page holds. Set before the run rather
+        // than after, since the [org.endy.pmczero.model.scraper.FileDownloader] reads it per element
+        kontext.skipDownloads = noDownload
 
         scraper.doWork(html, baseUriOf(url), kontext)
 

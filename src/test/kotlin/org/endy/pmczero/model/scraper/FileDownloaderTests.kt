@@ -376,6 +376,89 @@ class FileDownloaderTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // When the scan was told to leave the files where they are
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * A file that was not fetched is a known gap rather than a silent one.
+     *
+     * Reported the same way a download that 404s is, since a caller reads both out of one list and
+     * cannot act on them differently: the element and the reason it was left alone.
+     */
+    @Test
+    fun `records why an element was not downloaded when the scan excludes downloads`() {
+        val kontext = kontextFor(location, "").also { it.skipDownloads = true }
+
+        worker.applya("http://example.org/bilder/a.jpg", kontext)
+
+        val failure = kontext.failures.single()
+        assertEquals("http://example.org/bilder/a.jpg", failure.element)
+        assertEquals("Download excluded. Need to be done manually", failure.reason)
+    }
+
+    @Test
+    fun `downloads nothing when the scan excludes downloads`() {
+        val kontext = kontextFor(location, "").also { it.skipDownloads = true }
+
+        worker.applya("http://example.org/bilder/a.jpg", kontext)
+
+        assertTrue(fetcher.downloads.isEmpty(), "nothing was fetched")
+        assertEquals(emptyList(), writtenRelativeTo(location), "no file was written")
+    }
+
+    /** One entry per element, since a page holds several and each file is a gap of its own. */
+    @Test
+    fun `records one failure per element of a page`() {
+        val kontext = kontextFor(location, "").also { it.skipDownloads = true }
+
+        worker.applya("http://example.org/one.jpg", kontext)
+        worker.applya("http://example.org/two.jpg", kontext)
+
+        assertEquals(
+            listOf("http://example.org/one.jpg", "http://example.org/two.jpg"),
+            kontext.failures.map { it.element }
+        )
+    }
+
+    /** The exclusion is said rather than thrown, so one excluded file does not end a scan of many. */
+    @Test
+    fun `does not throw when the scan excludes downloads`() {
+        val kontext = kontextFor(location, "").also { it.skipDownloads = true }
+
+        worker.applya("http://example.org/a.jpg", kontext)
+
+        assertEquals(1, kontext.failures.size)
+    }
+
+    /**
+     * A location that cannot receive files is not refused when nothing is to be written into it.
+     *
+     * The check would be about where a file goes, and there is no file, so a scan that records only
+     * what a page holds is not a scan into a folder that is not there.
+     */
+    @Test
+    fun `does not refuse a location it would not download into`() {
+        val http = givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+        val kontext = kontextFor(http, "").also { it.skipDownloads = true }
+
+        worker.applya("http://example.org/a.jpg", kontext)
+
+        assertEquals(1, kontext.failures.size)
+        assertTrue(fetcher.downloads.isEmpty())
+    }
+
+    /** False by default, so a scan that says nothing keeps downloading what it found. */
+    @Test
+    fun `downloads as usual when the scan says nothing about it`() {
+        val kontext = kontextFor(location, "")
+
+        worker.applya("http://example.org/a.jpg", kontext)
+
+        assertEquals(listOf("http://example.org/a.jpg"), fetcher.downloads.map { it.url })
+        assertEquals(emptyList(), kontext.failures)
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
 
