@@ -284,6 +284,7 @@ class ScraperImageImportService(
             // the two fields that are never overwritten by a scraper: no worker sets them, so whatever
             // the caller said is what the set records, and blank is stored as none
             this.supplierId = supplierId?.takeIf { it.isNotBlank() }
+            this.subpath = kontext.locationPath
             this.scannnerId = scannerId
         }
 
