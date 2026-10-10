@@ -78,16 +78,34 @@ class SequenceWorkerTests {
         assertTrue(bessource.name!!.endsWith("a.jpg"), "the medium names the file the downloader writes")
     }
 
-    /** Order is the list, so a scanner of it reads top down and a stored json keeps that order. */
+    /**
+     * The workers share one set, so a [SetCreator] in the middle of a sequence names it rather than
+     * throwing away what the workers before it recorded.
+     *
+     * It used to replace the set of the kontext with one of its own; it does not any more, since a run
+     * onto a set that is there has to keep that set and the media it holds.
+     */
     @Test
-    fun `runs the workers in the order they are listed`() {
-        // the set creator last, so the name it sets is the one that is left behind
+    fun `names the set the earlier workers filled rather than replacing it`() {
         SequenceWorker(listOf(MediaAdder(), SetCreator()))
             .applya("http://example.org/bilder/a.jpg", kontext)
 
-        // the set was replaced by the creator, so the media recorded before it are gone with it
         assertEquals("http://example.org/bilder/a.jpg", kontext.mset?.name)
-        assertEquals(0, kontext.mset?.media?.size)
+        assertEquals(1, kontext.mset?.media?.size, "the medium of the first worker is still there")
+    }
+
+    /** A set that is already named keeps that name, which is a run onto a set that is there. */
+    @Test
+    fun `leaves the name of a set that has one`() {
+        kontext.mset = Mset().also {
+            it.id = 55
+            it.name = "Aces und mehr"
+        }
+
+        SetCreator().applya("der Titel der Seite", kontext)
+
+        assertEquals(55, kontext.mset?.id)
+        assertEquals("Aces und mehr", kontext.mset?.name)
     }
 
     @Test

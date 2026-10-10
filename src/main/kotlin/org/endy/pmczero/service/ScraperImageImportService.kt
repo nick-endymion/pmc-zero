@@ -187,6 +187,7 @@ class ScraperImageImportService(
      * file it did not fetch. See [org.endy.pmczero.model.ScanningKontext.alwaysNewDownload]
      * @param waitUntil how far to wait for the page before its dom is read, null for the load event.
      * See [importWith]
+     * @param msetId the set to record this run on, rather than a set of its own. See [importWith]
      * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
      * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
      * when it holds no worker that downloads the files of the media it records, when the location
@@ -205,7 +206,8 @@ class ScraperImageImportService(
         supplierId: String? = null,
         noDownload: Boolean = false,
         alwaysNewDownload: Boolean = false,
-        waitUntil: WaitUntilState? = null
+        waitUntil: WaitUntilState? = null,
+        msetId: Int? = null
     ): ImageImportTO = importWith(
         locationId = locationId,
         url = url,
@@ -222,7 +224,8 @@ class ScraperImageImportService(
         scannerId = scannerId,
         noDownload = noDownload,
         alwaysNewDownload = alwaysNewDownload,
-        waitUntil = waitUntil
+        waitUntil = waitUntil,
+        msetId = msetId
     )
 
     /**
@@ -264,6 +267,16 @@ class ScraperImageImportService(
      * [org.endy.pmczero.service.BrowserFetcher.render] is where the states are worth reading about;
      * the one for this call is `domcontentloaded` when the files are not to be fetched here, since
      * the load event counts the images of the page and a draft has no use for that wait
+     * @param msetId the set to record this run on, rather than a set of its own: the second page of a
+     * gallery, a second supplier of the same set. The set is read here, with the media it holds, and put
+     * on the [org.endy.pmczero.model.ScanningKontext] for the
+     * [org.endy.pmczero.model.scraper.SetCreator] of the scraper to keep rather than replace, so the
+     * media of this run are added to the ones that are already there and its id is what the answer
+     * holds. What the run says nothing about is left as that set had it: its name, its folder, and its
+     * supplier unless the caller names another. [url] and [locationId] are the run's own, so a set run
+     * into more than once ends up naming the last page it was given. A draft answers no id, since
+     * nothing is written.
+     * @throws org.endy.pmczero.exception.NotFoundException when no mset has that id
      */
     fun importWith(
         locationId: Int,
@@ -278,9 +291,16 @@ class ScraperImageImportService(
         scannerId: Int? = null,
         noDownload: Boolean = false,
         alwaysNewDownload: Boolean = false,
-        waitUntil: WaitUntilState? = null
-    ): ImageImportTO {        val location = writableLocation(locationId)
+        waitUntil: WaitUntilState? = null,
+        msetId: Int? = null
+    ): ImageImportTO {
+        val location = writableLocation(locationId)
         val storageId = location.storageOrNull()?.id
+
+        // before the page is even read, so a mistyped id costs a query rather than a browser round
+        // trip, and answers 404 rather than a merge onto a row that is not there. With its media, since
+        // a run onto a set adds to the media that set holds rather than replacing them
+        val into = msetId?.let { msetService.findById(it, withMedia = true) }
 
         // rendered here rather than by the StructuredWorker below, which would fetch the page itself and
         // so lose the scroll count and the wait for a selector: a lazily loading gallery read without
@@ -288,13 +308,21 @@ class ScraperImageImportService(
         // event answers an empty shell
         val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState, waitUntil)
 
-        val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(supplierId, name, url))
+        val kontext = scraperService.getNewScanningContext(
+            location, browserFetcher, folderFor(supplierId, name, into, url)
+        )
 
         // on the kontext rather than in the scraper, so the same stored scraper serves a run that
         // writes its files and one that only records what the page holds. Set before the run rather
         // than after, since the [org.endy.pmczero.model.scraper.FileDownloader] reads it per element
         kontext.skipDownloads = noDownload
         kontext.alwaysNewDownload = alwaysNewDownload
+        // read by the [org.endy.pmczero.model.scraper.SetCreator], which keeps the set of a run onto a
+        // set that is there rather than building one of its own. The set itself is put on the kontext
+        // before the run for it to keep: a worker is handed an element and nothing else and cannot read
+        // the row itself, so this is where the read has to happen
+        kontext.msetId = msetId
+        into?.let { kontext.mset = it }
 
         scraper.doWork(html, baseUriOf(url), kontext)
 
@@ -307,18 +335,24 @@ class ScraperImageImportService(
 
         // only when one was asked for: the [org.endy.pmczero.model.scraper.SetCreator] of the scraper has
         // already named the set after the page title, and overwriting that with the url would throw away
-        // the one name that says what the images are of
-        kontext.mset?.name =  kontext.mset?.name ?: name?.takeIf { it.isNotBlank() } ?:  url
+        // the one name that says what the images are of. A set this run lands on keeps the name it has,
+        // which the creator above has already seen
+        kontext.mset?.let { set ->
+            set.name = name?.takeIf { it.isNotBlank() && into != null }
+                ?: set.name?.takeIf { it.isNotBlank() }
+                ?: name?.takeIf { it.isNotBlank() }
+                ?: url
+        }
 
-        // after the scraper ran rather than on the mset the kontext was built with: a [SetCreator] in
-        // the scraper replaces that mset with one of its own, so anything set on it before the run is
-        // gone by the time the set is saved
+        // after the scraper ran rather than on the mset the kontext was built with: a scraper may have
+        // replaced that mset with one of its own, so anything set on it before the run is gone by the
+        // time the set is saved
         kontext.mset?.apply {
             this.locationId = locationId
             this.url = url
             // the two fields that are never overwritten by a scraper: no worker sets them, so whatever
             // the caller said is what the set records, and blank is stored as none
-            this.supplierId = supplierId?.takeIf { it.isNotBlank() }
+            this.supplierId = supplierId?.takeIf { it.isNotBlank() } ?: into?.supplierId
             this.subpath = kontext.locationPath
             this.scannnerId = scannerId
         }
@@ -635,13 +669,28 @@ class ScraperImageImportService(
     }
 
     /**
-     * The folder below [location] the files of this import go into, named after [name] or [url].
+     * The folder below [location] the files of this import go into, named after [supplierId], [name] or
+     * [url].
      *
      * Sanitised down to what a file name may hold, because a page title is free text and may hold
      * anything at all, and the folder is derived from one. One folder per import, so a second gallery
      * cannot overwrite the files of the first one.
+     *
+     * [into] is the set this run is recorded on, and it is what decides the folder when the caller
+     * named neither a supplier nor a name: a run that lands on a set already there belongs in the
+     * folder that set records, not in a new folder named after the url it was given. Without this a
+     * second page of a gallery would put half the set in one folder and the other half in another, and
+     * the subpath of the set would name only the second of them.
      */
-    private fun folderFor(supplierId: String?, name: String?, url: String): String {
+    private fun folderFor(
+        supplierId: String?,
+        name: String?,
+        into: org.endy.pmczero.model.modern.Mset?,
+        url: String
+    ): String {
+        val existing = into?.subpath
+        if (supplierId.isNullOrBlank() && name.isNullOrBlank() && !existing.isNullOrBlank()) return existing
+
         val raw = supplierId?.takeIf { it.isNotBlank() } ?: name?.takeIf {it.isNotBlank()} ?: url
         return sanitise(raw).ifBlank { "import" }
     }

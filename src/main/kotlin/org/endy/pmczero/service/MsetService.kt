@@ -91,6 +91,18 @@ class MsetService(
     fun findBelow(id: Int): Mset =
         msetRepository.findFirstBelowId(id) ?: throw NotFoundException()
 
+    /**
+     * Saves [mset], with its media attached to it and their bessources to them.
+     *
+     * Transactional, which the walk below needs: a set that was read somewhere else carries media whose
+     * bessources are still lazy, and touching one of those outside a session fails rather than loading
+     * it. A set that was read with its media and is saved again is exactly that case, since the media of
+     * a second run are added to the set the first run left rather than to a set of its own.
+     *
+     * A set that has an id is merged rather than inserted, so this is also how a scan adds to a set that
+     * is already there: the media of the run are added to the ones the set already holds.
+     */
+    @Transactional
     fun save(mset: Mset): Mset {
         mset.media.forEach {
             it.mset = mset

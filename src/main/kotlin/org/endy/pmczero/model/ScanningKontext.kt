@@ -122,5 +122,17 @@ data class ScanningKontext(
      * scraper serves both. It changes the name a file is recorded under, which is why it has to be
      * visible to both workers that ask about that name and not only to the one that fetches.
      */
-    var alwaysNewDownload: Boolean = false
+    var alwaysNewDownload: Boolean = false,
+    /**
+     * The id of the set this scan belongs to, or null when it is to be a set of its own.
+     *
+     * What a caller names when a page is not a set of its own but belongs to one that is there: the
+     * second page of a gallery, a second supplier of the same set. The
+     * [org.endy.pmczero.model.scraper.SetCreator] of the scraper reads it and builds the set with that
+     * id, so the media of the run end up on the row the caller named rather than on a new one.
+     *
+     * Part of the kontext because a [org.endy.pmczero.model.scraper.Worker] is handed an element and
+     * nothing else, so a worker cannot be told anything the scan does not know.
+     */
+    var msetId: Int? = null
 )

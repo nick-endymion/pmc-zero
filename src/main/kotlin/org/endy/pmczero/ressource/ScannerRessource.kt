@@ -173,6 +173,14 @@ class ScannerRessource(
      * until all two hundred are in. `domcontentloaded` is the one for a caller that wants the markup
      * and not the wait: the html is parsed and the deferred scripts have run, and no picture is
      * waited for. See [org.endy.pmczero.service.BrowserFetcher.render]
+     * @param msetId records this run on the set with that id rather than on a set of its own, for a
+     * page that is not a set of its own: the second page of a gallery, or a second supplier of the
+     * same set. The set is read with the media it holds and kept, so the media of this run are added to
+     * those and that id is what `msetId` of the answer holds. What the run says nothing about is left
+     * as the set had it — its name, its folder, its supplier — and the files go into the folder of that
+     * set, so a second page does not split the set over two folders. [url] and [locationId] are the
+     * run's own, so a set run into more than once ends up naming the last page. Answers 404 when no
+     * set has that id, before the page is read at all
      */
     @PostMapping("/{id}/scrape")
     fun scrape(
@@ -187,7 +195,8 @@ class ScannerRessource(
         @RequestParam(required = false) supplierId: String?,
         @RequestParam(defaultValue = "false") noDownload: Boolean,
         @RequestParam(defaultValue = "false") alwaysNewDownload: Boolean,
-        @RequestParam(required = false) waitUntil: String?
+        @RequestParam(required = false) waitUntil: String?,
+        @RequestParam(required = false) msetId: Int?
     ): ImageImportTO = scraperImageImportService.importWithStoredScanner(
         scannerId = id,
         locationId = locationId,
@@ -200,7 +209,8 @@ class ScannerRessource(
         supplierId = supplierId,
         noDownload = noDownload,
         alwaysNewDownload = alwaysNewDownload,
-        waitUntil = waitUntilOf(waitUntil)
+        waitUntil = waitUntilOf(waitUntil),
+        msetId = msetId
     )
 
     @PostMapping("/{id}/scan")

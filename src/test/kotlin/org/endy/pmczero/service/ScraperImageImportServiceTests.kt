@@ -4,6 +4,7 @@ import org.endy.pmczero.exception.NotAccessibleException
 import com.microsoft.playwright.options.WaitUntilState
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.model.scraper.DomParser
@@ -1465,6 +1466,232 @@ class ScraperImageImportServiceTests {
         )
 
         verify(browserFetcher).render("http://example.org/galerie.html", null, 3, null, null)
+    }
+
+    /** a set with [id] in the database, for a run that is recorded onto an existing one */
+    private fun givenStoredMset(
+        id: Int,
+        name: String? = "Aces und mehr",
+        subpath: String? = null,
+        supplierId: String? = null,
+        tags: List<String> = emptyList(),
+        media: List<Medium> = emptyList()
+    ) {
+        whenever(msetService.findById(id, withMedia = true)).thenReturn(
+            Mset().also {
+                it.id = id
+                it.name = name
+                it.subpath = subpath
+                it.supplierId = supplierId
+                it.tags = tags.toMutableList()
+                it.media = media.toMutableList()
+            }
+        )
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Which set the run belongs to
+    // -------------------------------------------------------------------------------------
+
+    /** The set the caller named, so that a second page lands on the row of the first. */
+    @Test
+    fun `records the run on the set it was given`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55)
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        assertEquals(55, savedMset().id)
+    }
+
+    /** Without one, the set is a new one and the database gives it an id, as it always did. */
+    @Test
+    fun `builds a set of its own when no mset was named`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html"
+        )
+
+        assertNull(savedMset().id, "the database decides the id of a new set")
+    }
+
+    /**
+     * A save with an id is a merge, so every field the run leaves null would be written over the row.
+     * These three are the ones the run has nothing to say about, and they survive the second run.
+     */
+    @Test
+    fun `keeps what the run says nothing about on the set it runs into`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(
+            55,
+            subpath = "2020/august",
+            supplierId = "4711",
+            tags = listOf("Amateur", "Aces")
+        )
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        val set = savedMset()
+        assertEquals("2020/august", set.subpath, "the folder of the set is not blanked")
+        assertEquals("4711", set.supplierId, "the supplier is not blanked")
+        assertEquals(listOf("Amateur", "Aces"), set.tags, "the tags are not cleared")
+    }
+
+    /** What the caller does say about a field is what the set records, as on a run of its own. */
+    @Test
+    fun `lets the run say what it says about a field of the set it runs into`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55, subpath = "2020/august", supplierId = "4711", tags = listOf("Amateur"))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            msetId = 55,
+            supplierId = "4712"
+        )
+
+        assertEquals("4712", savedMset().supplierId)
+    }
+
+    /**
+     * A set that is already there keeps its name, since a second page of a gallery would otherwise
+     * rename the set after its own title.
+     */
+    @Test
+    fun `keeps the name of a set it runs into`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55, name = "Aces und mehr")
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        assertEquals("Aces und mehr", savedMset().name)
+    }
+
+    /**
+     * A name the caller passes is the one thing that does rename it, which is the same answer a set of
+     * its own gives: the page title wins there, and a named set here is not what the page called itself.
+     */
+    @Test
+    fun `lets the caller rename a set it runs into`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55, name = "Aces und mehr")
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            msetId = 55,
+            name = "Neu benannt"
+        )
+
+        assertEquals("Neu benannt", savedMset().name)
+    }
+
+    /**
+     * The files of a run onto a set go into the folder of that set, so a second page does not split
+     * the set over two folders and leave the subpath naming only the second of them.
+     */
+    @Test
+    fun `writes the files of a run into the folder of the set it runs into`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55, subpath = "2020/august")
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        assertEquals("2020/august", savedMset().subpath)
+        assertEquals(
+            listOf("2020/august/drittes.png", "2020/august/erstes.jpg", "2020/august/zweites.jpg"),
+            writtenRelativeTo(tempDir)
+        )
+    }
+
+    /** The set is looked up before the page is read, so a mistyped id costs a query and not a render. */
+    @Test
+    fun `answers not found for an mset that does not exist`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        whenever(msetService.findById(99, withMedia = true)).thenAnswer {
+            throw org.endy.pmczero.exception.NotFoundException()
+        }
+
+        assertThrows<org.endy.pmczero.exception.NotFoundException> {
+            service.importWithStoredScanner(
+                scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 99
+            )
+        }
+
+        verify(browserFetcher, never()).render(any(), anyOrNull(), any(), anyOrNull(), anyOrNull())
+    }
+
+    /**
+     * Read with its media, since a run onto a set adds to the ones it holds rather than replacing them,
+     * and the media are what would be lost.
+     */
+    @Test
+    fun `reads the set it runs into with the media it holds`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55)
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        verify(msetService).findById(55, withMedia = true)
+    }
+
+    /**
+     * The media of an earlier run stay on the set, which is the whole point of naming it.
+     *
+     * A set built here instead of read would hold only the media of this run, and saving that onto the
+     * row would leave the earlier media behind on it while the set claimed to hold only the new ones.
+     */
+    @Test
+    fun `adds the media of the run to the media the set already holds`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        val earlier = Medium().also { it.name = "frueher.jpg" }
+        givenStoredMset(55, media = listOf(earlier))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        val names = savedMset().media.map { it.name }
+        assertEquals(4, names.size, "the earlier medium and the three of this run: $names")
+        assertTrue("frueher.jpg" in names, "the earlier medium is still there: $names")
+    }
+
+    /** Tags of the set are not the run's to clear, and a scraper that adds to them adds to those. */
+    @Test
+    fun `keeps the tags of the set it runs into`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+        givenStoredMset(55, tags = listOf("Amateur", "Aces"))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", msetId = 55
+        )
+
+        assertEquals(listOf("Amateur", "Aces"), savedMset().tags)
     }
 
     // -------------------------------------------------------------------------------------
