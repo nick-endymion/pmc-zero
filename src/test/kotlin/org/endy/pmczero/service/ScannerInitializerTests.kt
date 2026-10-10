@@ -9,6 +9,7 @@ import org.endy.pmczero.model.modern.Scanner
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
+import org.endy.pmczero.model.scraper.FoundElementsWorker
 import org.endy.pmczero.model.scraper.MediaAdder
 import org.endy.pmczero.model.scraper.RecoveryWorker
 import org.endy.pmczero.model.scraper.SequenceWorker
@@ -414,11 +415,11 @@ class ScannerInitializerTests {
     // -------------------------------------------------------------------------------------
 
     /**
-     * The case this scraper was built for: an index page that ends in the link to the next one, where
-     * the caller wants that link and not the galleries above it.
+     * The case this scraper was built for: a page that writes its links one after the other and ends
+     * in the link to the next one, where the caller wants that link and not the galleries above it.
      */
     @Test
-    fun `collects the last link of a page and no other`() {
+    fun `collects the last link of a page that writes its links flat`() {
         val html = """
             <html><body>
             <a href="/gallery/1">First</a>
@@ -468,6 +469,29 @@ class ScannerInitializerTests {
         )
     }
 
+    /**
+     * The last one of the group, and one finding per group, since `:last-child` is about the children
+     * of a parent and not about the last link of a document. Pinned so that the boundary of this
+     * selector is a fact about the test rather than a surprise at run time.
+     */
+    @Test
+    fun `collects the last link of each group of a page that groups them`() {
+        val html = """
+            <html><body>
+            <div class="gallery"><a href="/gallery/1">First</a><a href="/gallery/2">Second</a></div>
+            <div class="footer"><a href="/impressum">Impressum</a></div>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                FoundElement(1, "http://example.org/gallery/2"),
+                FoundElement(1, "http://example.org/impressum")
+            ),
+            runOver("Last Link Collector", html)
+        )
+    }
+
     /** The link collector and this one read the same elements, so this has to be a subset of its answer. */
     @Test
     fun `answers the last of what the link collector answers`() {
@@ -486,7 +510,7 @@ class ScannerInitializerTests {
         assertEquals(all.last(), last.single(), "the last of them")
     }
 
-    /** The href rather than the label, and not the image of a page, since it is a collector of links. */
+    /** The href rather than the label, since it is a collector of links. */
     @Test
     fun `collects the href of the last link rather than its text`() {
         val html = """<html><body>
@@ -498,6 +522,22 @@ class ScannerInitializerTests {
             listOf(FoundElement(1, "http://example.org/last.html")),
             runOver("Last Link Collector", html)
         )
+    }
+
+    /**
+     * The selector is what says "the last one", so it is the part of the stored scanner a caller edits:
+     * pinned here so that changing it to a plain `a[href]` would fail a test rather than quietly make
+     * this the link collector again.
+     */
+    @Test
+    fun `reads the last link of each parent with the selector that says so`() {
+        val worker = scannerService.deserialize(storedScanner("Last Link Collector").serialization!!)
+            .worker as StructuredWorker
+
+        val parser = assertIs<DomParser>(worker.scrapers.single().parser)
+        assertEquals("a[href]:last-child", parser.tag)
+        assertEquals("abs:href", parser.attribute)
+        assertIs<FoundElementsWorker>(worker.scrapers.single().worker)
     }
 
     // -------------------------------------------------------------------------------------

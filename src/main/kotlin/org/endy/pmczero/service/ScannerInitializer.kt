@@ -4,7 +4,7 @@ import org.endy.pmczero.model.modern.Scanner
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
 import org.endy.pmczero.model.scraper.FoundElementsWorker
-import org.endy.pmczero.model.scraper.LastFoundElementWorker
+import org.endy.pmczero.model.scraper.LastFoundElementWorker // only named in the comment above, see there
 import org.endy.pmczero.model.scraper.MediaAdder
 import org.endy.pmczero.model.scraper.PassThroughParser
 import org.endy.pmczero.model.scraper.RecoveryWorker
@@ -332,27 +332,39 @@ class ScannerInitializer(
     }
 
     /**
-     * The last link of a page, at level 1, and nothing else.
+ * The last link of a page that writes its links one after the other, and no other.
      *
-     * The [buildLinkCollector] with a [LastFoundElementWorker] instead of a [FoundElementsWorker], so
-     * everything above it holds and only the answer differs: the same `a[href]`, the same `abs:href`,
-     * the same level, and one finding rather than one per link.
+     * The [buildLinkCollector] with `a[href]:last-child` in place of `a[href]`, so everything above it
+     * holds and only the selector differs: the same `abs:href`, the same level, and a css selector
+     * that matches one element where the plain one matched all of them. A [FoundElementsWorker] is
+     * then enough, since there is only ever one element to record.
      *
      * For a page whose last link is the one a caller is after, which is a shape pages are written in:
      * an index page that lists its galleries and ends in the link to the next page, a listing whose
      * pager sits at the foot of it. A caller paging through such a page does not want the two hundred
      * gallery links to pick one out of, it wants the url of the page it is to read next.
      *
-     * "Last" is the last one the page has, i.e. the last in document order, and not the last that
-     * differs from the ones before it: a page whose final two links are the same has one finding and
-     * it is that url, since [Parser] has already thrown the duplicate out before this worker sees
-     * anything.
+     * ### What the selector can and cannot say
+     *
+     * `:last-child` and `:last-of-type` are relative to a parent, so this answers the last link of each
+     * list the page writes rather than the last link of the page:
+     *
+     *     <body><a href="1">..</a><a href="2">..</a><a href="3">..</a></body>   one finding, href 3
+     *     <body><div><a href="1">..</a><a href="2">..</a></div>
+     *           <div><a href="3">..</a><a href="4">..</a></div></body>          two findings, 2 and 4
+     *
+     * Which is the right answer for a page that writes its links flat, and one link too many for a page
+     * that groups them: a gallery list in one div and a footer with an Impressum link in another
+     * answers the last gallery and the Impressum.
+     *
+     * [LastFoundElementWorker] is the other spelling, and it asks about the document rather than about
+     * the markup, so it answers one finding whatever shape the page has. It is not used here because a
+     * stored scanner is a thing a caller reads and edits, and a selector is the part of it that says
+     * what to change; a scanner that has to give the last of a collection that is not flat is one
+     * selector away from being this one, and the worker is there for the page where that is not enough.
      *
      * Nothing else changes. The finding is still the href resolved against the page rather than the
      * label of the link, and a page without links answers nothing at all.
-     *
-     * Two of these over one page would replace each other, see [LastFoundElementWorker], so a scraper
-     * that wants the last link as well as the last image has to give the second one a level of its own.
      */
     private fun buildLastLinkCollector(): Scanner {
         val scraper = Scraper(
@@ -360,7 +372,7 @@ class ScannerInitializer(
             StructuredWorker(
                 download = false,
                 scrapers = listOf(
-                    Scraper(DomParser("(.*)", "a[href]", "abs:href"), LastFoundElementWorker(1))
+                    Scraper(DomParser("(.*)", "a[href]:last-child", "abs:href"), FoundElementsWorker(1))
                 )
             )
         )

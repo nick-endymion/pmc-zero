@@ -256,14 +256,13 @@ class ScraperServiceTests {
     }
 
     /**
-     * A page holding the same file name twice: one file, two media on it, and the second element
-     * reported as not fetched.
+     * A page holding the same file name twice: one file, two media on it, and nothing fetched twice.
      *
      * A plain scan, so [ScanningKontext.alwaysNewDownload] is false, which is the default. The file
      * that is there is left alone rather than a second copy written beside it, so both media point at
-     * the one file and the caller is told which of the two urls it is holding. A caller that wants both
-     * files asks for it on the import path, see
-     * [org.endy.pmczero.service.ScraperImageImportService.importWithStoredScanner].
+     * the one file. That is not reported as a failure: the file is there and both media reach it, so
+     * there is nothing for a caller to do. A caller that wants both files asks for it on the import
+     * path, see [org.endy.pmczero.service.ScraperImageImportService.importWithStoredScanner].
      */
     @Test
     fun `a scan keeps one file when a page holds the same file name twice`() {
@@ -292,9 +291,9 @@ class ScraperServiceTests {
             "both media point at the one file there is"
         )
         assertEquals(
-            listOf("http://testfatest.com/bilder/zwei/a.jpg"),
+            emptyList(),
             sc.failures.map { it.element },
-            "the second url is reported as not fetched"
+            "the second url is not fetched and not a failure either: the file of the first one is there"
         )
         assertEquals(
             "content of http://testfatest.com/bilder/eins/a.jpg",

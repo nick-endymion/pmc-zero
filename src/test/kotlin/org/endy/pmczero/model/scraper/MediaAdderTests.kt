@@ -347,7 +347,7 @@ class MediaAdderTests {
 
     /**
      * The same agreement without a variant: both media point at the one file there is, and the second
-     * element is the one reported as not fetched.
+     * element is not fetched at all.
      *
      * The property that matters is that neither medium points at a file that is not there, which is
      * what a second name would have done here.
@@ -368,7 +368,8 @@ class MediaAdderTests {
                 "medium ${medium.name} points at a file that is not there"
             )
         }
-        assertEquals("http://example.org/two/a.jpg", kontext.failures.single().element)
+        // the second url is not a failure: the file of the first one is there and both media point at it
+        assertEquals(emptyList(), kontext.failures)
     }
 
     @Test

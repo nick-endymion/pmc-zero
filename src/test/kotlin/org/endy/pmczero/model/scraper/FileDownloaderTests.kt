@@ -182,6 +182,9 @@ class FileDownloaderTests {
     /**
      * Without that, the two share the name and the second is not fetched at all, since by the time it
      * is asked for the first has written the file the name points at.
+     *
+     * Not reported as a failure either, since there is nothing a caller could do about it: the file is
+     * there and the medium of the second element points at it.
      */
     @Test
     fun `two elements with the same file name share one file unless a new download is asked for`() {
@@ -192,7 +195,7 @@ class FileDownloaderTests {
 
         assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
         assertEquals(1, fetcher.downloads.size)
-        assertEquals("http://example.org/two/a.jpg", kontext.failures.single().element)
+        assertEquals(emptyList(), kontext.failures, "an earlier file of an earlier run is not a failure")
     }
 
     /** A third clash keeps counting, rather than colliding with the variant of the second. */
@@ -230,16 +233,21 @@ class FileDownloaderTests {
     }
 
     /**
-     * A file already in the folder of the scan is left exactly as it is, and the element is reported
-     * rather than fetched again.
+     * A file already in the folder of the scan is left exactly as it is, and is not fetched again.
      *
      * The name is the one that file already has, so nothing is written beside it and nothing is
-     * overwritten: a second import of a gallery adds no files and says which ones it did not fetch.
+     * overwritten: a second import of a gallery adds no files.
+     *
+     * Not reported either, which is a decision rather than an omission: a file that is there is not
+     * something a caller is missing, and the medium of this element points at it, so a report would be
+     * about a caller's own earlier work rather than about anything that failed. The failures list is
+     * for what could not be had.
+     *
      * The file here was put there by something other than this scan, which is why it is not in
      * `takenFileNames`: a gallery imported yesterday is on disk and nothing in this kontext knows it.
      */
     @Test
-    fun `leaves a file of an earlier scan alone and reports it`() {
+    fun `leaves a file of an earlier scan alone`() {
         val existing = File(tempDir, "2020/a.jpg").apply {
             parentFile.mkdirs()
             writeText("from an earlier import")
@@ -253,10 +261,7 @@ class FileDownloaderTests {
         assertTrue(fetcher.downloads.isEmpty(), "nothing was fetched")
         // the plain name, so that the medium of this element points at the file that is there
         assertEquals(mapOf("http://example.org/bilder/a.jpg" to "a.jpg"), kontext.takenFileNames)
-        assertEquals(
-            "File already exists, so it was not downloaded",
-            kontext.failures.single().reason
-        )
+        assertEquals(emptyList(), kontext.failures, "a file that is there is not a failure")
     }
 
     /**
