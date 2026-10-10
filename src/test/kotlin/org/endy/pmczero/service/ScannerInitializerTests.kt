@@ -226,6 +226,190 @@ class ScannerInitializerTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // The gallery block link collector
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The case this scraper was built for: every href of every link of that class, as a url that can
+     * be visited rather than as the path the page wrote.
+     */
+    @Test
+    fun `collects the hrefs of the gallery block links`() {
+        val html = """
+            <html><body>
+            <a class="blk_galleries expp" href="/gallery/6577307">Gallery</a>
+            <a class="blk_galleries expp" href="/gallery/6577311">Another one</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                FoundElement(1, "http://example.org/gallery/6577307"),
+                FoundElement(1, "http://example.org/gallery/6577311")
+            ),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** A page with one of them needs nothing changed, since the class is the selector. */
+    @Test
+    fun `collects a single href`() {
+        val html = """<html><body><a class="blk_galleries expp" href="/gallery/6577307">G</a></body></html>"""
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/gallery/6577307")),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** A page without such a block answers nothing rather than failing, since nothing to collect is a result. */
+    @Test
+    fun `collects nothing from a page without that class`() {
+        assertEquals(
+            emptyList(),
+            runOver("Gallery Block Link Collector", """<html><body><a href="/a.html">A</a></body></html>""")
+        )
+    }
+
+    /**
+     * The class is what marks a gallery link, and the navigation links around it have none of them,
+     * so they must not come along.
+     */
+    @Test
+    fun `collects nothing from links without that class`() {
+        val html = """
+            <html><body>
+            <a href="/impressum.html">Impressum</a>
+            <a class="nav_link" href="/kontakt.html">Kontakt</a>
+            <a class="blk_galleries expp" href="/gallery/6577307">Gallery</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/gallery/6577307")),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /**
+     * A css selector matches a class wherever it sits in the attribute, so a page that leaves the
+     * `expp` off one of them does not lose that gallery.
+     */
+    @Test
+    fun `collects a link of the class without the second one`() {
+        val html = """
+            <html><body>
+            <a class="blk_galleries" href="/gallery/1">A</a>
+            <a class="expp blk_galleries" href="/gallery/2">B</a>
+            <a class="expp" href="/gallery/3">C</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                FoundElement(1, "http://example.org/gallery/1"),
+                FoundElement(1, "http://example.org/gallery/2")
+            ),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** The href and not the label, which is what the caller can do something with. */
+    @Test
+    fun `reads the href rather than the text of the link`() {
+        val html = """<html><body>
+            <a class="blk_galleries expp" href="/gallery/6577307">Galerieübersicht</a>
+            </body></html>""".trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/gallery/6577307")),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** An absolute href on the page stays absolute rather than being resolved against the page again. */
+    @Test
+    fun `keeps an href the page wrote as an absolute one`() {
+        val html = """
+            <html><body>
+            <a class="blk_galleries expp" href="https://other.example/gallery/7">A</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "https://other.example/gallery/7")),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** A link of that class without an href has none to gather, so it is not a finding. */
+    @Test
+    fun `collects nothing from a link of that class without an href`() {
+        val html = """<html><body>
+            <a class="blk_galleries expp">Gallery</a>
+            <a class="blk_galleries expp" href="/gallery/1">A</a>
+            </body></html>""".trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/gallery/1")),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** Only the gallery links of a page, and every one of them rather than the first. */
+    @Test
+    fun `collects every gallery link of the page in the order the page lists them`() {
+        val html = """
+            <html><body>
+            <a class="blk_galleries expp" href="/gallery/9">9</a>
+            <a class="blk_galleries expp" href="/gallery/3">3</a>
+            <a class="blk_galleries expp" href="/gallery/7">7</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                FoundElement(1, "http://example.org/gallery/9"),
+                FoundElement(1, "http://example.org/gallery/3"),
+                FoundElement(1, "http://example.org/gallery/7")
+            ),
+            runOver("Gallery Block Link Collector", html)
+        )
+    }
+
+    /** The selector is on the class of the links, which is what tells them apart from the rest. */
+    @Test
+    fun `reads the links of that class rather than every link of the page`() {
+        val worker = scannerService.deserialize(storedScanner("Gallery Block Link Collector").serialization!!)
+            .worker as StructuredWorker
+
+        val parser = assertIs<DomParser>(worker.scrapers.single().parser)
+        assertEquals("a.blk_galleries", parser.tag)
+        assertEquals("abs:href", parser.attribute)
+    }
+
+    /** A collector, so nothing is downloaded and no media is recorded. */
+    @Test
+    fun `collects the gallery links and nothing else`() {
+        val kontext = kontext()
+        val html = """
+            <html><body>
+            <a class="blk_galleries expp" href="/gallery/6577307">Gallery</a>
+            <img src="/bilder/a.jpg">
+            </body></html>
+        """.trimIndent()
+
+        scannerService.deserialize(storedScanner("Gallery Block Link Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/gallery/6577307")),
+            kontext.foundElements
+        )
+        assertEquals(emptyList(), kontext.mset?.media?.toList(), "no media recorded")
+    }
+
+    // -------------------------------------------------------------------------------------
     // The others
     // -------------------------------------------------------------------------------------
 
@@ -329,7 +513,8 @@ class ScannerInitializerTests {
                 "Full Page Scraper",
                 "Gallery Index Lister",
                 "Sequence Image Scraper",
-                "Category Link Collector"
+                "Category Link Collector",
+                "Gallery Block Link Collector"
             ),
             stored.map { it.name }
         )

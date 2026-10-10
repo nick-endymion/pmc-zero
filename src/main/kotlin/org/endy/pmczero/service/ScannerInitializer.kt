@@ -42,6 +42,8 @@ import org.springframework.stereotype.Component
  *    [SequenceWorker] rather than with two branches.
  * 8. **Category Link Collector** - the words of the links under one block of a page, e.g. the gallery
  *    categories a page lists in one `div`.
+ * 9. **Gallery Block Link Collector** - the hrefs of the links a page marks with one class, e.g. the
+ *    galleries it offers in a block of `a class="blk_galleries expp"`.
  *
  * Only the first, the fifth and the seventh download anything, so only those three can be run through
  * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
@@ -67,7 +69,8 @@ class ScannerInitializer(
             buildFullPageScraper(),
             buildGalleryIndexLister(),
             buildSequenceImageScraper(),
-            buildCategoryLinkCollector()
+            buildCategoryLinkCollector(),
+            buildGalleryBlockLinkCollector()
         )
 
         for (scanner in scanners) {
@@ -172,6 +175,67 @@ class ScannerInitializer(
             name = "Sequence Image Scraper"
             regex = "testing"
             example = "https://example.com/gallery"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+     * The hrefs of every link of one class on a page, at level 1.
+     *
+     * For a page that offers its galleries in a block of its own, marked by a class on the links:
+     *
+     *     <a class="blk_galleries expp" href="/gallery/6577307">Gallery</a>
+     *     <a class="blk_galleries expp" href="/gallery/6577311">Another one</a>
+     *
+     * answers `http://example.org/gallery/6577307` and `http://example.org/gallery/6577311`.
+     *
+     * `a.blk_galleries` and not `a.blk_galleries.expp`, since a css selector matches a class anywhere in
+     * an attribute and a page is free to write a second one: the element above is collected by either
+     * spelling, and so is a neighbour written `class="blk_galleries"` without the `expp`. Which of those
+     * is the wanted one is a fact about the site rather than about a page, so the narrower
+     * `a.blk_galleries.expp` is a one word change in the stored json if it ever turns out that the
+     * `expp` ones are the galleries and the others are something else.
+     *
+     * The class is the selector rather than a surrounding element, since these links are not put into a
+     * container of their own: there is no id here to name, and the class is what the page marks them
+     * with. It is also what keeps the other links of the page out of the answer, which is the whole
+     * difference to the [buildLinkCollector] and its `a[href]`.
+     *
+     * `abs:href` makes the hrefs absolute against the page they were found on, which is the reason
+     * this scraper is not simply a narrower [buildLinkCollector]: the links above are written
+     * `/gallery/6577307`, and a collector answering that is a list of paths rather than of pages that
+     * can be visited. See [org.endy.pmczero.model.scraper.Scraper] for where the base uri comes from.
+     *
+     * `(.+)` rather than the `(.*)` of the [buildLinkCollector], because the selector here does not ask
+     * for the href: an anchor of this class with a typo in its href reads as an empty string, and there
+     * is no such link to gather. The selector could ask for it instead, `a.blk_galleries[href]`, and the
+     * two answer the same on a page whose links are written correctly.
+     *
+     * Nothing is downloaded and no set is created, so this is a collector: run it through
+     * `POST /api/scanners/{id}/scan` and read the found elements. To also follow each of these links
+     * and collect what is on the pages behind them, this selector is what [buildGalleryIndexLister]
+     * would need in place of its `a[href]`; that is a stored json away and is not built here, since a
+     * run of that costs a fetch per link.
+     */
+    private fun buildGalleryBlockLinkCollector(): Scanner {
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(
+                        DomParser("(.+)", "a.blk_galleries", "abs:href"),
+                        FoundElementsWorker(1)
+                    )
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Gallery Block Link Collector"
+            regex = "(.*)"
+            example = "https://example.com/index"
             serialization = scannerService.serialize(scraper)
             valid = true
         }
