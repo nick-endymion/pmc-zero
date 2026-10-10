@@ -14,6 +14,24 @@ interface MsetRepository : CrudRepository<Mset, Int> {
     fun findAllByNameContaining(searchTerm: String) : List<Mset>
 
     /**
+     * the msets that were imported from exactly [url], in id order
+     *
+     * More than one is the normal case rather than the odd one: a gallery imported twice, once with
+     * its files and once with `noDownload` to fetch them later, is two sets of the same page, and a
+     * caller asking what is stored for a url wants both. A set that was not imported from a page has
+     * no url at all and is not found here, see [Mset.url].
+     *
+     * Exact rather than a `containing`, since a url is a whole value: a search on a fragment would
+     * answer the sets of every page that mentions this one, which is a different question and one
+     * [findAllByNameContaining] already asks of names.
+     *
+     * Ordered by id, so two calls that see the same rows answer them in the same order. Without it the
+     * database is free to answer in any order, and a caller paging through the result could see the
+     * same set twice.
+     */
+    fun findAllByUrlOrderById(url: String): List<Mset>
+
+    /**
      * the mset with the smallest id that is greater than [id], null when there is none
      *
      * The neighbour above [id] in id order, which is what paging through the sets one at a time is.

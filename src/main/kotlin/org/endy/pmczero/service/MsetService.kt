@@ -49,6 +49,21 @@ class MsetService(
     }
 
     /**
+     * The sets that were imported from [url], in id order. See
+     * [MsetRepository.findAllByUrlOrderById].
+     *
+     * A list and not a single set, since a page may well have been imported more than once: once with
+     * its files, and again with `noDownload` to record what it holds without fetching anything, or for
+     * a second supplier of the same gallery. Which of them holds what is then a question about the
+     * individual sets, see [Mset.supplierId] and [Mset.scannnerId].
+     *
+     * Empty rather than an error when nothing was imported from that url, which is a result and not a
+     * failure: a page that has never been scraped is a page a caller is about to scrape, and a 404 here
+     * would read as though the url were wrong.
+     */
+    fun findByUrl(url: String): List<Mset> = msetRepository.findAllByUrlOrderById(url)
+
+    /**
      * The mset following the one with [id] in id order, i.e. the one with the smallest id greater
      * than it. See [MsetRepository.findFirstAboveId].
      *

@@ -285,6 +285,14 @@ class MsetPersistenceTest {
             msetRepository.findAllByNameContaining(name).single().id!!
         }
 
+    /** the id of a set named [name] that was imported from [url] */
+    private fun givenSetOfUrl(url: String, name: String): Int {
+        entityManager.persist(Mset().apply { this.name = name; this.url = url })
+        entityManager.flush()
+        entityManager.clear()
+        return msetRepository.findAllByUrlOrderById(url).single { it.name == name }.id!!
+    }
+
     private fun firstId(): Int = msetRepository.findAllByNameContaining("first").single().id!!
     private fun secondId(): Int = msetRepository.findAllByNameContaining("second").single().id!!
     private fun thirdId(): Int = msetRepository.findAllByNameContaining("third").single().id!!
@@ -425,6 +433,88 @@ class MsetPersistenceTest {
 
         assertEquals(1, msetRepository.count())
         assertEquals(1, msetRepository.findAll().single().locationId)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Msets of one url
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * More than one is the normal case: a gallery imported with its files and again with `noDownload`
+     * to record what it holds is two sets of the same page.
+     */
+    @Test
+    fun `finds every set of a url`() {
+        givenSetOfUrl("http://example.org/galerie.html", "first")
+        givenSetOfUrl("http://example.org/andere.html", "elsewhere")
+        givenSetOfUrl("http://example.org/galerie.html", "second")
+
+        assertEquals(
+            listOf("first", "second"),
+            msetRepository.findAllByUrlOrderById("http://example.org/galerie.html").map { it.name }
+        )
+    }
+
+    /** In id order, so two calls that see the same rows answer them in the same order. */
+    @Test
+    fun `answers the sets of a url in id order`() {
+        val ids = listOf("a", "b", "c").map { givenSetOfUrl("http://example.org/g.html", it) }
+
+        assertEquals(
+            ids,
+            msetRepository.findAllByUrlOrderById("http://example.org/g.html").map { it.id }
+        )
+    }
+
+    /**
+     * A set that was not imported from a page has no url at all, so there is nothing to match it on
+     * and it is not found by any url.
+     */
+    @Test
+    fun `finds no set of a url that none was imported from`() {
+        givenSetOfUrl("http://example.org/galerie.html", "first")
+        entityManager.persist(Mset().apply { name = "scanned from a folder" })
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(emptyList<Mset>(), msetRepository.findAllByUrlOrderById("http://example.org/other.html"))
+    }
+
+    /** A url is matched whole, not as a fragment of a longer one. */
+    @Test
+    fun `does not find a set by part of its url`() {
+        givenSetOfUrl("http://example.org/galerie.html", "first")
+
+        assertEquals(
+            emptyList<Mset>(),
+            msetRepository.findAllByUrlOrderById("http://example.org/galerie")
+        )
+    }
+
+    /**
+     * A query string is part of the url and is not trimmed off, so a page asked for twice with
+     * different parameters is two sets rather than one.
+     */
+    @Test
+    fun `tells two urls of one page apart by their query`() {
+        givenSetOfUrl("http://example.org/g.html?size=large", "large")
+        givenSetOfUrl("http://example.org/g.html?size=small", "small")
+
+        assertEquals(
+            listOf("large"),
+            msetRepository.findAllByUrlOrderById("http://example.org/g.html?size=large").map { it.name }
+        )
+    }
+
+    /**
+     * The sets of a url, in one query rather than one per id, which is what makes a caller that asks
+     * before every scrape affordable.
+     */
+    @Test
+    fun `finds nothing for a url of a page that was never scraped`() {
+        givenSetOfUrl("http://example.org/galerie.html", "first")
+
+        assertEquals(0, msetRepository.findAllByUrlOrderById("http://example.org/never.html").size)
     }
 
     // -------------------------------------------------------------------------------------

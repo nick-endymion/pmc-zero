@@ -63,6 +63,27 @@ class MsetRessource(
         return msetService.findById(id).toTOwithMedia(true)
     }
 
+    /**
+     * The sets that were imported from [url], in id order.
+     *
+     * For a page that may have been scraped more than once, which is the normal case rather than the
+     * odd one: once with its files, again with `noDownload` to record what it holds, or once per
+     * supplier of the same gallery. [MsetTO.supplierId] and [MsetTO.scannerId] are what tell those
+     * apart, which is why this answers with the sets and not with a name.
+     *
+     * Answers an empty list when nothing was ever imported from that url, since a page that has not
+     * been scraped yet is a normal thing to ask about and not an error.
+     *
+     * The media are left out, as in [getMsets], so the answer stays a row per set rather than a
+     * gallery per set. [getMsetWithMedia] has them for one set.
+     *
+     * The url is matched whole, so this is not a search over the pages that mention it.
+     */
+    @GetMapping("/by-url")
+    fun getMsetsByUrl(@RequestParam url: String): List<MsetTO> {
+        return msetService.findByUrl(url).map { it.toTO() }
+    }
+
     @GetMapping("/{id}/ressources-urls")
     fun getMsetWithMediax(@PathVariable id: Int): List<RessourceUrlsTO> {
         return msetService.ressourcesInUse(id)

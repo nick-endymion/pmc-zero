@@ -534,6 +534,44 @@ class MsetServiceTest {
         assertTrue(service.findByStorageId(1).isEmpty())
     }
 
+    // -------------------------------------------------------------------------------------
+    // Msets of one url
+    // -------------------------------------------------------------------------------------
+
+    /** A page may have been imported more than once, so this is a list rather than one set. */
+    @Test
+    fun `finds the msets of a url`() {
+        whenever(msetRepository.findAllByUrlOrderById("http://example.org/g.html")).thenReturn(
+            listOf(
+                Mset().apply { id = 5; name = "first"; url = "http://example.org/g.html" },
+                Mset().apply { id = 9; name = "second"; url = "http://example.org/g.html" }
+            )
+        )
+
+        val result = service.findByUrl("http://example.org/g.html")
+
+        assertEquals(listOf(5, 9), result.map { it.id })
+    }
+
+    /**
+     * A page that was never scraped answers an empty list rather than an error: a caller asking this
+     * is usually about to scrape it.
+     */
+    @Test
+    fun `finds no msets for a url none was imported from`() {
+        whenever(msetRepository.findAllByUrlOrderById("http://example.org/g.html")).thenReturn(emptyList())
+
+        assertTrue(service.findByUrl("http://example.org/g.html").isEmpty())
+    }
+
+    /** The url is asked for as it is, since a repository matching a fragment of one is a different query. */
+    @Test
+    fun `asks the repository for the url as it is`() {
+        service.findByUrl("http://example.org/g.html?size=large")
+
+        verify(msetRepository).findAllByUrlOrderById("http://example.org/g.html?size=large")
+    }
+
     @Test
     fun `checks the storage exists before looking for its msets`() {
         // an unknown id is not a storage that happens to hold nothing
