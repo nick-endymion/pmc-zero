@@ -3,9 +3,11 @@ package org.endy.pmczero.model.scraper
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.endy.pmczero.exception.NotAccessibleException
+import org.endy.pmczero.model.FailedDownload
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.ScanFailure
 import org.endy.pmczero.model.ScanningKontext
+import org.endy.pmczero.service.FailedDownloads
 import java.io.File
 
 /**
@@ -40,6 +42,18 @@ import java.io.File
  * per run, or a [org.endy.pmczero.model.modern.Location] per gallery: the names this worker answers are
  * the names of the files in the folder of the run, so a different folder is a different answer.
  *
+ * ### A download that failed
+ *
+ * Kept for another try in [FailedDownloads], with the url and the path it goes to, before the failure
+ * is thrown. A run reports its failures on the [ScanningKontext] and is then over, and the url of an
+ * image that timed out is nowhere to be found again after that: a caller who wants it has nothing to
+ * work with. [org.endy.pmczero.service.FailedDownloadService] is the other end of that, and it fetches
+ * them again over the same [org.endy.pmczero.service.Fetcher] the run used.
+ *
+ * The two paths that return rather than fetch are not failures and are not kept: an excluded download
+ * is one that was not to be fetched at all, and a file that is already there is one that does not need
+ * fetching. What is kept is a download that was tried and could not be done.
+ *
  * @throws NotAccessibleException when the location is not a file system location, when the path of
  * the element would escape it, or when the download itself fails
  */
@@ -69,13 +83,31 @@ class FileDownloader : Worker() {
         // nothing to write and nothing to rename: a second import of a gallery adds no files and
         // reports one entry per file it did not fetch, the way it reports one per file that 404s
         if (!scanningKontext.alwaysNewDownload && target.isFile) {
-            scanningKontext.failures.add(ScanFailure(element, FILE_ALREADY_STORED))
+//            scanningKontext.failures.add(ScanFailure(element, FILE_ALREADY_STORED)) // not reasonable to report this as a failure, since the file is there and the medium points at it
             return
         }
 
         // no proxy by default: a scan runs against one host, and the page holding the elements was
         // fetched over plain http for a scan that reads it that way
-        scanningKontext.fetcher.downloadTo(element, target, withProxy = false)
+        //
+        // kept for another try before it is thrown, since a download that failed is otherwise gone:
+        // the kontext reports it and then the run is over, and the url of a 200 image that timed out
+        // is nowhere to be found again. The two paths that returned above are not failures and are not
+        // kept: an excluded file is not to be fetched at all, and a file that is already there is one
+        // that does not need fetching.
+        try {
+            scanningKontext.fetcher.downloadTo(element, target, withProxy = false)
+        } catch (e: Throwable) {
+            // Throwable and not Exception, since the exceptions of this application extend Throwable
+            // rather than Exception, see NotFoundException. Rethrown either way, so this adds a retry to
+            // a failure rather than swallowing it: a scrape whose downloads fail is a scrape that
+            // stops, and RecoveryWorker is what decides otherwise. An Error is not kept, being a jvm
+            // that cannot go on rather than a file that could not be had.
+            if (e !is Error) {
+                FailedDownloads.remember(FailedDownload(element, target, scanningKontext.fetcher, e))
+            }
+            throw e
+        }
     }
 
     /**

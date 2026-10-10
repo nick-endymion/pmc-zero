@@ -6,6 +6,7 @@ import org.endy.pmczero.model.ScanningKontext
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.service.FailedDownloads
 import org.endy.pmczero.service.Fetcher
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -39,6 +40,7 @@ class FileDownloaderTests {
         fetcher = RecordingFetcher()
         worker = FileDownloader()
         location = givenLocation(tempDir.absolutePath, LocationType.MAIN_FS)
+        FailedDownloads.clear()
     }
 
     // -------------------------------------------------------------------------------------
@@ -506,6 +508,110 @@ class FileDownloaderTests {
 
         assertEquals(listOf("http://example.org/a.jpg"), fetcher.downloads.map { it.url })
         assertEquals(emptyList(), kontext.failures)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // A download that failed is kept for another try
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The reason the cache exists: a run reports its failures and is then over, and the url of an image
+     * that timed out is nowhere to be found again afterwards.
+     */
+    @Test
+    fun `keeps a download that failed for another try`() {
+        fetcher.failing = true
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+        }
+
+        val kept = FailedDownloads.all().single()
+        assertEquals("http://example.org/a.jpg", kept.url)
+        assertEquals(File(tempDir, "2020/a.jpg").canonicalFile, kept.target.canonicalFile)
+        assertTrue(kept.reason.isNotBlank(), "the reason it failed")
+        assertEquals(1, kept.attempts)
+    }
+
+    /**
+     * Over the fetcher the run used, so a retry goes the same road the download did: a failure that
+     * needs the session of a browser is not fixed by asking a plain http client.
+     */
+    @Test
+    fun `keeps the fetcher the download was made with`() {
+        fetcher.failing = true
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(location, ""))
+        }
+
+        assertTrue(FailedDownloads.all().single().fetcher === fetcher)
+    }
+
+    /** A second import of a gallery that fails the same way is one entry with two attempts on it. */
+    @Test
+    fun `keeps one entry for a download that fails over`() {
+        fetcher.failing = true
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+        }
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+        }
+
+        assertEquals(1, FailedDownloads.count())
+        assertEquals(2, FailedDownloads.all().single().attempts)
+    }
+
+    /** A download that worked is nothing to retry. */
+    @Test
+    fun `keeps nothing for a download that worked`() {
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+
+        assertEquals(emptyList(), FailedDownloads.all())
+    }
+
+    /**
+     * Not a failure: an excluded download was not to be fetched at all, and retrying it would be the
+     * opposite of what that caller asked for.
+     */
+    @Test
+    fun `keeps nothing for a download the scan excluded`() {
+        val kontext = kontextFor(location, "2020").also { it.skipDownloads = true }
+
+        worker.applya("http://example.org/a.jpg", kontext)
+
+        assertEquals(emptyList(), FailedDownloads.all())
+        assertEquals(1, kontext.failures.size, "it is still reported on the kontext")
+    }
+
+    /** Also not a failure: the file is there, so there is nothing left to fetch. */
+    @Test
+    fun `keeps nothing for a file that is already there`() {
+        File(tempDir, "2020/a.jpg").apply {
+            parentFile.mkdirs()
+            writeText("from an earlier import")
+        }
+
+        worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+
+        assertEquals(emptyList(), FailedDownloads.all())
+    }
+
+    /**
+     * A folder that cannot receive files is not a download that failed either: nothing was fetched
+     * because there was nowhere to put it, which is a problem of the location.
+     */
+    @Test
+    fun `keeps nothing when the location cannot receive files`() {
+        val http = givenLocation("http://example.org/main", LocationType.MAIN_HTTP)
+
+        assertThrows<NotAccessibleException> {
+            worker.applya("http://example.org/a.jpg", kontextFor(http, ""))
+        }
+
+        assertEquals(emptyList(), FailedDownloads.all())
     }
 
     // -------------------------------------------------------------------------------------
