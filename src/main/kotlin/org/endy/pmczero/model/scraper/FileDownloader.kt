@@ -31,12 +31,19 @@ import java.io.File
  *
  * ### A file that is already there
  *
- * By default it is left alone: the element is recorded in `failures` with the reason the file was not
- * fetched again, and nothing is written. The medium still points at the file that is there, so a second
- * import of a gallery adds no files and says which ones it did not fetch, rather than filling the
- * location with copies of a gallery that is already there. A caller that does want the copies asks for
- * them, see [ScanningKontext.alwaysNewDownload], and then the file is written beside the old one under
- * a name of its own and the two are kept apart.
+ * By default it is left alone: nothing is written and nothing is reported. The medium still points at
+ * the file that is there, so a second import of a gallery adds no files rather than filling the
+ * location with copies of a gallery that is already there.
+ *
+ * Not reported, which is a decision rather than an omission: `failures` is for what could not be had,
+ * and a file that is there is not something a caller is missing. It would also be a report about the
+ * caller's own earlier import, which is the one thing a result of this run has nothing to do with. A
+ * caller that wants to know what its second import skipped already has the answer in a cheaper place:
+ * [org.endy.pmczero.repository.BessourceRepository.findNamesOfExistingMedia] is what a scan uses to
+ * skip those files in the first place.
+ *
+ * A caller that does want the copies asks for them, see [ScanningKontext.alwaysNewDownload], and then
+ * the file is written beside the old one under a name of its own and the two are kept apart.
  *
  * A caller that wants two runs of a gallery kept apart altogether needs a [ScanningKontext.locationPath]
  * per run, or a [org.endy.pmczero.model.modern.Location] per gallery: the names this worker answers are
@@ -151,10 +158,14 @@ class FileDownloader : Worker() {
         /**
          * Why an element was not downloaded, when the file of that medium is already in the location.
          *
+         * Nothing writes this any more, since a file that is already there is not reported as a failure
+         * any more, see the class comment. Kept because the wording is what a caller reads out of an
+         * `ImageImportTO` of a run written before that, and a caller parsing those results has to
+         * recognise a reason that this no longer produces.
+         *
          * A different text from [DOWNLOAD_EXCLUDED] on purpose, since the two mean opposite things to
          * a caller: here the file is there and nothing is missing, whereas an excluded file still has
-         * to be fetched. Both are reported in `ImageImportTO.failures` rather than in a count of their
-         * own, so the reason is the only thing that tells them apart.
+         * to be fetched.
          */
         const val FILE_ALREADY_STORED = "File already exists, so it was not downloaded"
     }

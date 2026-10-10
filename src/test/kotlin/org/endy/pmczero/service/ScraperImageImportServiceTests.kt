@@ -1309,10 +1309,15 @@ class ScraperImageImportServiceTests {
 
     /**
      * A second import of the same gallery into the same folder: the files the first one wrote are left
-     * alone and reported, rather than copied beside themselves.
+     * alone and nothing is fetched beside them.
+     *
+     * Not reported as failures, which is a decision rather than an omission: a file that is already
+     * there is not something a caller is missing, so listing it would be a report about the caller's own
+     * earlier import. What a caller reads to find out what could not be had is [failed], and here
+     * nothing was missed.
      */
     @Test
-    fun `reports the files it did not download because they are already there`() {
+    fun `leaves the files that are already there alone`() {
         givenPage(page)
         givenScannerWith(4, service.scraperOf(null))
 
@@ -1323,12 +1328,9 @@ class ScraperImageImportServiceTests {
             scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
         )
 
-        assertEquals(3, second.failed)
-        assertTrue(
-            second.failures.all { it.reason == "File already exists, so it was not downloaded" },
-            "every one says the file was already there: ${second.failures.map { it.reason }}"
-        )
-        // the folder still holds the three files the first import wrote
+        assertEquals(0, second.failed)
+        assertTrue(second.failures.isEmpty(), "nothing failed: ${second.failures.map { it.reason }}")
+        // the folder still holds the three files the first import wrote, and no copies beside them
         assertEquals(
             listOf("G/drittes.png", "G/erstes.jpg", "G/zweites.jpg"),
             writtenRelativeTo(tempDir)
