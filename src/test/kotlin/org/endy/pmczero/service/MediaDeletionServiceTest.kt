@@ -55,7 +55,7 @@ class MediaDeletionServiceTest {
     @BeforeEach
     fun setUp() {
         service = MediaDeletionService(
-            mediaRepository, StorageService(storageRepository), entityManager
+            mediaRepository, BessourceFiles(StorageService(storageRepository)), entityManager
         )
         mainFs = File(tempDir, "main").apply { mkdirs() }
         tnFs = File(tempDir, "tn").apply { mkdirs() }

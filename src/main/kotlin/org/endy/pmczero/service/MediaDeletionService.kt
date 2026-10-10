@@ -2,12 +2,8 @@ package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
-import org.endy.pmczero.model.LocationType
-import org.endy.pmczero.model.RessType
 import org.endy.pmczero.model.modern.Bessource
-import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
-import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.to.MediumDeletionTO
 import org.springframework.data.repository.findByIdOrNull
@@ -53,7 +49,7 @@ private const val DELETED_FOLDER = "DELETED"
 @Service
 class MediaDeletionService(
     private val mediaRepository: MediaRepository,
-    private val storageService: StorageService,
+    private val bessourceFiles: BessourceFiles,
     private val entityManager: EntityManager
 ) {
 
@@ -160,36 +156,12 @@ class MediaDeletionService(
      * below the [DELETED_FOLDER].
      */
     private fun moveOf(bessource: Bessource): Move? {
-        val location = locationOf(bessource) ?: return null
+        val from = bessourceFiles.fileOf(bessource) ?: return null
         val relative = bessource.name ?: return null
-        val from = fileIn(location, relative) ?: return null
-        if (!from.isFile) return null
-
         val parked = parked(relative) ?: return null
+        val to = bessourceFiles.destinationOf(bessource, parked) ?: return null
 
-        return Move(from, fileIn(location, parked) ?: return null, parked)
-    }
-
-    /**
-     * The location of the file [bessource] points at, null when there is none to speak of.
-     *
-     * The location type follows the ressource type the same way
-     * [LocationService.providePhysicalRessources] maps them: a primary file lives in the MAIN_FS
-     * location, a thumbnail in the TN_FS one. A bessource of any other type has no folder of its
-     * own here, and an HTTP location has no folder at all.
-     */
-    private fun locationOf(bessource: Bessource): Location? {
-        val storage: Storage = bessource.storageOrNull() ?: return null
-        val wanted = when (bessource.ressType) {
-            RessType.PRIMARY.i -> LocationType.MAIN_FS
-            RessType.TN.i -> LocationType.TN_FS
-            else -> return null
-        }
-
-        // withLocations: the locations are lazy, so reading one without them would fail outside a
-        // session and load nothing useful with them
-        return storageService.findById(storage.id ?: return null, withLocations = true)
-            .locationInUse(wanted.i)
+        return Move(from, to, parked)
     }
 
     /**
@@ -235,18 +207,5 @@ class MediaDeletionService(
     } catch (e: IOException) {
         println("could not move ${move.from.path} to ${move.to.path} for medium $mediumId: ${e.message}")
         false
-    }
-
-    /**
-     * [relative] inside the folder of the FS [location], null when it would escape that folder.
-     *
-     * Canonicalised before the comparison, which is what rules out `..` and symlinks: a bessource
-     * name is free text and a move must never reach outside the location it belongs to.
-     */
-    private fun fileIn(location: Location, relative: String?): File? {
-        val root = File(location.uri ?: return null).canonicalFile
-        val file = File(root, relative ?: return null).canonicalFile
-
-        return if (file.path.startsWith(root.path + File.separator)) file else null
     }
 }
