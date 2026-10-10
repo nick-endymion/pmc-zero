@@ -19,8 +19,12 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.support.SimpleTransactionStatus
 import java.io.File
 import java.security.MessageDigest
 import java.time.LocalDateTime
@@ -47,6 +51,13 @@ class FileInfoServiceTests {
     private val bessourceRepository: BessourceRepository = mock()
     private val storageRepository: StorageRepository = mock()
 
+    /**
+     * the batches of a run are written in a transaction, and a mocked one answers every begin and every
+     * commit with nothing, which is what a test of the counting wants: the run is over files on disk,
+     * not over a database
+     */
+    private val transactionManager: PlatformTransactionManager = mock()
+
     private lateinit var service: FileInfoService
 
     /** the MAIN_FS folder, which is where a primary bessource lives */
@@ -57,13 +68,18 @@ class FileInfoServiceTests {
         service = FileInfoService(
             fileInfoRepository,
             bessourceRepository,
-            BessourceFiles(StorageService(storageRepository))
+            BessourceFiles(StorageService(storageRepository)),
+            transactionManager
         )
 
         givenStorageWithAFolder(mainFs)
 
         // a save hands the row back the way a repository would
         whenever(fileInfoRepository.save(any<FileInfo>())).thenAnswer { it.getArgument(0) }
+
+        // and a transaction is one that starts and commits without doing anything, since what a run
+        // over a storage writes is a row per file and not a transaction
+        whenever(transactionManager.getTransaction(any())).thenReturn(SimpleTransactionStatus())
     }
 
     // -------------------------------------------------------------------------------------
@@ -294,8 +310,205 @@ class FileInfoServiceTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // A whole storage
+    // -------------------------------------------------------------------------------------
+
+    /** the run of a storage that has nothing recorded yet, i.e. the first call */
+    @Test
+    fun `records what is missing of a storage`() {
+        givenBessources(count = 3)
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(3, run.attempted)
+        assertEquals(3, run.recorded)
+        assertEquals(0, run.skipped)
+        assertEquals(0, run.failed)
+        assertEquals(emptyList(), run.failures)
+    }
+
+    @Test
+    fun `records the file of every bessource of the storage`() {
+        givenBessources(count = 2)
+
+        service.recordMissingOf(1)
+
+        val saved = argumentCaptor<FileInfo>()
+        verify(fileInfoRepository, times(2)).save(saved.capture())
+        assertEquals(listOf(1, 2), saved.allValues.map { it.bessourceId })
+    }
+
+    /**
+     * The reason this is worth calling twice: a bessource with a row is not read again, so a second run
+     * over a storage that was recorded a moment ago costs one query per storage and no hashes at all.
+     */
+    @Test
+    fun `leaves a bessource that has a row alone`() {
+        givenBessources(count = 2)
+        whenever(fileInfoRepository.findBessourceIdsOfStorage(1)).thenReturn(listOf(2))
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(1, run.attempted)
+        assertEquals(1, run.recorded)
+        assertEquals(1, run.skipped)
+        verify(fileInfoRepository, never()).findByBessourceId(2)
+    }
+
+    @Test
+    fun `records nothing when every bessource has a row already`() {
+        givenBessources(count = 2)
+        whenever(fileInfoRepository.findBessourceIdsOfStorage(1)).thenReturn(listOf(1, 2))
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(0, run.attempted)
+        assertEquals(0, run.recorded)
+        assertEquals(2, run.skipped)
+        verify(fileInfoRepository, never()).save(any<FileInfo>())
+    }
+
+    @Test
+    fun `records nothing for a storage without bessources`() {
+        whenever(bessourceRepository.findIdsOfStorage(1)).thenReturn(emptyList())
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(0, run.attempted)
+        assertEquals(0, run.recorded)
+        assertEquals(0, run.failed)
+    }
+
+    /** A thumbnail is a file of the storage as well, so it is recorded like any other. */
+    @Test
+    fun `records the thumbnail of a bessource as well`() {
+        val tnFs = File(tempDir, "tn").apply { mkdirs() }
+        givenStorageWithAFolder(mainFs, tnFs)
+        whenever(bessourceRepository.findIdsOfStorage(1)).thenReturn(listOf(1, 2))
+        givenBessource(1, "bilder/a.jpg", content = "bild")
+        givenBessource(2, "bilder/a.jpg", content = "thumb", ressType = RessType.TN, write = false)
+        File(tnFs, "bilder").mkdirs()
+        File(tnFs, "bilder/a.jpg").writeText("thumb")
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(2, run.recorded)
+        assertEquals(0, run.failed)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // What a run over a storage refuses
+    // -------------------------------------------------------------------------------------
+
+    /** A file that is not there is a fact about that one file, not a reason to give up on the storage. */
+    @Test
+    fun `reports a file it cannot read and records the ones beside it`() {
+        givenBessources(count = 2)
+        whenever(bessourceRepository.findIdsOfStorage(1)).thenReturn(listOf(1, 2, 3))
+        givenBessource(3, "bilder/weg.jpg", write = false)
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(2, run.recorded)
+        assertEquals(1, run.failed)
+        assertEquals(3, run.attempted)
+        assertEquals(1, run.failures.size)
+        assertEquals(3, run.failures.first().bessourceId)
+        assertTrue(
+            run.failures.first().reason.contains("no file on disk"),
+            "the reason is the message of what was thrown: ${run.failures.first().reason}"
+        )
+    }
+
+    /** Every failure is counted, since a storage whose location is unreachable fails all of them. */
+    @Test
+    fun `names no more failures than it reports`() {
+        whenever(bessourceRepository.findIdsOfStorage(1)).thenReturn((1..60).toList())
+        for (id in 1..60) {
+            givenBessource(id, "bilder/$id.jpg", write = false)
+        }
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(60, run.failed, "every one of them failed")
+        assertEquals(
+            FileInfoService.MAX_FAILURES_REPORTED,
+            run.failures.size,
+            "the answer names only as many as it may"
+        )
+    }
+
+    // -------------------------------------------------------------------------------------
+    // How a run over a storage is committed
+    // -------------------------------------------------------------------------------------
+
+    /** A hundred files at a time, so a run that is interrupted keeps what it had already written. */
+    @Test
+    fun `commits every hundred files`() {
+        givenBessources(count = 250)
+
+        val run = service.recordMissingOf(1)
+
+        assertEquals(250, run.recorded)
+        verify(transactionManager, times(3)).commit(any())
+    }
+
+    @Test
+    fun `commits once for fewer than a hundred files`() {
+        givenBessources(count = 99)
+
+        service.recordMissingOf(1)
+
+        verify(transactionManager, times(1)).commit(any())
+    }
+
+    /** Nothing to write is nothing to commit, so a storage that is already recorded costs no transaction. */
+    @Test
+    fun `commits nothing when there is nothing to record`() {
+        givenBessources(count = 3)
+        whenever(fileInfoRepository.findBessourceIdsOfStorage(1)).thenReturn(listOf(1, 2, 3))
+
+        service.recordMissingOf(1)
+
+        verify(transactionManager, never()).commit(any())
+    }
+
+    /**
+     * A batch committed on its own rather than in a transaction of the caller, since the whole point
+     * of committing every hundred files is that the hundredth is committed before the two hundredth is
+     * looked at.
+     */
+    @Test
+    fun `writes a batch in a transaction of its own`() {
+        givenBessources(count = 1)
+
+        service.recordMissingOf(1)
+
+        val asked = argumentCaptor<TransactionDefinition>()
+        verify(transactionManager).getTransaction(asked.capture())
+        assertEquals(TransactionDefinition.PROPAGATION_REQUIRES_NEW, asked.firstValue.propagationBehavior)
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
+
+    /**
+     * [count] bessources on storage 1, numbered from [from], each with a file below the MAIN_FS folder
+     *
+     * Small files with different content, since a hash over equal content would be equal as well and a
+     * run over identical files is one a test cannot tell from a run that recorded nothing.
+     */
+    private fun givenBessources(count: Int, from: Int = 1) {
+        val ids = (from until from + count).toList()
+        whenever(bessourceRepository.findIdsOfStorage(1)).thenReturn(ids)
+
+        for (id in ids) {
+            givenBessource(id, "bilder/$id.jpg", content = "inhalt $id")
+        }
+    }
+
+    /** a bessource with [id] naming [name], its file written unless [write] is false */
 
     /** a bessource with [id] naming [name], its file written unless [write] is false */
     private fun givenBessource(

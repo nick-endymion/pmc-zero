@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 @SerialName("passThrough")
 class PassThroughParser() : Parser() {
-    override fun getElements(text: String, baseUri: String): List<String> {
+    override fun findElements(text: String, baseUri: String): List<String> {
         return listOf(text)
     }
 }

@@ -426,6 +426,24 @@ class ScannerInitializerTests {
         assertEquals("Galerie", kontext.mset?.name)
     }
 
+    /**
+     * A page that shows an image twice is one medium, since a [Parser] says an answer it would say
+     * twice once: without that the set held `a.jpg` and `a.1.jpg` for one file, because
+ * [org.endy.pmczero.model.scraper.ScanPath] hands out a variant of a name rather than overwriting it.
+ */
+@Test
+    fun `records an image the page shows twice once`() {
+        val html = """<html><head><title>Galerie</title></head><body>
+            <img src="/bilder/a.jpg"><img src="/bilder/a.jpg"><img src="/bilder/b.jpg">
+            </body></html>"""
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Image Scraper").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals(listOf("a.jpg", "b.jpg"), kontext.mset?.media?.map { it.name })
+    }
+
     /** A downloader has to be in it, since an import of it is refused without one. */
     @Test
     fun `the image scraper downloads what it records`() {

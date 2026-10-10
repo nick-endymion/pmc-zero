@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * How a downloaded page is turned into the strings a [Worker] then acts on.
  *
- * `sealed` rather than `abstract`, and that is not a stylistic choice: [Scraper] holds a `Parser`, so
+ * `sealed` rather than `abstract`, and that is not a stylistic choice: [Scraper] holds a [Parser], so
  * serializing a scraper means serializing polymorphically. kotlinx.serialization resolves that
  * differently for the two:
  *
@@ -26,6 +26,37 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed class Parser {
 
-    abstract fun getElements(text: String, baseUri: String) : List<String>
+    /**
+     * What this finds in [text], with the answers that say the same thing twice said once.
+     *
+     * A page repeats itself: the same image in the teaser and in the gallery, the same link in the
+     * header and in the footer, the same url twice because a page lists a gallery in two blocks. A
+     * worker acts on one element at a time and has nothing to say about having seen it already, so
+     * two findings that are the same string produce a second medium for the same file, a second
+     * download of it, and a second line in a result that says nothing was different about it. Which of
+     * those a caller wants is not for each of them to decide, so it is decided once, here.
+     *
+     * The first of a run of equal answers is the one kept, since a parser answers in document order
+     * and the order is what a worker hands to [ScanPath.freeFileNameOf] to name things by.
+     *
+     * Equal means equal as a string and nothing more. A parser answers strings and not urls, so
+     * `/gallery/1` and `http://example.org/gallery/1` are two answers here even where they are one
+     * page, and a caller that wants them one has to resolve them itself, since [DomParser] has already
+     * had its say about what an attribute means.
+     *
+     * Not across parsers either: two parsers of one scraper are two questions about a page and are
+     * answered independently, which is what lets [org.endy.pmczero.model.FoundElement] tell a level 1
+     * finding apart from the level 2 finding of the same url.
+     */
+    fun getElements(text: String, baseUri: String): List<String> =
+        findElements(text, baseUri).distinct()
 
+    /**
+     * What a parser of this kind finds, in the order the page has it and with its duplicates still in.
+     *
+     * The raw half of [getElements], which is what every implementation answers and what takes the
+     * duplicates out once for all of them: a parser added later cannot forget to, since forgetting is
+     * not something the compiler can be asked about.
+     */
+    protected abstract fun findElements(text: String, baseUri: String): List<String>
 }

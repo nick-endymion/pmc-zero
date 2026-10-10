@@ -9,7 +9,7 @@ import org.jsoup.select.Elements
 @SerialName("dom")
 class DomParser(val regex: String, val tag: String, val attribute: String) : Parser() {
 
-    override fun getElements(text: String, baseUri: String): List<String> { //TODO via Jsoup
+    override fun findElements(text: String, baseUri: String): List<String> { //TODO via Jsoup
 
         val doc = Jsoup.parse(text)
         doc.setBaseUri(baseUri)

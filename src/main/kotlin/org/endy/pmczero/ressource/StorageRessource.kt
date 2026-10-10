@@ -2,8 +2,10 @@ package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.service.FileInfoService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
+import org.endy.pmczero.to.FileInfoRunTO
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.StorageTO
 import org.springframework.web.bind.annotation.*
@@ -12,7 +14,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/storages")
 class StorageRessource(
     val storageService: StorageService,
-    val msetService: MsetService
+    val msetService: MsetService,
+    val fileInfoService: FileInfoService
 ) {
 
     @GetMapping("/")
@@ -43,6 +46,34 @@ class StorageRessource(
     @GetMapping("/{id}/msets")
     fun getMsets(@PathVariable id: Int): List<MsetTO> {
         return msetService.findByStorageId(id).map { it.toTO() }
+    }
+
+    /**
+     * Records what is missing of this storage: the file behind every bessource of it that has no
+     * [org.endy.pmczero.model.modern.FileInfo] yet, and answers what the run did.
+     *
+     * A bessource that has a row is left alone, so calling this a second time over a storage that was
+     * recorded a moment ago writes nothing and costs one query, while calling it after a scan that
+     * brought in new files fills in the new ones and leaves the old ones as they are.
+     *
+     * Every file is hashed, so this is a call that takes as long as the storage is large and reads
+     * every file on it once. The writes land a hundred at a time rather than in one transaction at the
+     * end, so a run that is interrupted has recorded the first hundred files and the next hundred and
+     * not the last one, and each of those is worth keeping.
+     *
+     * A file that cannot be read is reported as a failure and does not stop the run, so the answer
+     * carries [org.endy.pmczero.to.FileInfoRunTO.attempted], `recorded`, `skipped` and `failed` rather
+     * than being the recorded ones.
+     *
+     * Answers 404 for an unknown storage, so a mistyped id is not mistaken for a storage with nothing
+     * to record.
+     */
+    @PostMapping("/{id}/set-fileinfos")
+    fun setFileInfos(@PathVariable id: Int): FileInfoRunTO {
+        // so an unknown storage is a 404 rather than a run over nothing that reports success
+        storageService.findById(id)
+
+        return fileInfoService.recordMissingOf(id)
     }
 
     @PostMapping("/")

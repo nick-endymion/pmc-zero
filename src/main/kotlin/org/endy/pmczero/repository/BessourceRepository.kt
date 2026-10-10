@@ -33,5 +33,15 @@ interface BessourceRepository : CrudRepository<Bessource, Int> {
         @Param("names") names: Collection<String>
     ): List<String>
 
+    /**
+     * the ids of the bessources on [storageId], of any ressource type
+     *
+     * Ids rather than rows, for a caller that walks a whole storage: it looks at each file one at a
+     * time and has no use for the rest of a bessource, and a storage of a hundred thousand files does
+     * not fit in memory as rows where the ids are a fraction of that.
+     */
+    @Query("select b.id from Bessource b where b.storage.id = :storageId")
+    fun findIdsOfStorage(@Param("storageId") storageId: Int): List<Int>
+
 }
 
