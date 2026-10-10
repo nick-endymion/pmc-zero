@@ -64,14 +64,18 @@ internal object ScanPath {
     }
 
     /**
-     * [fileNameOf] of [element], or a variant of it when the scan already handed that name out.
+     * [fileNameOf] of [element], or a variant of it when the caller asked for one and the scan
+     * already handed that name out.
      *
-     * A gallery that names its images `1.jpg`, `2.jpg`, ... never comes through here, but a page that
-     * links the same name twice, or links a file and then a thumb under the same name, would: the
-     * second download would replace the first, and the medium of the first would be left pointing at
-     * bytes that are no longer the ones it was recorded for. A variant per clash keeps both.
+     * A gallery that names its images `1.jpg`, `2.jpg`, ... never comes through here. A page that links
+     * the same name twice, or links a file and then a thumb under the same name, does, and it is
+     * [ScanningKontext.alwaysNewDownload] that decides what happens to it: with that set, the second
+     * gets a variant of the name so the second download cannot replace the first and leave the medium
+     * of the first pointing at bytes that are no longer the ones it was recorded for. Without it, both
+     * keep the plain name and [FileDownloader] fetches the second one only if the first is not there,
+     * which is the same answer for a gallery imported a second time.
      *
-     * The variant is remembered against the element, so the same element always answers the same name.
+     * The name is remembered against the element, so the same element always answers the same name.
      * That is what makes [MediaAdder] and [FileDownloader] agree even though both ask: without it the
      * second one to ask would see the first name as taken and pick the next variant, leaving a
      * bessource pointing at `a.1.jpg` and a file written to `a.jpg`.
@@ -90,10 +94,15 @@ internal object ScanPath {
         taken[element]?.let { return it }
 
         val name = fileNameOf(element)
-        val free = if (taken.values.contains(name) || existingOnDisk(scanningKontext, name))
-            taken.values.toList().firstFreeVariantOf(name)
-        else
-            name
+
+        // a variant only when the caller asked for one, see [ScanningKontext.alwaysNewDownload].
+        // Otherwise the name a file already sits under is the name this element keeps, since the
+        // downloader leaves that file alone rather than writing a second copy beside it: a name of its
+        // own would point at a file that is not there, which is what a medium must never do
+        val free = if (scanningKontext.alwaysNewDownload &&
+            (taken.values.contains(name) || existingOnDisk(scanningKontext, name))
+        ) taken.values.toList().firstFreeVariantOf(name)
+        else name
 
         taken[element] = free
         return free

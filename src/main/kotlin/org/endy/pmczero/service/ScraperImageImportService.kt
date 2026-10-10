@@ -1,6 +1,7 @@
 package org.endy.pmczero.service
 
 import com.microsoft.playwright.options.WaitForSelectorState
+import com.microsoft.playwright.options.WaitUntilState
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.modern.Location
@@ -180,6 +181,12 @@ class ScraperImageImportService(
      * downloader would have written is reported in [org.endy.pmczero.to.ImageImportTO.failures]
      * instead, with the reason it was left alone, so a caller still sees what the page holds and which
      * of it is still to be had. See [org.endy.pmczero.model.ScanningKontext.skipDownloads]
+     * @param alwaysNewDownload true fetches a file again even when the location already holds it,
+     * under a name of its own, which is what this did before there was a choice. False, the default,
+     * leaves the file alone, records the medium under the name that file already has and reports the
+     * file it did not fetch. See [org.endy.pmczero.model.ScanningKontext.alwaysNewDownload]
+     * @param waitUntil how far to wait for the page before its dom is read, null for the load event.
+     * See [importWith]
      * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
      * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
      * when it holds no worker that downloads the files of the media it records, when the location
@@ -196,7 +203,9 @@ class ScraperImageImportService(
         waitForSelectorState: WaitForSelectorState? = null,
         persist: Boolean = true,
         supplierId: String? = null,
-        noDownload: Boolean = false
+        noDownload: Boolean = false,
+        alwaysNewDownload: Boolean = false,
+        waitUntil: WaitUntilState? = null
     ): ImageImportTO = importWith(
         locationId = locationId,
         url = url,
@@ -211,7 +220,9 @@ class ScraperImageImportService(
         persist = persist,
         supplierId = supplierId,
         scannerId = scannerId,
-        noDownload = noDownload
+        noDownload = noDownload,
+        alwaysNewDownload = alwaysNewDownload,
+        waitUntil = waitUntil
     )
 
     /**
@@ -247,6 +258,12 @@ class ScraperImageImportService(
      * [org.endy.pmczero.model.ScanningKontext.skipDownloads]. Every element the downloader was asked
      * for is reported in [org.endy.pmczero.to.ImageImportTO.failures] with the reason it was left
      * alone, so the answer is the same shape as one where the downloads failed
+     * @param alwaysNewDownload true fetches a file again even when the location already holds it,
+     * under a name of its own. See [org.endy.pmczero.model.ScanningKontext.alwaysNewDownload]
+     * @param waitUntil how far to wait for the page before its dom is read, null for the load event.
+     * [org.endy.pmczero.service.BrowserFetcher.render] is where the states are worth reading about;
+     * the one for this call is `domcontentloaded` when the files are not to be fetched here, since
+     * the load event counts the images of the page and a draft has no use for that wait
      */
     fun importWith(
         locationId: Int,
@@ -259,16 +276,17 @@ class ScraperImageImportService(
         persist: Boolean = true,
         supplierId: String? = null,
         scannerId: Int? = null,
-        noDownload: Boolean = false
-    ): ImageImportTO {
-        val location = writableLocation(locationId)
+        noDownload: Boolean = false,
+        alwaysNewDownload: Boolean = false,
+        waitUntil: WaitUntilState? = null
+    ): ImageImportTO {        val location = writableLocation(locationId)
         val storageId = location.storageOrNull()?.id
 
         // rendered here rather than by the StructuredWorker below, which would fetch the page itself and
         // so lose the scroll count and the wait for a selector: a lazily loading gallery read without
         // scrolling answers only what was above the fold, and a single page application read at the load
         // event answers an empty shell
-        val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState)
+        val html = browserFetcher.render(url, waitForSelector, scrollTimes, waitForSelectorState, waitUntil)
 
         val kontext = scraperService.getNewScanningContext(location, browserFetcher, folderFor(supplierId, name, url))
 
@@ -276,6 +294,7 @@ class ScraperImageImportService(
         // writes its files and one that only records what the page holds. Set before the run rather
         // than after, since the [org.endy.pmczero.model.scraper.FileDownloader] reads it per element
         kontext.skipDownloads = noDownload
+        kontext.alwaysNewDownload = alwaysNewDownload
 
         scraper.doWork(html, baseUriOf(url), kontext)
 

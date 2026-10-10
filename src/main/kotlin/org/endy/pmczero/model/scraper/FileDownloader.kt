@@ -27,9 +27,18 @@ import java.io.File
  * browser fetches its files the same way. A page that hands out urls only its own cookies reach
  * would otherwise yield media whose files could not be fetched at all.
  *
- * Nothing is skipped: a file that is already there is overwritten. A caller that wants files kept
- * apart needs a [ScanningKontext.locationPath] per run, or a
- * [org.endy.pmczero.model.modern.Location] per gallery.
+ * ### A file that is already there
+ *
+ * By default it is left alone: the element is recorded in `failures` with the reason the file was not
+ * fetched again, and nothing is written. The medium still points at the file that is there, so a second
+ * import of a gallery adds no files and says which ones it did not fetch, rather than filling the
+ * location with copies of a gallery that is already there. A caller that does want the copies asks for
+ * them, see [ScanningKontext.alwaysNewDownload], and then the file is written beside the old one under
+ * a name of its own and the two are kept apart.
+ *
+ * A caller that wants two runs of a gallery kept apart altogether needs a [ScanningKontext.locationPath]
+ * per run, or a [org.endy.pmczero.model.modern.Location] per gallery: the names this worker answers are
+ * the names of the files in the folder of the run, so a different folder is a different answer.
  *
  * @throws NotAccessibleException when the location is not a file system location, when the path of
  * the element would escape it, or when the download itself fails
@@ -54,6 +63,15 @@ class FileDownloader : Worker() {
             ?: throw NotAccessibleException(
                 "the path $relative of $element escapes the location it is downloaded into"
             )
+
+        // a file that is already there is left where it is, and said so, unless the caller asked for a
+        // new copy of it. The name the medium was recorded under is the name of that file, so there is
+        // nothing to write and nothing to rename: a second import of a gallery adds no files and
+        // reports one entry per file it did not fetch, the way it reports one per file that 404s
+        if (!scanningKontext.alwaysNewDownload && target.isFile) {
+            scanningKontext.failures.add(ScanFailure(element, FILE_ALREADY_STORED))
+            return
+        }
 
         // no proxy by default: a scan runs against one host, and the page holding the elements was
         // fetched over plain http for a scan that reads it that way
@@ -97,5 +115,15 @@ class FileDownloader : Worker() {
          * change is then something it has to recognise.
          */
         const val DOWNLOAD_EXCLUDED = "Download excluded. Need to be done manually"
+
+        /**
+         * Why an element was not downloaded, when the file of that medium is already in the location.
+         *
+         * A different text from [DOWNLOAD_EXCLUDED] on purpose, since the two mean opposite things to
+         * a caller: here the file is there and nothing is missing, whereas an excluded file still has
+         * to be fetched. Both are reported in `ImageImportTO.failures` rather than in a count of their
+         * own, so the reason is the only thing that tells them apart.
+         */
+        const val FILE_ALREADY_STORED = "File already exists, so it was not downloaded"
     }
 }

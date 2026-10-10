@@ -117,14 +117,26 @@ class ScraperRessource(
      * @param scrollTimes how often to scroll to the bottom before answering. A lazily loading list
      * only holds its rows below the fold, so this is what gets all of them rather than the first
      * screenful. It stops on its own once a scroll changes nothing, so this can be set generously
+     * @param waitUntil how far to wait before the dom is read. Blank waits for the load event, which
+     * counts the images of the page, so a gallery of two hundred of them holds the answer up until
+     * all two hundred are in. `domcontentloaded` is the one for a caller that only wants the markup:
+     * the html is parsed and the deferred scripts have run, and no picture is waited for. See
+     * [org.endy.pmczero.service.BrowserFetcher.render] for what the states are worth
      */
     @PostMapping("/render")
     fun render(
         @RequestParam url: String,
         @RequestParam(required = false) waitForSelector: String?,
         @RequestParam(required = false) waitForSelectorState: String?,
-        @RequestParam(defaultValue = "0") scrollTimes: Int
-    ): String = browserFetcher.render(url, waitForSelector, scrollTimes, waitStateOf(waitForSelectorState))
+        @RequestParam(defaultValue = "0") scrollTimes: Int,
+        @RequestParam(required = false) waitUntil: String?
+    ): String = browserFetcher.render(
+        url,
+        waitForSelector,
+        scrollTimes,
+        waitStateOf(waitForSelectorState),
+        waitUntilOf(waitUntil)
+    )
 
     /**
      * Imports the images of [url] into the location with [locationId], answering what happened to
@@ -363,6 +375,9 @@ class ScraperRessource(
      * is the parameter that makes the draft worth reading
      * @param waitForSelectorState what `waitForSelector` has to reach to count as done. Blank waits
      * for it to be visible. See [render]
+     * @param waitUntil how far to wait before the dom is read, ignored when [browser] is false. See
+     * [render]; `domcontentloaded` is the one for a draft, since a draft fetches nothing and so has
+     * no use for a wait on the pictures
      */
     @PostMapping("/draft")
     fun draft(
@@ -370,7 +385,8 @@ class ScraperRessource(
         @RequestParam(required = false) waitForSelector: String?,
         @RequestParam(required = false) waitForSelectorState: String?,
         @RequestParam(defaultValue = "true") browser: Boolean,
-        @RequestParam(defaultValue = "3") scrollTimes: Int
+        @RequestParam(defaultValue = "3") scrollTimes: Int,
+        @RequestParam(required = false) waitUntil: String?
     ): MsetTO {
         // a placeholder location, so nothing of the draft points at a real storage: this is a look at
         // what a page holds, not a set that is about to be saved
@@ -385,7 +401,13 @@ class ScraperRessource(
         // than every worker fetching the page again: a gallery that appends images as it is scrolled
         // would otherwise be read several times, each time holding something different
         if (browser) scraper.doWork(
-            browserFetcher.render(url, waitForSelector, scrollTimes, waitStateOf(waitForSelectorState)),
+            browserFetcher.render(
+                url,
+                waitForSelector,
+                scrollTimes,
+                waitStateOf(waitForSelectorState),
+                waitUntilOf(waitUntil)
+            ),
             baseUriOf(url),
             kontext
         )

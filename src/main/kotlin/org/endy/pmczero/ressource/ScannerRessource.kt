@@ -124,6 +124,18 @@ class ScannerRessource(
      * are fetched. A set saved this way therefore points at files that are not on disk yet, which is
      * what makes it worth a second run of the same call without it later.
      *
+     * ### A file that is already there
+     *
+     * By default a file the location already holds is left alone. The medium is still recorded, under
+     * the name that file has, and the file is reported in [ImageImportTO.failures] with the reason it
+     * was not fetched again. So importing a gallery twice answers a set whose media all point at files
+     * that exist plus a list of what was not fetched, rather than a second copy of every picture under
+     * a numbered name.
+     *
+     * `alwaysNewDownload` asks for those copies instead, for a caller that wants the same picture twice
+     * under two names. The file that is there is kept and the new one written beside it as
+     * `bild.1.jpg`, so nothing already stored is overwritten either way.
+     *
      * Answers 404 when no scanner has that id or when the location does not exist, and 409 when the
      * location cannot receive files or the browser cannot be started.
      *
@@ -154,6 +166,13 @@ class ScannerRessource(
      * [org.endy.pmczero.model.modern.Scanner.supplierIdentifcator], and whatever the caller read out
      * of the url is what gets stored
      * @param noDownload true runs the whole import and fetches none of the files. See above
+     * @param alwaysNewDownload true fetches a file again even when the location already holds it,
+     * under a name of its own. False, the default, leaves that file alone and reports it. See above
+     * @param waitUntil how far to wait for the page before its dom is read. Blank waits for the load
+     * event, which counts the images of the page, so a gallery of two hundred holds the answer up
+     * until all two hundred are in. `domcontentloaded` is the one for a caller that wants the markup
+     * and not the wait: the html is parsed and the deferred scripts have run, and no picture is
+     * waited for. See [org.endy.pmczero.service.BrowserFetcher.render]
      */
     @PostMapping("/{id}/scrape")
     fun scrape(
@@ -166,7 +185,9 @@ class ScannerRessource(
         @RequestParam(defaultValue = "3") scrollTimes: Int,
         @RequestParam(defaultValue = "true") persist: Boolean,
         @RequestParam(required = false) supplierId: String?,
-        @RequestParam(defaultValue = "false") noDownload: Boolean
+        @RequestParam(defaultValue = "false") noDownload: Boolean,
+        @RequestParam(defaultValue = "false") alwaysNewDownload: Boolean,
+        @RequestParam(required = false) waitUntil: String?
     ): ImageImportTO = scraperImageImportService.importWithStoredScanner(
         scannerId = id,
         locationId = locationId,
@@ -177,7 +198,9 @@ class ScannerRessource(
         waitForSelectorState = waitStateOf(waitForSelectorState),
         persist = persist,
         supplierId = supplierId,
-        noDownload = noDownload
+        noDownload = noDownload,
+        alwaysNewDownload = alwaysNewDownload,
+        waitUntil = waitUntilOf(waitUntil)
     )
 
     @PostMapping("/{id}/scan")

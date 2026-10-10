@@ -8,7 +8,9 @@ import io.mockk.verify
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.Mtype
+import org.endy.pmczero.model.ScanningKontext
 import org.endy.pmczero.model.modern.Location
+import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.service.*
@@ -254,14 +256,17 @@ class ScraperServiceTests {
     }
 
     /**
-     * The same import over a page holding the same file name twice: two media on two paths and two
-     * files, rather than one medium whose file the second download replaced.
+     * A page holding the same file name twice: one file, two media on it, and the second element
+     * reported as not fetched.
      *
-     * The content of both files is asserted, not just their names, since "there are two files" is also
-     * true when the second overwrote the first and only one name was ever taken.
+     * A plain scan, so [ScanningKontext.alwaysNewDownload] is false, which is the default. The file
+     * that is there is left alone rather than a second copy written beside it, so both media point at
+     * the one file and the caller is told which of the two urls it is holding. A caller that wants both
+     * files asks for it on the import path, see
+     * [org.endy.pmczero.service.ScraperImageImportService.importWithStoredScanner].
      */
     @Test
-    fun `a scan keeps both files when a page holds the same file name twice`() {
+    fun `a scan keeps one file when a page holds the same file name twice`() {
         val page = """
             <html><body>
             <img src="/bilder/eins/a.jpg">
@@ -276,21 +281,67 @@ class ScraperServiceTests {
         every { locationService.findById(10) } returns fsLocation(10, target)
         givenDownloaderWritesFiles()
 
-        val scanner = Scraper(
-            RegexParser("(.*fa.*)"),
-            StructuredWorker(
-                true,
-                listOf(
-                    Scraper(DomParser("(.+)", "img", "abs:src"), MediaAdder()),
-                    Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader())
-                )
-            )
-        )
-
         val sc = ScraperService(locationService, downloader, browserFetcher)
-            .scan(scanner, "http://testfatest.com/galerie.html", locationId = 10, locationPath = "2020")
+            .scan(imageScanner(), "http://testfatest.com/galerie.html", locationId = 10, locationPath = "2020")
 
         val media = sc.mset!!.media
+        assertEquals(2, media.size)
+        assertEquals(
+            listOf("2020/a.jpg", "2020/a.jpg"),
+            media.map { it.bessources.single().name },
+            "both media point at the one file there is"
+        )
+        assertEquals(
+            listOf("http://testfatest.com/bilder/zwei/a.jpg"),
+            sc.failures.map { it.element },
+            "the second url is reported as not fetched"
+        )
+        assertEquals(
+            "content of http://testfatest.com/bilder/eins/a.jpg",
+            File(target, "2020/a.jpg").readText()
+        )
+    }
+
+    /**
+     * The same page with [ScanningKontext.alwaysNewDownload] set: two media on two paths and two files,
+     * rather than one medium whose file the second download replaced.
+     *
+     * The content of both files is asserted, not just their names, since "there are two files" is also
+     * true when the second overwrote the first and only one name was ever taken.
+     *
+     * The kontext is built here rather than through [ScraperService.scan], which has no way of being
+     * asked for a new download: the import path is the one that offers it, see
+     * [org.endy.pmczero.service.ScraperImageImportService.importWithStoredScanner].
+     */
+    @Test
+    fun `a scan keeps both files when a new download is asked for`() {
+        val page = """
+            <html><body>
+            <img src="/bilder/eins/a.jpg">
+            <img src="/bilder/zwei/a.jpg">
+            </body></html>
+        """.trimIndent()
+
+        every { downloader.getAsString(any()) } returns page
+
+        val target = Files.createTempDirectory("scan-clash-new").toFile()
+        target.deleteOnExit()
+        givenDownloaderWritesFiles()
+
+        val kontext = ScanningKontext(
+            fsLocation(10, target),
+            Mset(),
+            arrayListOf(),
+            downloader,
+            "2020",
+            alwaysNewDownload = true
+        )
+
+        // the url rather than the page, which is what [ScraperService.scan] hands the scraper: the
+        // outer parser picks out of the url and the worker fetches the page it names
+        imageScanner().doWork("http://testfatest.com/galerie.html", "", kontext)
+
+        val media = kontext.mset!!.media
         assertEquals(2, media.size)
 
         for (medium in media) {
@@ -402,6 +453,25 @@ class ScraperServiceTests {
         )
 
     }
+
+    /**
+     * The scraper of the images of a page: every `img` recorded as a medium and downloaded.
+     *
+     * The worker the same pipelines of the application build, see
+     * [org.endy.pmczero.service.ScraperImageImportService.scraperOf], so a test here is about the
+     * pipeline rather than about a scraper of its own.
+     */
+    private fun imageScanner() = Scraper(
+        RegexParser("(.*fa.*)"),
+        StructuredWorker(
+            true,
+            listOf(
+                Scraper(DomParser("(.*)", "title", ""), SetCreator()),
+                Scraper(DomParser("(.+)", "img", "abs:src"), MediaAdder()),
+                Scraper(DomParser("(.+)", "img", "abs:src"), FileDownloader())
+            )
+        )
+    )
 
     /**
      * Lets the mocked [Downloader] answer every `downloadTo` by writing the file it was handed, so a

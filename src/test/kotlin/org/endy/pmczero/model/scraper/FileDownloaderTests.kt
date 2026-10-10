@@ -155,7 +155,7 @@ class FileDownloaderTests {
 
     /**
      * Two elements of the same name in one folder get a variant each, so neither file replaces the
-     * other.
+     * other, when the caller asked for a new download.
      *
      * Without this the second download would overwrite the first, and the medium recorded for the
      * first would be left pointing at bytes that are no longer the ones it was recorded for. The
@@ -163,7 +163,7 @@ class FileDownloaderTests {
      */
     @Test
     fun `two elements with the same file name get a variant each`() {
-        val kontext = kontextFor(location, "2020")
+        val kontext = kontextFor(location, "2020", alwaysNewDownload = true)
 
         worker.applya("http://example.org/one/a.jpg", kontext)
         worker.applya("http://example.org/two/a.jpg", kontext)
@@ -177,10 +177,26 @@ class FileDownloaderTests {
         assertEquals(2, fetcher.downloads.size)
     }
 
+    /**
+     * Without that, the two share the name and the second is not fetched at all, since by the time it
+     * is asked for the first has written the file the name points at.
+     */
+    @Test
+    fun `two elements with the same file name share one file unless a new download is asked for`() {
+        val kontext = kontextFor(location, "2020")
+
+        worker.applya("http://example.org/one/a.jpg", kontext)
+        worker.applya("http://example.org/two/a.jpg", kontext)
+
+        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals(1, fetcher.downloads.size)
+        assertEquals("http://example.org/two/a.jpg", kontext.failures.single().element)
+    }
+
     /** A third clash keeps counting, rather than colliding with the variant of the second. */
     @Test
     fun `counts on for every further clash of the same file name`() {
-        val kontext = kontextFor(location, "2020")
+        val kontext = kontextFor(location, "2020", alwaysNewDownload = true)
 
         worker.applya("http://example.org/one/a.jpg", kontext)
         worker.applya("http://example.org/two/a.jpg", kontext)
@@ -212,14 +228,16 @@ class FileDownloaderTests {
     }
 
     /**
-     * A file already in the folder of the scan keeps its name, so a second import of the same gallery
-     * does not overwrite the files the first one wrote.
+     * A file already in the folder of the scan is left exactly as it is, and the element is reported
+     * rather than fetched again.
      *
+     * The name is the one that file already has, so nothing is written beside it and nothing is
+     * overwritten: a second import of a gallery adds no files and says which ones it did not fetch.
      * The file here was put there by something other than this scan, which is why it is not in
      * `takenFileNames`: a gallery imported yesterday is on disk and nothing in this kontext knows it.
      */
     @Test
-    fun `does not take a name a file of an earlier scan already occupies`() {
+    fun `leaves a file of an earlier scan alone and reports it`() {
         val existing = File(tempDir, "2020/a.jpg").apply {
             parentFile.mkdirs()
             writeText("from an earlier import")
@@ -228,14 +246,45 @@ class FileDownloaderTests {
 
         worker.applya("http://example.org/bilder/a.jpg", kontext)
 
+        assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
+        assertEquals("from an earlier import", existing.readText(), "the earlier file was not touched")
+        assertTrue(fetcher.downloads.isEmpty(), "nothing was fetched")
+        // the plain name, so that the medium of this element points at the file that is there
+        assertEquals(mapOf("http://example.org/bilder/a.jpg" to "a.jpg"), kontext.takenFileNames)
+        assertEquals(
+            "File already exists, so it was not downloaded",
+            kontext.failures.single().reason
+        )
+    }
+
+    /**
+     * A new download was asked for, so the earlier file keeps its name and the new one is written
+     * beside it.
+     *
+     * The behaviour this had before there was a choice, kept as the opt in it now is.
+     */
+    @Test
+    fun `writes a new copy beside an earlier file when a new download is asked for`() {
+        val existing = File(tempDir, "2020/a.jpg").apply {
+            parentFile.mkdirs()
+            writeText("from an earlier import")
+        }
+        val kontext = kontextFor(location, "2020", alwaysNewDownload = true)
+
+        worker.applya("http://example.org/bilder/a.jpg", kontext)
+
         assertEquals(listOf("2020/a.1.jpg", "2020/a.jpg"), writtenRelativeTo(location, "2020"))
         assertEquals("from an earlier import", existing.readText(), "the earlier file was overwritten")
         assertEquals(mapOf("http://example.org/bilder/a.jpg" to "a.1.jpg"), kontext.takenFileNames)
+        assertEquals(emptyList(), kontext.failures)
     }
 
     /**
      * A file in another folder of the location is no clash, since it does not occupy the name in the
      * folder this scan writes into.
+     *
+     * So the file is fetched even though a file of that name exists, which is what makes a per run
+     * folder the way to keep two galleries of the same names apart.
      */
     @Test
     fun `ignores files of another folder of the location`() {
@@ -249,7 +298,8 @@ class FileDownloaderTests {
 
         // only what this scan wrote below 2020, so the file of last years gallery does not count
         assertEquals(listOf("2020/a.jpg"), writtenRelativeTo(location, "2020"))
-        assertEquals("last years gallery", File(tempDir, "2019/a.jpg").readText(), "the old file was overwritten")
+        assertEquals("last years gallery", File(tempDir, "2019/a.jpg").readText(), "the old file was not touched")
+        assertEquals(emptyList(), kontext.failures, "nothing was reported")
     }
 
     /**
@@ -462,8 +512,18 @@ class FileDownloaderTests {
     // Fixtures
     // -------------------------------------------------------------------------------------
 
-    private fun kontextFor(location: Location, locationPath: String) =
-        ScanningKontext(location, Mset(), arrayListOf(), fetcher, locationPath)
+    private fun kontextFor(
+        location: Location,
+        locationPath: String,
+        alwaysNewDownload: Boolean = false
+    ) = ScanningKontext(
+        location,
+        Mset(),
+        arrayListOf(),
+        fetcher,
+        locationPath,
+        alwaysNewDownload = alwaysNewDownload
+    )
 
     private fun givenLocation(uri: String, locationType: LocationType) = Location().apply {
         this.uri = uri

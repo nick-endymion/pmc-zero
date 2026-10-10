@@ -260,7 +260,7 @@ class MediaAdderTests {
      */
     @Test
     fun `gives two media of the same file name the name of their own file`() {
-        val kontext = kontextFor(fsLocation(1, tempDir), "2020")
+        val kontext = kontextFor(fsLocation(1, tempDir), "2020", alwaysNewDownload = true)
 
         worker.applya("http://example.org/one/a.jpg", kontext)
         worker.applya("http://example.org/two/a.jpg", kontext)
@@ -283,13 +283,28 @@ class MediaAdderTests {
      */
     @Test
     fun `two galleries of one scan holding the same file name do clash`() {
-        val kontext = kontextFor(fsLocation(1, tempDir), "")
+        val kontext = kontextFor(fsLocation(1, tempDir), "", alwaysNewDownload = true)
 
         worker.applya("http://example.org/2020/a.jpg", kontext)
         worker.applya("http://example.org/2021/a.jpg", kontext)
 
         assertEquals(listOf("a.jpg", "a.1.jpg"), mset.media.map { it.name })
         assertEquals(listOf("a.jpg", "a.1.jpg"), namesIn(mset))
+    }
+
+    /**
+     * Without a new download asked for, the two share the name of the one file, and it is the
+     * downloader that leaves the second one out rather than this one that renames it.
+     */
+    @Test
+    fun `two media of the same file name share one name unless a new download is asked for`() {
+        val kontext = kontextFor(fsLocation(1, tempDir), "2020")
+
+        worker.applya("http://example.org/one/a.jpg", kontext)
+        worker.applya("http://example.org/two/a.jpg", kontext)
+
+        assertEquals(listOf("a.jpg", "a.jpg"), mset.media.map { it.name })
+        assertEquals(listOf("2020/a.jpg", "2020/a.jpg"), namesIn(mset))
     }
 
     /** Given a folder each, they land apart and keep the name of their file. */
@@ -314,7 +329,7 @@ class MediaAdderTests {
      */
     @Test
     fun `records the same variant the file downloader writes`() {
-        val kontext = kontextFor(fsLocation(1, tempDir), "2020")
+        val kontext = kontextFor(fsLocation(1, tempDir), "2020", alwaysNewDownload = true)
 
         for (url in listOf("http://example.org/one/a.jpg", "http://example.org/two/a.jpg")) {
             worker.applya(url, kontext)
@@ -328,6 +343,32 @@ class MediaAdderTests {
                 "medium ${medium.name} points at a file that is not there"
             )
         }
+    }
+
+    /**
+     * The same agreement without a variant: both media point at the one file there is, and the second
+     * element is the one reported as not fetched.
+     *
+     * The property that matters is that neither medium points at a file that is not there, which is
+     * what a second name would have done here.
+     */
+    @Test
+    fun `records the same name the file downloader writes when there is no variant`() {
+        val kontext = kontextFor(fsLocation(1, tempDir), "2020")
+
+        for (url in listOf("http://example.org/one/a.jpg", "http://example.org/two/a.jpg")) {
+            worker.applya(url, kontext)
+            FileDownloader().applya(url, kontext)
+        }
+
+        assertEquals(listOf("2020/a.jpg", "2020/a.jpg"), namesIn(mset))
+        for (medium in mset.media) {
+            assertTrue(
+                File(tempDir, medium.bessources.single().name!!).isFile,
+                "medium ${medium.name} points at a file that is not there"
+            )
+        }
+        assertEquals("http://example.org/two/a.jpg", kontext.failures.single().element)
     }
 
     @Test
@@ -398,8 +439,18 @@ class MediaAdderTests {
         }
     }
 
-    private fun kontextFor(location: Location, locationPath: String) =
-        ScanningKontext(location, mset, arrayListOf(), fetcher, locationPath)
+    private fun kontextFor(
+        location: Location,
+        locationPath: String,
+        alwaysNewDownload: Boolean = false
+    ) = ScanningKontext(
+        location,
+        mset,
+        arrayListOf(),
+        fetcher,
+        locationPath,
+        alwaysNewDownload = alwaysNewDownload
+    )
 
     private fun namesIn(mset: Mset): List<String> =
         mset.media.map { it.bessources.single().name!! }

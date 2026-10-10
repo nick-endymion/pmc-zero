@@ -125,16 +125,32 @@ class BrowserFetcher @Autowired constructor(
      * above zero is what a lazy loading list needs, since it appends more rows as it is approached;
      * 0 leaves the page where it landed. Stops on its own as soon as a scroll changes nothing, so a
      * generous number does not cost a generous number of waits
+     * @param waitUntil how far to wait before the dom is read. See below
      * @throws NotAccessibleException when the browser is disabled, cannot be started, [waitForSelector]
      * does not appear in time, or the page cannot be read
+     *
+     * ### How long it waits
+     *
+     * The load event counts the images of the page, so a gallery of two hundred of them means nothing
+     * is read before all two hundred have come back, and one unreachable picture holds up the whole
+     * answer. [WaitUntilState.DOMCONTENTLOADED] is the setting for a caller that only wants the
+     * markup: the html has been parsed and the deferred scripts have run, which is where an
+     * application framework has built its dom, and no picture is waited for.
+     *
+     * That is a trade the caller makes per call rather than for the application, since the two are
+     * different needs. A scrape whose scraper is going to fetch the files anyway is better off waiting
+     * for the load event: a page that appends its gallery once the images are in has not shown it at
+     * `domcontentloaded`. A caller that wants to see what a page holds, or that fetches nothing
+     * (`noDownload` on the import path), has no use for the wait at all.
      */
     fun render(
         urlString: String,
         waitForSelector: String? = null,
         scrollTimes: Int = 0,
-        waitForSelectorState: WaitForSelectorState? = null
+        waitForSelectorState: WaitForSelectorState? = null,
+        waitUntil: WaitUntilState? = null
     ): String = withPage { page ->
-            page.navigate(urlString, navigateOptions())
+            page.navigate(urlString, navigateOptions(waitUntil))
             waitForSelector?.let {
                 waitFor(page, it, waitForSelectorState)
             }
@@ -174,7 +190,7 @@ class BrowserFetcher @Autowired constructor(
         waitForSelector: String? = null,
         waitForSelectorState: WaitForSelectorState? = null
     ): List<String> = withPage { page ->
-        page.navigate(urlString, navigateOptions())
+        page.navigate(urlString, navigateOptions(null))
         // before the scrolls, so the scroll also waits for a container that an application only
         // builds once its data is there: scrolling an empty list moves nothing and would stop the
         // scroll loop after one round
@@ -367,17 +383,22 @@ class BrowserFetcher @Autowired constructor(
             ?.let { Proxy(it) }
 
     /**
-     * The navigation options of every read.
+     * The navigation options of every read, waiting as far as [waitUntil] says.
      *
      * `LOAD` rather than the default `NETWORKIDLE`: a page that keeps a connection open, which an
      * analytics script or a websocket does, never reaches network idle and would time out every call
      * on it. Load is the point at which the dom is there and the scripts of the first round have run,
      * which is what the lazy loading of images is waited for by [scroll].
+     *
+     * The state is left unset when the caller named none, rather than being spelled out here, so that
+     * a caller that says nothing gets exactly what playwright gives by default and the load event
+     * stays the behaviour of every call that predates the parameter.
      */
-    private fun navigateOptions(): Page.NavigateOptions =
-        Page.NavigateOptions()
-            .setTimeout(timeoutMs)
-            .setWaitUntil(WaitUntilState.LOAD)
+    private fun navigateOptions(waitUntil: WaitUntilState?): Page.NavigateOptions {
+        val options = Page.NavigateOptions().setTimeout(timeoutMs)
+        waitUntil?.let { options.setWaitUntil(it) }
+        return options
+    }
 
     /**
      * Waits for [selector] on [page] to reach [state], or gives up with the navigation timeout.

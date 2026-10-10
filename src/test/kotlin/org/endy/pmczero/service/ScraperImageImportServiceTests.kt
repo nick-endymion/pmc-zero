@@ -1,6 +1,7 @@
 package org.endy.pmczero.service
 
 import org.endy.pmczero.exception.NotAccessibleException
+import com.microsoft.playwright.options.WaitUntilState
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Mset
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.io.TempDir
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.atLeastOnce
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -454,7 +456,7 @@ class ScraperImageImportServiceTests {
 
     @Test
     fun `lets a browser failure on the index through`() {
-        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenAnswer {
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull(), anyOrNull())).thenAnswer {
             throw NotAccessibleException("the browser is disabled")
         }
 
@@ -477,7 +479,7 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-links"
         )
 
-        verify(browserFetcher).render("http://example.org/index.html", "app-links", 7, null)
+        verify(browserFetcher).render("http://example.org/index.html", "app-links", 7, null, null)
     }
 
     /**
@@ -653,12 +655,12 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-images"
         )
 
-        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null)
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null, null)
     }
 
     @Test
     fun `lets a browser failure through when listing`() {
-        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenAnswer {
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull(), anyOrNull())).thenAnswer {
             throw NotAccessibleException("the browser is disabled")
         }
 
@@ -1038,7 +1040,7 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-images"
         )
 
-        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null)
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null, null)
     }
 
     /** A scanner that records media without writing them would answer with urls that all 404. */
@@ -1298,6 +1300,171 @@ class ScraperImageImportServiceTests {
 
         assertEquals(3, result.failed)
         verify(msetService, never()).save(any())
+    }
+
+    // -------------------------------------------------------------------------------------
+    // A file that is already there
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * A second import of the same gallery into the same folder: the files the first one wrote are left
+     * alone and reported, rather than copied beside themselves.
+     */
+    @Test
+    fun `reports the files it did not download because they are already there`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+        val second = service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+
+        assertEquals(3, second.failed)
+        assertTrue(
+            second.failures.all { it.reason == "File already exists, so it was not downloaded" },
+            "every one says the file was already there: ${second.failures.map { it.reason }}"
+        )
+        // the folder still holds the three files the first import wrote
+        assertEquals(
+            listOf("G/drittes.png", "G/erstes.jpg", "G/zweites.jpg"),
+            writtenRelativeTo(tempDir)
+        )
+    }
+
+    /** The media are still recorded, under the name the file has, so every one of them is reachable. */
+    @Test
+    fun `records the media of a file it did not download under the name that file has`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+
+        assertEquals(
+            listOf("G/drittes.png", "G/erstes.jpg", "G/zweites.jpg").sorted(),
+            savedMset().media.map { it.bessources.single().name }.sortedBy { it.orEmpty() }
+        )
+    }
+
+    /** Nothing is renamed, so no `a.1.jpg` is invented for a file that is already the right one. */
+    @Test
+    fun `invents no second name for a file that is already there`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+
+        assertTrue(
+            writtenRelativeTo(tempDir).none { it.contains(".1.") },
+            "no file was given a second name: ${writtenRelativeTo(tempDir)}"
+        )
+    }
+
+    /**
+     * The old behaviour, on request: the old file keeps its name and a copy is written beside it.
+     *
+     * The first import wrote `erstes.jpg`, so the second writes `erstes.1.jpg` rather than replacing
+     * it, and reports nothing since nothing failed.
+     */
+    @Test
+    fun `writes a copy of every file when a new download is asked for`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+        val second = service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            name = "G",
+            alwaysNewDownload = true
+        )
+
+        assertEquals(0, second.failed)
+        assertEquals(emptyList(), second.failures)
+        assertEquals(
+            listOf(
+                "G/drittes.1.png", "G/drittes.png",
+                "G/erstes.1.jpg", "G/erstes.jpg",
+                "G/zweites.1.jpg", "G/zweites.jpg"
+            ),
+            writtenRelativeTo(tempDir)
+        )
+    }
+
+    /** A file of one run is no clash in another folder, so a per run folder is still a way to keep two apart. */
+    @Test
+    fun `downloads into a folder of its own whatever is stored below another one`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "G"
+        )
+        val second = service.importWithStoredScanner(
+            scannerId = 4, locationId = 7, url = "http://example.org/galerie.html", name = "Other"
+        )
+
+        assertEquals(0, second.failed)
+        assertEquals(6, writtenRelativeTo(tempDir).size, "the second folder got its own three files")
+    }
+
+    // -------------------------------------------------------------------------------------
+    // How long the page is waited for
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The load event counts the images of the page, so a caller that only wants the markup asks not to
+     * wait for them.
+     */
+    @Test
+    fun `waits as far as it is told before reading the dom`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html",
+            waitUntil = WaitUntilState.DOMCONTENTLOADED
+        )
+
+        verify(browserFetcher).render(
+            "http://example.org/galerie.html",
+            null,
+            3,
+            null,
+            WaitUntilState.DOMCONTENTLOADED
+        )
+    }
+
+    /** Blank, or rather absent, leaves the decision to playwright, which is what every call did before. */
+    @Test
+    fun `leaves the wait to playwright when no state is named`() {
+        givenPage(page)
+        givenScannerWith(4, service.scraperOf(null))
+
+        service.importWithStoredScanner(
+            scannerId = 4,
+            locationId = 7,
+            url = "http://example.org/galerie.html"
+        )
+
+        verify(browserFetcher).render("http://example.org/galerie.html", null, 3, null, null)
     }
 
     // -------------------------------------------------------------------------------------
@@ -1732,7 +1899,7 @@ class ScraperImageImportServiceTests {
     /** The browser failing is its own error, passed through rather than reported as an empty page. */
     @Test
     fun `lets a browser failure through`() {
-        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenAnswer {
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull(), anyOrNull())).thenAnswer {
             throw NotAccessibleException("the browser is disabled")
         }
 
@@ -1763,7 +1930,7 @@ class ScraperImageImportServiceTests {
             waitForSelector = "app-images"
         )
 
-        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null)
+        verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null, null)
         // and the workers are handed that html rather than fetching the url again
         verify(browserFetcher, never()).getAsString(any(), any())
     }
@@ -1811,7 +1978,7 @@ class ScraperImageImportServiceTests {
     private fun givenPage(html: String) {
         // anyOrNull for the selector, which is null in most tests: Mockito's any() does not match a null
         // argument, so a plain any() there would leave the stub unanswered and hand back null html
-        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull())).thenReturn(html)
+        whenever(browserFetcher.render(any(), anyOrNull(), any(), anyOrNull(), anyOrNull())).thenReturn(html)
     }
 
     /**
@@ -1874,10 +2041,15 @@ class ScraperImageImportServiceTests {
             .sorted()
             .toList()
 
-    /** The set that was handed to [MsetService.save], which is the whole point of the import. */
+    /**
+     * The set that was handed to [MsetService.save] last, which is the whole point of the import.
+     *
+     * At least one rather than exactly one, since a test may run the import twice over the same
+     * gallery and the set of the second run is the one it is asking about.
+     */
     private fun savedMset(): Mset {
         val captor = argumentCaptor<Mset>()
-        verify(msetService).save(captor.capture())
+        verify(msetService, atLeastOnce()).save(captor.capture())
         return captor.lastValue
     }
 }

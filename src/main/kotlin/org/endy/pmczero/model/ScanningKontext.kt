@@ -108,5 +108,19 @@ data class ScanningKontext(
      * False by default, so a scan that says nothing downloads what it found, which is what every scan
      * did before there was anything to say otherwise.
      */
-    var skipDownloads: Boolean = false
+    var skipDownloads: Boolean = false,
+    /**
+     * Whether a file that is already in the location is to be fetched again under a name of its own,
+     * rather than left alone where it is.
+     *
+     * False by default: the name a file already has is the name the medium is recorded under, and the
+     * file is not fetched again, so a second import of a gallery writes nothing and says what it left
+     * alone. True is what this did before there was a choice, and what a caller wants when the same
+     * picture is wanted twice under two names.
+     *
+     * Part of the kontext rather than of the scraper, like [skipDownloads], so that the same stored
+     * scraper serves both. It changes the name a file is recorded under, which is why it has to be
+     * visible to both workers that ask about that name and not only to the one that fetches.
+     */
+    var alwaysNewDownload: Boolean = false
 )
