@@ -410,6 +410,97 @@ class ScannerInitializerTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // The last link collector
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The case this scraper was built for: an index page that ends in the link to the next one, where
+     * the caller wants that link and not the galleries above it.
+     */
+    @Test
+    fun `collects the last link of a page and no other`() {
+        val html = """
+            <html><body>
+            <a href="/gallery/1">First</a>
+            <a href="/gallery/2">Second</a>
+            <a href="/index.php?page=2">Next page</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/index.php?page=2")),
+            runOver("Last Link Collector", html)
+        )
+    }
+
+    /** One link is the last one as much as three are, so a page needs nothing changed. */
+    @Test
+    fun `collects the only link of a page`() {
+        val html = """<html><body><a href="/only.html">Only</a></body></html>"""
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/only.html")),
+            runOver("Last Link Collector", html)
+        )
+    }
+
+    @Test
+    fun `collects nothing from a page without links`() {
+        assertEquals(
+            emptyList(),
+            runOver("Last Link Collector", """<html><body><p>keine links</p></body></html>""")
+        )
+    }
+
+    /** The query of a pager link is part of it, or the second page would be the first one. */
+    @Test
+    fun `keeps the query of the last link`() {
+        val html = """
+            <html><body>
+            <a href="/gallery/1">First</a>
+            <a href="/index.php?page=2&sort=name">Next page</a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/index.php?page=2&sort=name")),
+            runOver("Last Link Collector", html)
+        )
+    }
+
+    /** The link collector and this one read the same elements, so this has to be a subset of its answer. */
+    @Test
+    fun `answers the last of what the link collector answers`() {
+        val html = """
+            <html><body>
+            <a href="/one.html">One</a>
+            <a href="/two.html">Two</a>
+            <a href="/three.html">Three</a>
+            </body></html>
+        """.trimIndent()
+
+        val all = runOver("Link Collector", html)
+        val last = runOver("Last Link Collector", html)
+
+        assertEquals(1, last.size, "one finding rather than one per link")
+        assertEquals(all.last(), last.single(), "the last of them")
+    }
+
+    /** The href rather than the label, and not the image of a page, since it is a collector of links. */
+    @Test
+    fun `collects the href of the last link rather than its text`() {
+        val html = """<html><body>
+            <a href="/one.html">One</a>
+            <a href="/last.html">Zurück zur Übersicht</a>
+            </body></html>""".trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/last.html")),
+            runOver("Last Link Collector", html)
+        )
+    }
+
+    // -------------------------------------------------------------------------------------
     // The others
     // -------------------------------------------------------------------------------------
 
@@ -532,7 +623,8 @@ class ScannerInitializerTests {
                 "Gallery Index Lister",
                 "Sequence Image Scraper",
                 "Category Link Collector",
-                "Gallery Block Link Collector"
+                "Gallery Block Link Collector",
+                "Last Link Collector"
             ),
             stored.map { it.name }
         )

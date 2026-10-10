@@ -4,6 +4,7 @@ import org.endy.pmczero.model.modern.Scanner
 import org.endy.pmczero.model.scraper.DomParser
 import org.endy.pmczero.model.scraper.FileDownloader
 import org.endy.pmczero.model.scraper.FoundElementsWorker
+import org.endy.pmczero.model.scraper.LastFoundElementWorker
 import org.endy.pmczero.model.scraper.MediaAdder
 import org.endy.pmczero.model.scraper.PassThroughParser
 import org.endy.pmczero.model.scraper.RecoveryWorker
@@ -44,6 +45,8 @@ import org.springframework.stereotype.Component
  *    categories a page lists in one `div`.
  * 9. **Gallery Block Link Collector** - the hrefs of the links a page marks with one class, e.g. the
  *    galleries it offers in a block of `a class="blk_galleries expp"`.
+ * 10. **Last Link Collector** - the last link of a page and no other, e.g. the link to the next page
+ *     of an index that ends in one.
  *
  * Only the first, the fifth and the seventh download anything, so only those three can be run through
  * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
@@ -70,7 +73,8 @@ class ScannerInitializer(
             buildGalleryIndexLister(),
             buildSequenceImageScraper(),
             buildCategoryLinkCollector(),
-            buildGalleryBlockLinkCollector()
+            buildGalleryBlockLinkCollector(),
+            buildLastLinkCollector()
         )
 
         for (scanner in scanners) {
@@ -322,6 +326,49 @@ class ScannerInitializer(
             name = "Link Collector"
             regex = "testing"
             example = "https://example.com/index"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+     * The last link of a page, at level 1, and nothing else.
+     *
+     * The [buildLinkCollector] with a [LastFoundElementWorker] instead of a [FoundElementsWorker], so
+     * everything above it holds and only the answer differs: the same `a[href]`, the same `abs:href`,
+     * the same level, and one finding rather than one per link.
+     *
+     * For a page whose last link is the one a caller is after, which is a shape pages are written in:
+     * an index page that lists its galleries and ends in the link to the next page, a listing whose
+     * pager sits at the foot of it. A caller paging through such a page does not want the two hundred
+     * gallery links to pick one out of, it wants the url of the page it is to read next.
+     *
+     * "Last" is the last one the page has, i.e. the last in document order, and not the last that
+     * differs from the ones before it: a page whose final two links are the same has one finding and
+     * it is that url, since [Parser] has already thrown the duplicate out before this worker sees
+     * anything.
+     *
+     * Nothing else changes. The finding is still the href resolved against the page rather than the
+     * label of the link, and a page without links answers nothing at all.
+     *
+     * Two of these over one page would replace each other, see [LastFoundElementWorker], so a scraper
+     * that wants the last link as well as the last image has to give the second one a level of its own.
+     */
+    private fun buildLastLinkCollector(): Scanner {
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(DomParser("(.*)", "a[href]", "abs:href"), LastFoundElementWorker(1))
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Last Link Collector"
+            regex = "testing"
+            example = "https://example.org/index"
             serialization = scannerService.serialize(scraper)
             valid = true
         }
