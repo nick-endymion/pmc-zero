@@ -17,10 +17,13 @@ import javax.persistence.*
  * column rather than by a cascade nobody has to configure. The column is unique, so a bessource cannot
  * have two of these whatever writes them.
  *
+ * [hash] is indexed, because it is what [org.endy.pmczero.service.FileInfoService.duplicates] groups
+ * by, and that is the one question here that is asked of a whole table rather than of one row.
+ *
  * The table is `a.file_info`, beside the other `a.` tables of this application.
  */
 @Entity
-@Table(name = "a.file_info")
+@Table(name = "a.file_info", indexes = [Index(name = "ix_file_info_hash", columnList = "hash")])
 class FileInfo {
 
     @Id

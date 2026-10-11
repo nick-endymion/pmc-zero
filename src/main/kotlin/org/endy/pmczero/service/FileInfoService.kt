@@ -5,6 +5,8 @@ import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.modern.FileInfo
 import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.FileInfoRepository
+import org.endy.pmczero.to.DuplicateBessourceTO
+import org.endy.pmczero.to.FileInfoDuplicateTO
 import org.endy.pmczero.to.FileInfoFailureTO
 import org.endy.pmczero.to.FileInfoRunTO
 import org.slf4j.LoggerFactory
@@ -58,6 +60,48 @@ class FileInfoService(
     }
 
     private val logger = LoggerFactory.getLogger(FileInfoService::class.java)
+
+    /**
+     * Every content hash that more than one file has, with the bessources of those files.
+     *
+     * The one question about [FileInfo] that is asked of a whole table rather than of a single bessource,
+     * and the reason [FileInfo.hash] is indexed. It answers the archive level question a caller cannot
+     * ask any other way: which files of this collection are the same file twice, since nothing records
+     * that on the way in and a scan would have to compare every file with every other one to notice it.
+     *
+     * Grouped by hash and not flat, because the members of a group are interchangeable by definition:
+     * what a caller acts on is the set, and one group of four says more than four rows that have to be
+     * compared by the caller to be understood.
+     *
+     * A row without a hash is never a duplicate of anything, not even of another row without one: a
+     * bessource nobody looked at says nothing about its file, and a group by counts every null as one
+     * group, so those are left out rather than reported as a hundred files that are alike.
+     *
+     * Only bessources whose file was recorded are in here, since a bessource with no row has no hash to
+     * be in a group of. That makes this a report of what was looked at: a storage that has never been
+     * recorded has no duplicates as far as this answers, rather than no duplicates at all.
+     *
+     * Two files that are empty are duplicates of each other, since the hash of no bytes is the hash of
+     * no bytes. A caller who does not want those filters on [FileInfoDuplicateTO.size].
+     *
+     * Ordered by hash, the order the database hands the rows out in, so the answer is the same on every
+     * run and a caller can diff two of them.
+     */
+    fun duplicates(): List<FileInfoDuplicateTO> {
+        val byHash = fileInfoRepository.findDuplicates().groupBy { it.hash }
+
+        return byHash.map { (hash, files) ->
+            FileInfoDuplicateTO(
+                hash = hash!!,
+                size = files.first().size,
+                bessources = files.mapNotNull { file ->
+                    // a row whose bessource is gone is a fact about a file nobody can reach any more, so
+                    // it has no place in a list of bessources; the hash group above still counted it
+                    file.bessourceId?.let { DuplicateBessourceTO(it, file.storageId, file.name, file.fileCreatedAt, file.fileChangedAt) }
+                }
+            )
+        }
+    }
 
     /**
      * Records what is missing of [storageId]: the file behind every bessource of that storage that has

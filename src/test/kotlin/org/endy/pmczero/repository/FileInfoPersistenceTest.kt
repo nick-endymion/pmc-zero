@@ -2,6 +2,7 @@ package org.endy.pmczero.repository
 
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.FileInfo
+import org.endy.pmczero.model.modern.Storage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -10,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager
 import org.springframework.test.context.TestPropertySource
 import java.time.LocalDateTime
+import kotlin.test.assertTrue
 
 /**
  * What the database itself makes of a [FileInfo]: that the table is created, that the four facts about
@@ -202,14 +204,168 @@ class FileInfoPersistenceTest {
     }
 
     /**
+ * What [FileInfoRepository.findDuplicates] makes of a table, which is the one thing here that is a
+ * question about SQL rather than about this application.
+ */
+@Test
+    fun `answers the rows of every hash that more than one row has`() {
+        givenBessource("2020/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2020/b.jpg", storageId = givenStorage("regal"))
+
+        givenFileInfo(hash = "gleich", size = 10)
+        givenFileInfo(hash = "gleich", size = 10)
+        givenFileInfo(hash = "anders", size = 20)
+        flush()
+
+        val duplicates = fileInfoRepository.findDuplicates()
+
+        assertEquals(listOf("gleich"), duplicates.map { it.hash }.distinct())
+        assertEquals(2, duplicates.size, "only the hash that more than one row has")
+    }
+
+    /** The storage and the name are what a caller needs to find the files on disk. */
+    @Test
+    fun `answers the name and the storage of a duplicate`() {
+        val storage = givenStorage("regal")
+        val erstes = givenBessource("2020/a.jpg", storageId = storage)
+        val zweites = givenBessource("2021/zwei.jpg", storageId = storage)
+
+        givenFileInfo(hash = "gleich", bessourceId = erstes)
+        givenFileInfo(hash = "gleich", bessourceId = zweites)
+        flush()
+
+        val bessources = fileInfoRepository.findDuplicates().sortedBy { it.name }
+
+        assertEquals(listOf("2020/a.jpg", "2021/zwei.jpg"), bessources.map { it.name })
+        assertEquals(listOf(storage, storage), bessources.map { it.storageId })
+        assertEquals(listOf(erstes, zweites), bessources.map { it.bessourceId }.sortedBy { it })
+    }
+
+    /**
+     * The one thing this query has to be careful about: a group by counts every null of a column as one
+     * group, so a storage with a hundred unhashed bessources would otherwise be answered as a hundred
+     * files that are alike.
+     */
+    @Test
+    fun `answers nothing for rows that have no hash`() {
+        givenBessource("2020/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2022/a.jpg", storageId = givenStorage("regal"))
+
+        givenFileInfo(hash = null)
+        givenFileInfo(hash = null)
+        givenFileInfo(hash = null)
+        flush()
+
+        assertEquals(emptyList<DuplicateFile>(), fileInfoRepository.findDuplicates())
+    }
+
+    @Test
+    fun `answers nothing when every hash is its own`() {
+        givenBessource("2020/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/a.jpg", storageId = givenStorage("regal"))
+
+        givenFileInfo(hash = "eins")
+        givenFileInfo(hash = "zwei")
+        flush()
+
+        assertEquals(emptyList<DuplicateFile>(), fileInfoRepository.findDuplicates())
+    }
+
+    @Test
+    fun `answers nothing for a table with nothing in it`() {
+        assertEquals(emptyList<DuplicateFile>(), fileInfoRepository.findDuplicates())
+    }
+
+    /** In one order whatever the database feels like handing rows out in, so two runs can be diffed. */
+    @Test
+    fun `answers the rows in the order of their hash`() {
+        givenBessource("2020/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2020/b.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/b.jpg", storageId = givenStorage("regal"))
+
+        givenFileInfo(hash = "zwei")
+        givenFileInfo(hash = "zwei")
+        givenFileInfo(hash = "eins")
+        givenFileInfo(hash = "eins")
+        flush()
+
+        assertEquals(
+            listOf("eins", "eins", "zwei", "zwei"),
+            fileInfoRepository.findDuplicates().map { it.hash }
+        )
+    }
+
+    /** Two empty files have the hash of no bytes, so they are duplicates of each other. Said here so that it is a fact. */
+    @Test
+    fun `answers two empty files as duplicates of each other`() {
+        givenBessource("2020/leer.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/leer.jpg", storageId = givenStorage("regal"))
+
+        val leer = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        givenFileInfo(hash = leer, size = 0)
+        givenFileInfo(hash = leer, size = 0)
+        flush()
+
+        assertEquals(2, fileInfoRepository.findDuplicates().size)
+    }
+
+    /** The size is the same for every member of a group, since the hash says what the bytes are. */
+    @Test
+    fun `answers the size of a duplicate`() {
+        givenBessource("2020/a.jpg", storageId = givenStorage("regal"))
+        givenBessource("2021/a.jpg", storageId = givenStorage("regal"))
+
+        givenFileInfo(hash = "gleich", size = 1234)
+        givenFileInfo(hash = "gleich", size = 1234)
+        flush()
+
+        assertEquals(listOf(1234L, 1234L), fileInfoRepository.findDuplicates().map { it.size })
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Fixtures
+    // -------------------------------------------------------------------------------------
+
+    /** a stored row of [hash] and [size] for [bessourceId], or for a bessource of its own when that is null */
+    private fun givenFileInfo(hash: String?, size: Long? = null, bessourceId: Int? = null) {
+        entityManager.persist(
+            FileInfo().also {
+                it.bessourceId = bessourceId ?: givenBessource()
+                it.hash = hash
+                it.size = size
+            }
+        )
+    }
+
+    private fun flush() {
+        entityManager.flush()
+        entityManager.clear()
+    }
+
+    /** a stored storage, answering the id it was given */
+    private fun givenStorage(name: String): Int =
+        Storage().also { it.name = name }.also { entityManager.persist(it) }
+            .let { entityManager.flush(); it.id!! }
+
+    /**
      * A bessource as the database hands it back, answering the id it was given, so that `bessource_id`
      * names a row that is really there.
      *
      * Without an id of its own: [Bessource] generates one, and a persist of an entity that carries a
      * generated id is a persist of something the persistence context considers detached.
+     *
+     * The storage is read back by its id rather than handed over as an object, since this clears the
+     * persistence context afterwards and a bessource holding a storage that was detached by that would
+     * be a persist of something the database has never heard of.
      */
-    private fun givenBessource(): Int {
-        val bessource = Bessource().apply { name = "bilder/a.jpg" }
+    private fun givenBessource(name: String = "bilder/a.jpg", storageId: Int? = null): Int {
+        val bessource = Bessource().apply {
+            this.name = name
+            storageId?.let { this.storage = entityManager.find(Storage::class.java, it) }
+        }
         entityManager.persist(bessource)
         entityManager.flush()
         entityManager.clear()
