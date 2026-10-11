@@ -47,6 +47,8 @@ import org.springframework.stereotype.Component
  *    galleries it offers in a block of `a class="blk_galleries expp"`.
  * 10. **Last Link Collector** - the last link of a page and no other, e.g. the link to the next page
  *     of an index that ends in one.
+ * 11. **Last History Link Collector** - the last of the history anchors of a page, whose href is a
+ *     fragment of the page itself, e.g. `a class="expp" rel="history" href="#15"`.
  *
  * Only the first, the fifth and the seventh download anything, so only those three can be run through
  * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
@@ -74,7 +76,8 @@ class ScannerInitializer(
             buildSequenceImageScraper(),
             buildCategoryLinkCollector(),
             buildGalleryBlockLinkCollector(),
-            buildLastLinkCollector()
+            buildLastLinkCollector(),
+            buildLastHistoryLinkCollector()
         )
 
         for (scanner in scanners) {
@@ -381,6 +384,60 @@ class ScannerInitializer(
             name = "Last Link Collector"
             regex = "testing"
             example = "https://example.org/index"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+ * The last of the history anchors of a page, at level 1, and nothing else.
+     *
+     * For a page whose images each carry a link to a point in their history, written as a fragment of the
+     * page it is already on:
+     *
+     *     <a class="expp" rel="history" href="#15" title=""><img src="…/mini/15.jpg" alt=""></a>
+     *     <a class="expp" rel="history" href="#16" title=""><img src="…/mini/16.jpg" alt=""></a>
+     *
+     * answers `http://example.org/user/12345/index.php#16`, which is the address of the last of them.
+     *
+     * ### The fragment is resolved by `abs:href`, not by anything here
+     *
+     * `#15` is a reference to a place on the page it is written in, and jsoup resolves a reference like
+     * that against the base uri the parser was given, which is the url of the page the elements were
+     * found on. So the answer is that page's url with the fragment appended, and a caller can follow it
+     * like any other address rather than having to know which page it came from. Reading the plain `href`
+     * would answer `#15`, which is a reference to nothing outside the context of the element.
+     *
+     * ### Why the selector is this narrow
+     *
+     * `:last-child` is relative to a parent, see [buildLastLinkCollector], so `a[href]:last-child` on a
+     * page with a navigation link, a history block and a footer link answers three elements rather than
+     * one: the last of each of them. Narrowing the selector to what identifies these anchors is what
+     * makes it answer one: a page has one block of history links, so the last of that block is the last
+     * of the page.
+     *
+     * Both `rel=history` and the class are asked for, since the element above carries both. Dropping
+     * `.expp` from the stored selector widens it to every history link of the page, which is the right
+     * answer for a page whose history links are not marked with that class.
+     */
+    private fun buildLastHistoryLinkCollector(): Scanner {
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(
+                        DomParser("(.*)", "a.expp[rel=history]:last-child", "abs:href"),
+                        FoundElementsWorker(1)
+                    )
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Last History Link Collector"
+            regex = "(.*)"
+            example = "https://example.org/user/12345/index.php"
             serialization = scannerService.serialize(scraper)
             valid = true
         }

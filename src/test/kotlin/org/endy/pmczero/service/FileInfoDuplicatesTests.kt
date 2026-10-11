@@ -57,6 +57,21 @@ class FileInfoDuplicatesTests {
         assertEquals(created, member.fileCreatedAt)
     }
 
+    /**
+     * What a caller acts on rather than on the file: the medium is what
+     * [org.endy.pmczero.service.MediaDeletionService] deletes, and a file that has no medium is one
+     * nobody has made a medium of yet.
+     */
+    @Test
+    fun `answers the medium of a duplicate`() {
+        given(hash = "gleich", bessourceId = 7, mediumId = 42)
+        given(hash = "gleich", bessourceId = 8, mediumId = null)
+
+        val members = service.duplicates().single().bessources
+
+        assertEquals(listOf(42, null), members.map { it.mediumId })
+    }
+
     /** The size of the content, which is the same for every member and is what a caller reads first. */
     @Test
     fun `answers the size of a duplicate once`() {
@@ -122,6 +137,7 @@ class FileInfoDuplicatesTests {
         bessourceId: Int,
         name: String? = "bilder/$bessourceId.jpg",
         storageId: Int? = 1,
+        mediumId: Int? = null,
         size: Long? = null,
         fileCreatedAt: LocalDateTime? = null,
         fileChangedAt: LocalDateTime? = null
@@ -132,6 +148,7 @@ class FileInfoDuplicatesTests {
                 bessourceId = bessourceId,
                 name = name,
                 storageId = storageId,
+                mediumId = mediumId,
                 size = size,
                 fileCreatedAt = fileCreatedAt,
                 fileChangedAt = fileChangedAt
@@ -147,6 +164,7 @@ class FileInfoDuplicatesTests {
         override val bessourceId: Int,
         override val name: String?,
         override val storageId: Int?,
+        override val mediumId: Int?,
         override val size: Long?,
         override val fileCreatedAt: LocalDateTime?,
         override val fileChangedAt: LocalDateTime?

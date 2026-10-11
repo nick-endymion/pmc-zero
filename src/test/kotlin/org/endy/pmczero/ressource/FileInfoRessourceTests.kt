@@ -38,8 +38,8 @@ class FileInfoRessourceTests {
                     hash = "abc",
                     size = 2048,
                     bessources = listOf(
-                        DuplicateBessourceTO(1, 3, "2020/a.jpg", null, null),
-                        DuplicateBessourceTO(2, 4, "2021/a.jpg", null, null)
+                        DuplicateBessourceTO(1, 3, 11, "2020/a.jpg", null, null),
+                        DuplicateBessourceTO(2, 4, 12, "2021/a.jpg", null, null)
                     )
                 )
             )
@@ -53,6 +53,7 @@ class FileInfoRessourceTests {
             .andExpect(jsonPath("$[0].bessources.length()").value(2))
             .andExpect(jsonPath("$[0].bessources[0].bessourceId").value(1))
             .andExpect(jsonPath("$[0].bessources[0].storageId").value(3))
+            .andExpect(jsonPath("$[0].bessources[0].mediumId").value(11))
             .andExpect(jsonPath("$[0].bessources[0].name").value("2020/a.jpg"))
     }
 
@@ -76,7 +77,7 @@ class FileInfoRessourceTests {
                     size = 1,
                     bessources = listOf(
                         DuplicateBessourceTO(
-                            1, 3, "2020/a.jpg",
+                            1, 3, 11, "2020/a.jpg",
                             LocalDateTime.of(2020, 8, 1, 12, 0),
                             LocalDateTime.of(2021, 3, 4, 9, 15)
                         )

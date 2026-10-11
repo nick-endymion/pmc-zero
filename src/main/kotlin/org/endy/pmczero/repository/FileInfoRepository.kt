@@ -43,6 +43,11 @@ interface FileInfoRepository : CrudRepository<FileInfo, Int> {
      * disk: a bessource name means nothing without the location it sits in, and reading
      * [org.endy.pmczero.model.modern.Bessource.storage] for that would be a lazy load per row.
      *
+     * The medium of the bessource comes with it for the same reason: a caller who has found a file twice
+     * acts on one of the media rather than on the file, and
+     * [org.endy.pmczero.repository.MediaRepository] is what the deletion of a medium goes through. Reading
+     * [org.endy.pmczero.model.modern.Bessource.medium] for it would be the second lazy load per row.
+     *
      * Ordered by hash and then by bessource id, so the answer is in one order whatever the database
      * feels like handing rows out in.
      */
@@ -51,6 +56,7 @@ interface FileInfoRepository : CrudRepository<FileInfo, Int> {
             "f.bessourceId as bessourceId, " +
             "b.name as name, " +
             "b.storage.id as storageId, " +
+            "b.medium.id as mediumId, " +
             "f.size as size, " +
             "f.fileCreatedAt as fileCreatedAt, " +
             "f.fileChangedAt as fileChangedAt " +
@@ -87,6 +93,9 @@ interface DuplicateFile {
 
     /** the storage the name is relative to, without which the name says nothing on its own */
     val storageId: Int?
+
+    /** the medium of that bessource, which is what a caller deletes rather than the file */
+    val mediumId: Int?
 
     /** how large the file is, which the hash already says */
     val size: Long?

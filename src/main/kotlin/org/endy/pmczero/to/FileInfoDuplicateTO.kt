@@ -25,14 +25,24 @@ data class FileInfoDuplicateTO(
 )
 
 /**
- * One of the bessources of a [FileInfoDuplicateTO], as far as a caller can find the file with.
+ * One of the bessources of a [FileInfoDuplicateTO], as far as a caller can find the file with and act
+ * on it.
  *
  * The name alone says nothing: it is a path below the location of a storage, so [storageId] is what
- * makes it addressable, and [bessourceId] is what the rest of this application knows the medium by.
+ * makes it addressable, and [bessourceId] is what this application knows the file by.
+ *
+ * [mediumId] is what a caller acts on rather than on either of them: deleting a file means deleting the
+ * medium that points at it, and [org.endy.pmczero.service.MediaDeletionService] is what does that
+ * properly, i.e. marks the medium, moves the file below `DELETED` and leaves the file where it was
+ * rather than erasing it. A bessource of a file nobody has made a medium of has none, which is what
+ * null is for.
  */
 data class DuplicateBessourceTO(
     val bessourceId: Int,
     val storageId: Int?,
+
+    /** the medium that points at this file, i.e. what is deleted to get rid of the copy */
+    val mediumId: Int?,
 
     /** the path of the file below the location of that storage */
     val name: String?,

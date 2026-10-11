@@ -41,12 +41,13 @@ class MediaAdder : Worker() {
 
         val name = ScanPath.bessourceNameOf(element, scanningKontext)
 
+        val mediumNameOf = ScanPath.mediumNameOf(name)
+        if (scanningKontext.mset!!.media.any { it.name == mediumNameOf }) return // already recorded, so a second worker that runs against the same element does not add a second medium
+
         val medium = Medium().also {
-            it.name = ScanPath.mediumNameOf(name)
+            it.name = mediumNameOf
             it.mtype = Mtype.IMEDIUM.i
         }
-
-        if (scanningKontext.mset!!.media.any { it.name == name }) return // already recorded, so a second worker that runs against the same element does not add a second medium
 
         val b = Bessource().also {
             it.name = name

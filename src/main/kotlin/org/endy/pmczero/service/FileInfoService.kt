@@ -81,6 +81,10 @@ class FileInfoService(
      * be in a group of. That makes this a report of what was looked at: a storage that has never been
      * recorded has no duplicates as far as this answers, rather than no duplicates at all.
      *
+     * Each member carries the [org.endy.pmczero.model.modern.Medium] of its file, since a caller who
+     * has found a file twice acts on one of the media rather than on the file, and the medium is what
+     * [org.endy.pmczero.service.MediaDeletionService] deletes.
+     *
      * Two files that are empty are duplicates of each other, since the hash of no bytes is the hash of
      * no bytes. A caller who does not want those filters on [FileInfoDuplicateTO.size].
      *
@@ -97,7 +101,9 @@ class FileInfoService(
                 bessources = files.mapNotNull { file ->
                     // a row whose bessource is gone is a fact about a file nobody can reach any more, so
                     // it has no place in a list of bessources; the hash group above still counted it
-                    file.bessourceId?.let { DuplicateBessourceTO(it, file.storageId, file.name, file.fileCreatedAt, file.fileChangedAt) }
+                    file.bessourceId?.let {
+                        DuplicateBessourceTO(it, file.storageId, file.mediumId, file.name, file.fileCreatedAt, file.fileChangedAt)
+                    }
                 }
             )
         }

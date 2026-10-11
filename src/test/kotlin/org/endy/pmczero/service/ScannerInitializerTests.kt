@@ -541,6 +541,94 @@ class ScannerInitializerTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // The last history link collector
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The case this scraper was built for: the last of a page's history anchors, whose href is a
+     * fragment of the page itself, answered as the whole address so a caller can follow it.
+     */
+    @Test
+    fun `collects the last history link of a page with its url prepended`() {
+        val html = """
+            <html><body>
+            <a class="expp" rel="history" href="#13" title=""><img src="/mini/13.jpg" alt=""></a>
+            <a class="expp" rel="history" href="#14" title=""><img src="/mini/14.jpg" alt=""></a>
+            <a class="expp" rel="history" href="#15" title=""><img src="/mini/15.jpg" alt=""></a>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/galerie.html#15")),
+            runOver("Last History Link Collector", html)
+        )
+    }
+
+    /**
+     * The reason the selector is this narrow: `:last-child` is about a parent, so a plain `a[href]` one
+     * would answer the last link of the navigation and of the footer as well.
+     */
+    @Test
+    fun `collects the last history link and none of the links around it`() {
+        val html = """
+            <html><body>
+            <div class="head"><a href="/start.html">Start</a></div>
+            <div class="history">
+              <a class="expp" rel="history" href="#14"><img src="/mini/14.jpg" alt=""></a>
+              <a class="expp" rel="history" href="#15"><img src="/mini/15.jpg" alt=""></a>
+            </div>
+            <div class="foot"><a href="/kontakt.html">Kontakt</a></div>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(FoundElement(1, "http://example.org/galerie.html#15")),
+            runOver("Last History Link Collector", html)
+        )
+    }
+
+    @Test
+    fun `collects nothing from a page without history links`() {
+        val html = """<html><body><a href="/irgendwas.html">A</a></body></html>"""
+
+        assertEquals(emptyList(), runOver("Last History Link Collector", html))
+    }
+
+    /**
+     * A page whose history anchors sit one per block would answer one per block, which is what
+     * `:last-child` says. Not a defect of this scanner but a property of the selector, so it is stated
+     * here rather than left to be found out.
+     */
+    @Test
+    fun `collects the last history link of each block of a page that has several`() {
+        val html = """
+            <html><body>
+            <div><a class="expp" rel="history" href="#1">one</a></div>
+            <div><a class="expp" rel="history" href="#2">two</a></div>
+            </body></html>
+        """.trimIndent()
+
+        assertEquals(
+            listOf(
+                FoundElement(1, "http://example.org/galerie.html#1"),
+                FoundElement(1, "http://example.org/galerie.html#2")
+            ),
+            runOver("Last History Link Collector", html)
+        )
+    }
+
+    /** Both attributes of the stored selector, since either one alone is a one word change. */
+    @Test
+    fun `reads the history anchors of that class and no other link`() {
+        val worker = scannerService.deserialize(storedScanner("Last History Link Collector").serialization!!)
+            .worker as StructuredWorker
+
+        val parser = assertIs<DomParser>(worker.scrapers.single().parser)
+        assertEquals("a.expp[rel=history]:last-child", parser.tag)
+        assertEquals("abs:href", parser.attribute)
+    }
+
+    // -------------------------------------------------------------------------------------
     // The others
     // -------------------------------------------------------------------------------------
 
@@ -664,7 +752,8 @@ class ScannerInitializerTests {
                 "Sequence Image Scraper",
                 "Category Link Collector",
                 "Gallery Block Link Collector",
-                "Last Link Collector"
+                "Last Link Collector",
+                "Last History Link Collector"
             ),
             stored.map { it.name }
         )

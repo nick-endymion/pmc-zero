@@ -2,6 +2,7 @@ package org.endy.pmczero.repository
 
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.FileInfo
+import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -325,6 +326,43 @@ class FileInfoPersistenceTest {
         assertEquals(listOf(1234L, 1234L), fileInfoRepository.findDuplicates().map { it.size })
     }
 
+    /**
+     * The medium of a bessource, so a caller who has found a file twice can delete one of the media
+     * rather than hunt for the file again.
+     */
+    @Test
+    fun `answers the medium of a duplicate`() {
+        val storage = givenStorage("regal")
+        val medium = givenMedium("kopie.jpg")
+        val erstes = givenBessource("2020/a.jpg", storageId = storage, mediumId = medium)
+        val zweites = givenBessource("2021/a.jpg", storageId = storage, mediumId = medium)
+
+        givenFileInfo(hash = "gleich", bessourceId = erstes)
+        givenFileInfo(hash = "gleich", bessourceId = zweites)
+        flush()
+
+        assertEquals(
+            listOf(medium, medium),
+            fileInfoRepository.findDuplicates().map { it.mediumId }
+        )
+    }
+
+    /** A file nobody has made a medium of has none, which is what null is for. */
+    @Test
+    fun `answers no medium for a bessource that has none`() {
+        val storage = givenStorage("regal")
+        val ohneMedium = givenBessource("2020/verwaist.jpg", storageId = storage)
+
+        givenFileInfo(hash = "gleich", bessourceId = ohneMedium)
+        givenFileInfo(hash = "gleich")
+        flush()
+
+        val rows = fileInfoRepository.findDuplicates().sortedBy { it.name }
+
+        assertEquals(listOf("2020/verwaist.jpg", "bilder/a.jpg"), rows.map { it.name })
+        assertEquals(listOf(null, null), rows.map { it.mediumId })
+    }
+
     // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
@@ -350,6 +388,11 @@ class FileInfoPersistenceTest {
         Storage().also { it.name = name }.also { entityManager.persist(it) }
             .let { entityManager.flush(); it.id!! }
 
+    /** a stored medium, answering the id it was given */
+    private fun givenMedium(name: String): Int =
+        Medium().apply { this.name = name }.also { entityManager.persist(it) }
+            .let { entityManager.flush(); it.id!! }
+
     /**
      * A bessource as the database hands it back, answering the id it was given, so that `bessource_id`
      * names a row that is really there.
@@ -357,14 +400,15 @@ class FileInfoPersistenceTest {
      * Without an id of its own: [Bessource] generates one, and a persist of an entity that carries a
      * generated id is a persist of something the persistence context considers detached.
      *
-     * The storage is read back by its id rather than handed over as an object, since this clears the
-     * persistence context afterwards and a bessource holding a storage that was detached by that would
-     * be a persist of something the database has never heard of.
+     * What it points at is read back by id rather than handed over as an object, since this clears the
+     * persistence context afterwards and a bessource holding a storage or a medium that was detached by
+     * that would be a persist of something the database has never heard of.
      */
-    private fun givenBessource(name: String = "bilder/a.jpg", storageId: Int? = null): Int {
+    private fun givenBessource(name: String = "bilder/a.jpg", storageId: Int? = null, mediumId: Int? = null): Int {
         val bessource = Bessource().apply {
             this.name = name
             storageId?.let { this.storage = entityManager.find(Storage::class.java, it) }
+            mediumId?.let { this.medium = entityManager.find(Medium::class.java, it) }
         }
         entityManager.persist(bessource)
         entityManager.flush()

@@ -76,6 +76,88 @@ class ParserTests {
         assertEquals(listOf("a.html"), elements)
     }
 
+    /**
+ * A fragment is a reference to a place on the page it is written in, so it resolves against the base uri
+ * like any other relative reference and answers the whole address rather than the bare fragment.
+ */
+@Test
+    fun `DomParser resolves a fragment against the base uri`() {
+
+        val text = """<html><a rel="history" href="#15"><img src="x.jpg"></a></html>"""
+
+        val elements = DomParser("(.*)", "a[href]", "abs:href")
+            .getElements(text, "http://example.org/user/12345/index.php")
+
+        assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
+    }
+
+    /**
+     * Which is what makes the plain attribute useless for this: `#15` is a reference to nothing outside
+     * the context of the element, and a caller reading it has to know which page it came from.
+     */
+    @Test
+    fun `DomParser answers a bare fragment for a plain attribute`() {
+
+        val text = """<html><a rel="history" href="#15"><img src="x.jpg"></a></html>"""
+
+        val elements = DomParser("(.*)", "a[href]", "href")
+            .getElements(text, "http://example.org/user/12345/index.php")
+
+        assertEquals(listOf("#15"), elements)
+    }
+
+    /**
+     * `:last-child` is relative to a parent, so a selector that says "the last link of the page" does
+     * not exist in css: it answers the last of each list a page writes.
+     */
+    @Test
+    fun `DomParser answers the last element of each parent for a last child selector`() {
+
+        val text = """
+            <html><body>
+            <div class="head"><a href="/start.html">Start</a></div>
+            <div class="history"><a rel="history" href="#14">fourteen</a><a rel="history" href="#15">fifteen</a></div>
+            <div class="foot"><a href="/kontakt.html">Kontakt</a></div>
+            </body></html>
+        """.trimIndent()
+
+        val elements = DomParser("(.*)", "a[href]:last-child", "abs:href")
+            .getElements(text, "http://example.org/start.html")
+
+        assertEquals(
+            listOf(
+                "http://example.org/start.html",
+                "http://example.org/start.html#15",
+                "http://example.org/kontakt.html"
+            ),
+            elements
+        )
+    }
+
+    /**
+     * And narrowing the selector to what identifies these anchors is what makes it answer one, since a
+     * page has one block of them.
+     */
+    @Test
+    fun `DomParser answers one element for a narrow last child selector`() {
+
+        val text = """
+            <html><body>
+            <div class="head"><a href="/start.html">Start</a></div>
+            <div class="history">
+              <a class="expp" rel="history" href="#14"><img src="14.jpg"></a>
+              <a class="expp" rel="history" href="#15"><img src="15.jpg"></a>
+            </div>
+            <div class="foot"><a href="/kontakt.html">Kontakt</a></div>
+            </body></html>
+        """.trimIndent()
+
+        val elements = DomParser("(.*)", "a.expp[rel=history]:last-child", "abs:href")
+            .getElements(text, "http://example.org/user/12345/index.php")
+
+        assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
+    }
+
     @Test
     fun `DomParser returns nothing when the tag is absent`() {
 
