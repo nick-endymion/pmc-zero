@@ -15,6 +15,7 @@ fun Mset.toTO(): MsetTO {
         supplierId = supplierId,
         scannerId = scannnerId,
         tags = tags.toList(),
+        description = description,
         created_at = created_at,
         updated_at = updated_at
     )
@@ -50,6 +51,7 @@ fun Mset.toTOwithMedia(withBessources: Boolean = false): MsetTO {
         supplierId = supplierId,
         scannerId = scannnerId,
         tags = tags.toList(),
+        description = description,
         created_at = created_at,
         updated_at = updated_at,
         media = media.map { it.toTO(withBessources) })
@@ -64,6 +66,7 @@ fun MsetTO.toEntity(): Mset {
         mset.url = url
         mset.supplierId = supplierId
         mset.scannnerId = scannerId
+        mset.description = description
         // a copy rather than the list of the TO itself, since a MsetTO may be handed in twice and one
         // entity must not end up writing the tags of the other
         mset.tags = tags.toMutableList()

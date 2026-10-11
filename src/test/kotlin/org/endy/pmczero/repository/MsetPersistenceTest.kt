@@ -336,6 +336,91 @@ class MsetPersistenceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // The description of a set
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `keeps the description of a set`() {
+        entityManager.persist(
+            Mset().apply {
+                name = "Hearts"
+                description = "A gallery of hearts, played in august 2020."
+            }
+        )
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(
+            "A gallery of hearts, played in august 2020.",
+            msetRepository.findAll().single().description
+        )
+    }
+
+    /**
+     * Longer than the `varchar(255)` every other string of a set gets by default, which is the whole
+     * reason the column is a `TEXT`.
+     *
+     * Without that it would either be refused outright by a database in strict mode or cut off at 255
+     * characters, and a set whose description ends mid sentence is worse than one with none.
+     */
+    @Test
+    fun `keeps a description longer than a line`() {
+        val long = "Ein Bild nach dem anderen, und keines gleicht dem anderen. ".repeat(20)
+
+        entityManager.persist(Mset().apply { name = "lang"; description = long })
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(long, msetRepository.findAll().single().description)
+        assertTrue(long.length > 255, "it is over the length a varchar would hold")
+    }
+
+    /** A set nobody described is the normal case, since nothing writes one on the way in. */
+    @Test
+    fun `keeps a set with no description`() {
+        entityManager.persist(Mset().apply { name = "empty" })
+        entityManager.flush()
+        entityManager.clear()
+
+        assertNull(msetRepository.findAll().single().description)
+    }
+
+    /** What a caller writes over the api replaces what was there, like every other field of a set. */
+    @Test
+    fun `replaces the description of a set`() {
+        val mset = Mset().apply { name = "Hearts"; description = "the first one" }
+        entityManager.persist(mset)
+        entityManager.flush()
+        entityManager.clear()
+
+        val stored = msetRepository.findById(mset.id!!).get()
+        stored.description = "the second one"
+        msetRepository.save(stored)
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals("the second one", msetRepository.findById(mset.id!!).get().description)
+    }
+
+    /** Two sets keep their own text, which is what a column is for. */
+    @Test
+    fun `keeps the descriptions of two sets apart`() {
+        entityManager.persist(
+            Mset().apply { name = "erstes"; description = "one" }
+        )
+        entityManager.persist(
+            Mset().apply { name = "zweites"; description = "two" }
+        )
+        entityManager.flush()
+        entityManager.clear()
+
+        assertEquals(
+            listOf("one", "two"),
+            msetRepository.findAll().sortedBy { it.name }.map { it.description }
+        )
+    }
+
+    // -------------------------------------------------------------------------------------
     // Tags of a set
     // -------------------------------------------------------------------------------------
 

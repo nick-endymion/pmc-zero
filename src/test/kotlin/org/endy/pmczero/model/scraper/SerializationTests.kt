@@ -25,10 +25,11 @@ class SerializationTests {
 
         val parsers: List<Parser> = listOf(
             DomParser("(.*)", "img", "abs:src"),
+            DomElememenParser("(.*)", "a[href]", "abs:href"),
             RegexParser("(.*fa.*)"),
             PassThroughParser()
         )
-        val serialNames = listOf("dom", "regex", "passThrough")
+        val serialNames = listOf("dom", "domLastElement", "regex", "passThrough")
 
         for ((parser, serialName) in parsers.zip(serialNames)) {
 
@@ -48,10 +49,69 @@ class SerializationTests {
                     assertEquals(parser.tag, d.tag)
                     assertEquals(parser.attribute, d.attribute)
                 }
+                is DomElememenParser -> {
+                    val d = assertIs<DomElememenParser>(decoded)
+                    assertEquals(parser.regex, d.regex)
+                    assertEquals(parser.tag, d.tag)
+                    assertEquals(parser.attribute, d.attribute)
+                }
                 is RegexParser -> assertEquals(parser.regex, assertIs<RegexParser>(decoded).regex)
                 is PassThroughParser -> assertIs<PassThroughParser>(decoded)
             }
         }
+    }
+
+    /**
+     * Three fields and nothing else, i.e. the parser that does the parsing is not in the stored json.
+ *
+ * kotlinx.serialization writes every property that has a backing field, so a parser that kept its
+ * [DomParser] in a field would store it as a second nested parser object: the same three values twice,
+ * which a reader of `a.scanner.serialization` would have to know to ignore.
+ *
+ * Pinned as the exact json rather than as the absence of one field, so a second object of whatever kind
+ * is a failure too.
+ */
+@Test
+    fun `a stored last element parser carries its three fields and nothing else`() {
+
+        val json = Json.encodeToString(
+            Scraper(DomElememenParser("(.*)", "a.expp[rel=history]", "abs:href"), FoundElementsWorker(1))
+        )
+
+        assertEquals(
+            """{"parser":{"type":"domLastElement","regex":"(.*)","tag":"a.expp[rel=history]","attribute":"abs:href"},"worker":{"type":"foundElements","level":1}}""",
+            json
+        )
+    }
+
+    /**
+     * A stored scanner that keeps the last element keeps it, i.e. the parser comes back as itself and
+     * not as the plain [DomParser] it reads like in the json.
+     *
+     * The symptom of getting this wrong is a scanner that works and answers every element again: the
+     * three fields are the same, so only the behaviour of the stored scraper tells the two apart.
+     */
+    @Test
+    fun `a stored scraper keeps the parser that answers the last element`() {
+
+        val json = Json.encodeToString(
+            Scraper(DomElememenParser("(.*)", "a.expp[rel=history]", "abs:href"), FoundElementsWorker(1))
+        )
+
+        assertTrue(json.contains(""""type":"domLastElement""""), "domLastElement expected in $json")
+
+        val decoded = Json.decodeFromString<Scraper>(json).parser
+
+        val parser = assertIs<DomElememenParser>(decoded)
+        assertEquals("a.expp[rel=history]", parser.tag)
+        assertEquals(
+            listOf("http://example.org/index.php#15"),
+            parser.getElements(
+                """<a class="expp" rel="history" href="#14">14</a>
+                   <a class="expp" rel="history" href="#15">15</a>""",
+                "http://example.org/index.php"
+            )
+        )
     }
 
     /**

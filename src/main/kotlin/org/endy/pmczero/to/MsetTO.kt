@@ -42,6 +42,14 @@ data class MsetTO (
      */
     val tags: List<String> = emptyList(),
 
+    /**
+     * What this set is about, as long as a paragraph, or null when nobody has written one. See
+     * [org.endy.pmczero.model.modern.Mset.description]
+     *
+     * Free text rather than a list of words as [tags] is, since this is prose read in one go.
+     */
+    var description: String? = null,
+
     var created_at: LocalDateTime? = null,
     var updated_at: LocalDateTime? = null,
     val media: List<MediumTO>? =  mutableListOf<MediumTO>()

@@ -158,6 +158,107 @@ class ParserTests {
         assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
     }
 
+    /**
+ * The same elements as a [DomParser] would have answered and only the last of them, which is what a
+ * selector cannot say on its own: `:last-child` is about a parent.
+ */
+@Test
+    fun `DomElememenParser answers the last element of a page`() {
+
+        val text = """
+            <html><body>
+            <a href="/one.html">One</a>
+            <a href="/two.html">Two</a>
+            <a href="/three.html">Three</a>
+            </body></html>
+        """.trimIndent()
+
+        val last = DomElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+
+        val all = DomParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+
+        assertEquals(listOf("http://example.org/three.html"), last)
+        assertEquals(all.last(), last.single(), "the last of what the DomParser answered")
+    }
+
+    /**
+     * Of the document rather than of each block, which is the difference from a `:last-child` selector
+     * and the reason this is a parser: on this page the anchors are each alone in a wrapper, so every
+     * one of them is a last child.
+     */
+    @Test
+    fun `DomElememenParser answers one element for a page whose matches are wrapped one by one`() {
+
+        val text = """
+            <html><body>
+            <div class="head"><a href="/start.html">Start</a></div>
+            <div class="thumb"><a href="/one.html">One</a></div>
+            <div class="thumb"><a href="/two.html">Two</a></div>
+            <div class="foot"><a href="/kontakt.html">Kontakt</a></div>
+            </body></html>
+        """.trimIndent()
+
+        val elements = DomElememenParser("(.*)", "a[href]", "abs:href")
+            .getElements(text, "http://example.org/")
+
+        assertEquals(listOf("http://example.org/kontakt.html"), elements)
+    }
+
+    /** The same selector, the same attribute and the same regex: only the answer differs. */
+    @Test
+    fun `DomElememenParser answers one history link of a page of them`() {
+
+        val text = """
+            <html><body>
+            <a class="expp" rel="history" href="#14"><img src="/mini/14.jpg"></a>
+            <a class="expp" rel="history" href="#15"><img src="/mini/15.jpg"></a>
+            </body></html>
+        """.trimIndent()
+
+        val elements = DomElememenParser("(.*)", "a.expp[rel=history]", "abs:href")
+            .getElements(text, "http://example.org/user/12345/index.php")
+
+        assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
+    }
+
+    /** The regex is applied first, so the last of the matching elements is the last one there is. */
+    @Test
+    fun `DomElememenParser answers the last element the regex matches`() {
+
+        val text = """
+            <html><body>
+            <a href="/one.jpg">One</a>
+            <a href="/notes.txt">Two</a>
+            <a href="/three.jpg">Three</a>
+            </body></html>
+        """.trimIndent()
+
+        val elements = DomElememenParser("(.+\\.jpg)", "a[href]", "abs:href")
+            .getElements(text, "http://example.org/")
+
+        assertEquals(listOf("http://example.org/three.jpg"), elements)
+    }
+
+    @Test
+    fun `DomElememenParser answers nothing from a page without a match`() {
+
+        val elements = DomElememenParser("(.*)", "img[src]", "abs:src")
+            .getElements("<html><body>no images</body></html>", "http://example.org/")
+
+        assertTrue(elements.isEmpty())
+    }
+
+    /** One element is the last one as much as three are. */
+    @Test
+    fun `DomElememenParser answers the only element of a page`() {
+
+        val text = """<html><body><a href="/only.html">Only</a></body></html>"""
+
+        val elements = DomElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+
+        assertEquals(listOf("http://example.org/only.html"), elements)
+    }
+
     @Test
     fun `DomParser returns nothing when the tag is absent`() {
 

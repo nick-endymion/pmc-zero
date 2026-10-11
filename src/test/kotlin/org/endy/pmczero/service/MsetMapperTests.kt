@@ -27,6 +27,7 @@ class MsetMapperTests {
         supplierId = "4711"
         scannnerId = 12
         tags = mutableListOf("Hearts", "Aces", "matti")
+        description = "A gallery of hearts, played by matti, in august 2020."
     }
 
     @Test
@@ -43,6 +44,37 @@ class MsetMapperTests {
         assertEquals(original.supplierId, roundTripped.supplierId)
         assertEquals(original.scannnerId, roundTripped.scannnerId)
         assertEquals(original.tags, roundTripped.tags)
+        assertEquals(original.description, roundTripped.description)
+    }
+
+    /**
+     * The description is carried by both mappers that build a TO, since a field added to one side and
+     * forgotten on the other is not a compile error but a value that reads back as null.
+     */
+    @Test
+    fun `carries the description on both mappers that build a TO`() {
+        assertEquals(mset().description, mset().toTO().description)
+        assertEquals(mset().description, mset().toTOwithMedia().description)
+    }
+
+    /** A set nobody described has none rather than an empty string, which is a decision of its own. */
+    @Test
+    fun `carries a set without a description`() {
+        val original = mset().also { it.description = null }
+
+        assertNull(original.toTO().description)
+        assertNull(original.toTO().toEntity().description)
+    }
+
+    /**
+     * Longer than the `varchar(255)` every other string of a set gets by default, since that is the
+     * whole reason the column is a `TEXT`.
+     */
+    @Test
+    fun `carries a description longer than one line`() {
+        val long = "Ein Bild nach dem anderen. ".repeat(40)
+
+        assertEquals(long, mset().also { it.description = long }.toTO().toEntity().description)
     }
 
     /**

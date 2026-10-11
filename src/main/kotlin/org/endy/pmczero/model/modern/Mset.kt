@@ -131,6 +131,30 @@ class Mset {
     @Column(name = "name", nullable = true)
     var name: String? = null
 
+    /**
+     * What this set is about, in the words of whoever wrote them, or null when nobody has.
+     *
+     * Free text and as long as a paragraph, which is the one thing about this entity that the other text
+     * columns are not: [name] is one line, [url] and [supplierId] are a page and an id, and this is the
+     * field where a person or a page puts a sentence or several. Hence `TEXT` rather than the
+     * `varchar(255)` every other string here gets by default, and hence the overflow is a column wide
+     * enough rather than a truncation: MySQL in strict mode refuses a value that does not fit instead
+     * of cutting it, which would be the worse surprise of the two.
+     *
+     * `columnDefinition` rather than `@Lob`, since this application runs on MySQL and says so in the
+     * column, rather than leaving the size to be whatever the dialect infers from a large object.
+     *
+     * Optional and empty on most sets, since nothing writes it on the way in: a scan builds a set out of
+     * what a page held and has no sentence about it. A caller that wants one here puts one there through
+     * the api, and a scraper that wants to read it off the page can, see
+     * [org.endy.pmczero.model.scraper.DomParser] and the `meta[name=description]` of a page.
+     *
+     * One field and not a collection of words, unlike [tags]: a description is prose a person reads in
+     * one go, and a row per word of it would be a table of sentences.
+     */
+    @Column(name = "description", nullable = true, columnDefinition = "TEXT")
+    var description: String? = null
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = true, updatable = false)
     var created_at: LocalDateTime? = null
