@@ -170,7 +170,9 @@ class MediaService(
         val primaryUrl = provided.firstOrNull { it.ressType == RessType.PRIMARY.i }?.url
         val tnUrl = provided.firstOrNull { it.ressType == RessType.TN.i }?.url
 
-        return  RessourceUrlsTO(medium.id, medium.name, primaryUrl, tnUrl)
+        // mtype passed on so a caller can tell what kind of medium this is without reading the
+        // extension out of the name. Null for a row written before the column said anything.
+        return RessourceUrlsTO(medium.id, medium.name, primaryUrl, tnUrl, medium.mtype)
     }
 
     fun file(id: Int, type: RessType) {
