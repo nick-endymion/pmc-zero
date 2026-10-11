@@ -629,6 +629,232 @@ class ScannerInitializerTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // The description collector
+    // -------------------------------------------------------------------------------------
+
+    /** The case this scraper was built for: the sentence the page wrote in its meta description. */
+    @Test
+    fun `describes the set with what the page says about itself`() {
+        val html = """
+            <html><head>
+            <title>Herzen</title>
+            <meta name="description" content="Eine Galerie von Herzen, gespielt von matti.">
+            </head><body><p>irgendwas</p></body></html>
+        """.trimIndent()
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals("Eine Galerie von Herzen, gespielt von matti.", kontext.mset?.description)
+    }
+
+    /**
+     * The text in the answer as well as on the set, so a caller can read what a page said without a
+     * second call: the same parser feeds both branches.
+     */
+    @Test
+    fun `reports the description as a found element too`() {
+        val html = """<html><head>
+            <meta name="description" content="Eine Galerie von Herzen.">
+            </head><body></body></html>"""
+
+        assertEquals(
+            listOf(FoundElement(1, "Eine Galerie von Herzen.")),
+            runOver("Description Collector", html)
+        )
+    }
+
+    /**
+     * A page whose description attribute is empty says nothing, and an empty sentence on a set is worse
+     * than none: this is what the `(.+)` of the adder branch is for.
+     */
+    @Test
+    fun `describes a set with nothing from a page whose description is empty`() {
+        val html = """<html><head>
+            <meta name="description" content="">
+            </head><body></body></html>"""
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals(null, kontext.mset?.description)
+        assertEquals(emptyList(), kontext.foundElements, "and nothing is reported either")
+    }
+
+    /** A page that says nothing about itself is the normal case and not a failure. */
+    @Test
+    fun `describes a set with nothing from a page without a description`() {
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Collector").serialization!!)
+            .doWork("<html><head><title>Herzen</title></head><body></body></html>", "http://example.org/galerie.html", kontext)
+
+        assertEquals(null, kontext.mset?.description)
+    }
+
+    /** One description per set, since a page with two of those tags has one description and a mistake. */
+    @Test
+    fun `describes the set with the first of two descriptions a page carries`() {
+        val html = """
+            <html><head>
+            <meta name="description" content="Die erste.">
+            <meta name="description" content="Die zweite.">
+            </head><body></body></html>
+        """.trimIndent()
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals("Die erste.", kontext.mset?.description)
+    }
+
+    /** A description a person wrote survives a re-import of the gallery. */
+    @Test
+    fun `leaves a description the set already has`() {
+        val html = """<html><head>
+            <meta name="description" content="Was die Seite sagt.">
+            </head><body></body></html>"""
+
+        val kontext = kontext().also { it.mset?.description = "Von Hand geschrieben." }
+        scannerService.deserialize(storedScanner("Description Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals("Von Hand geschrieben.", kontext.mset?.description)
+    }
+
+    // -------------------------------------------------------------------------------------
+    // The description block collector
+    // -------------------------------------------------------------------------------------
+
+    /** The block as the site writes it, verbatim down to the `font` and the `bgcolor`. */
+    private val descriptionBlock = """
+        <html><body>
+        <h1>Some page</h1>
+        <span id="cnt_description">
+        					<center>
+    					<br>
+    					<table>
+    						<tbody><tr>
+    							<td width="650" style="border: solid 1px #999999;" bgcolor="#FCFFE0">
+    								<font face="verdana"><span style="font-size:14px;">A picture to a house</span></font>
+    							</td>
+    						</tr></tbody></table>
+    				</center>
+    					</span>
+        <a href="/next.html">more</a>
+        </body></html>
+    """.trimIndent()
+
+    @Test
+    fun `describes the set with the text of the description block`() {
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .doWork(descriptionBlock, "http://example.org/galerie.html", kontext)
+
+        assertEquals("A picture to a house", kontext.mset?.description)
+    }
+
+    /** The text in the answer as well as on the set, the same parser feeding both branches. */
+    @Test
+    fun `reports the text of the description block as a found element too`() {
+        assertEquals(
+            listOf(FoundElement(1, "A picture to a house")),
+            runOver("Description Block Collector", descriptionBlock)
+        )
+    }
+
+    /**
+     * The reason the stored selector is `#cnt_description span` and not the block itself: the text of an
+     * element is the text of everything under it, so the block would pick up whatever else a page puts
+     * in there.
+     */
+    @Test
+    fun `describes the set with the sentence and not what else the block holds`() {
+        val html = descriptionBlock.replace(
+            "<font face=\"verdana\"><span style=\"font-size:14px;\">A picture to a house</span></font>",
+            "<span style=\"font-size:14px;\">A picture to a house</span><a href=\"/x\">read more</a>"
+        )
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals("A picture to a house", kontext.mset?.description)
+    }
+
+    /** The same sentence without the `font` and the cell decoration around it. */
+    @Test
+    fun `describes the set from a page whose block is marked up differently`() {
+        val html = """<html><body>
+            <span id="cnt_description"><span>A picture to a house</span></span>
+            </body></html>"""
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals("A picture to a house", kontext.mset?.description)
+    }
+
+    /** A page without the block is the normal case, since the block is one site in the first place. */
+    @Test
+    fun `describes a set with nothing from a page without that block`() {
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .doWork("""<html><body><span id="cnt_cats">Hearts</span></body></html>""", "http://example.org/g.html", kontext)
+
+        assertEquals(null, kontext.mset?.description)
+        assertEquals(emptyList(), kontext.foundElements)
+    }
+
+    /** An empty block describes nothing, which is what the `(.+)` of the parser is for. */
+    @Test
+    fun `describes a set with nothing from an empty block`() {
+        val html = """<html><body>
+            <span id="cnt_description"><span>   </span></span>
+            </body></html>"""
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals(null, kontext.mset?.description)
+    }
+
+    /**
+     * The id is what scopes the block and the span is what says which text inside it is the
+     * description: a span of that text anywhere else on the page must not be taken for it.
+     */
+    @Test
+    fun `reads the text of that block and no span anywhere else`() {
+        val html = """<html><body>
+            <span id="cnt_description"><span>A picture to a house</span></span>
+            <div class="elsewhere"><span>Some navigation</span></div>
+            </body></html>"""
+
+        val kontext = kontext()
+        scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .doWork(html, "http://example.org/galerie.html", kontext)
+
+        assertEquals("A picture to a house", kontext.mset?.description)
+    }
+
+    /** Both halves of the stored selector, since either one alone would read something else. */
+    @Test
+    fun `reads the spans of that block with the selector that says so`() {
+        val worker = scannerService.deserialize(storedScanner("Description Block Collector").serialization!!)
+            .worker as StructuredWorker
+
+        for (scraper in worker.scrapers) {
+            val parser = assertIs<DomParser>(scraper.parser)
+            assertEquals("#cnt_description span", parser.tag)
+            assertEquals("", parser.attribute)
+        }
+    }
+
+    // -------------------------------------------------------------------------------------
     // The others
     // -------------------------------------------------------------------------------------
 
@@ -753,7 +979,9 @@ class ScannerInitializerTests {
                 "Category Link Collector",
                 "Gallery Block Link Collector",
                 "Last Link Collector",
-                "Last History Link Collector"
+                "Last History Link Collector",
+                "Description Collector",
+                "Description Block Collector"
             ),
             stored.map { it.name }
         )

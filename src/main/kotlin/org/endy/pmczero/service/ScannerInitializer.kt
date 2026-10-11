@@ -11,6 +11,7 @@ import org.endy.pmczero.model.scraper.RecoveryWorker
 import org.endy.pmczero.model.scraper.SequenceWorker
 import org.endy.pmczero.model.scraper.Scraper
 import org.endy.pmczero.model.scraper.SetCreator
+import org.endy.pmczero.model.scraper.SetDescriptionAdder
 import org.endy.pmczero.model.scraper.StructuredWorker
 import org.endy.pmczero.repository.SerializedScannerRepository
 import org.slf4j.LoggerFactory
@@ -49,6 +50,10 @@ import org.springframework.stereotype.Component
  *     of an index that ends in one.
  * 11. **Last History Link Collector** - the last of the history anchors of a page, whose href is a
  *     fragment of the page itself, e.g. `a class="expp" rel="history" href="#15"`.
+ * 12. **Description Collector** - the sentence a page writes about itself in its
+ *     `meta name="description"`, put on the set as its description.
+ * 13. **Description Block Collector** - the same sentence where a page puts it in a block of its own
+ *     rather than in a tag, e.g. `span id="cnt_description"`.
  *
  * Only the first, the fifth and the seventh download anything, so only those three can be run through
  * `POST /api/scanners/{id}/scrape`: an import refuses a scraper that records no files, see
@@ -77,7 +82,9 @@ class ScannerInitializer(
             buildCategoryLinkCollector(),
             buildGalleryBlockLinkCollector(),
             buildLastLinkCollector(),
-            buildLastHistoryLinkCollector()
+            buildLastHistoryLinkCollector(),
+            buildDescriptionCollector(),
+            buildDescriptionBlockCollector()
         )
 
         for (scanner in scanners) {
@@ -438,6 +445,125 @@ class ScannerInitializer(
             name = "Last History Link Collector"
             regex = "(.*)"
             example = "https://example.org/user/12345/index.php"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+ * The description a page writes about itself, at level 1, and nothing else.
+     *
+     * The usual place a page says what it is, in the `content` of a `meta` tag:
+     *
+     *     <meta name="description" content="Eine Galerie von Herzen, gespielt von matti.">
+     *
+     * answers that sentence, and [SetDescriptionAdder] puts it on the set as its description.
+     *
+     * `content` rather than the text of the element, since a `meta` tag has no text of its own: what a
+     * page wrote in that attribute is the description, and reading `""` for it would answer the blank
+     * text of a tag that is not in the page. `(.+)` rather than `(.*)` for the same reason, so a page
+     * whose description attribute is empty contributes nothing rather than an empty sentence.
+     *
+     * Nothing else of the page is looked at, so this is a collector beside [buildTitleExtractor] rather
+     * than an import: it records no media and downloads nothing, and an import of it would be refused
+     * for recording no files, see [ScraperImageImportService.importWithStoredScanner]. To get a set with
+     * its description and its images, the branch of [SetDescriptionAdder] belongs in the image scraper
+     * beside the [SetCreator] and the two `img` branches.
+     *
+     * One description per set rather than one per match: [SetDescriptionAdder] keeps the first element
+     * and drops the rest, since a page with two `meta` description tags is a page with one description
+     * and a mistake. A caller who wants the second one narrows the selector.
+     */
+    private fun buildDescriptionCollector(): Scanner {
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(DomParser("(.+)", "meta[name=description]", "content"), SetDescriptionAdder()),
+                    // the same parser over the same attribute, so the text is in the answer of the run as
+                    // well as on the set. `(.+)` here for the same reason as there: an empty description
+                    // attribute is not worth reporting as an empty element
+                    Scraper(DomParser("(.+)", "meta[name=description]", "content"), FoundElementsWorker(1))
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Description Collector"
+            regex = "testing"
+            example = "https://example.com/galerie.html"
+            serialization = scannerService.serialize(scraper)
+            valid = true
+        }
+    }
+
+    /**
+ * The sentence a page writes about itself in its description block, at level 1, and nothing else.
+     *
+     * Where [buildDescriptionCollector] reads the `meta` tag a page describes itself in, this reads the
+     * block it puts the same sentence into:
+     *
+     *     <span id="cnt_description">
+     *       <center><br>
+     *         <table><tbody><tr>
+     *           <td width="650" bgcolor="#FCFFE0">
+     *             <font face="verdana"><span style="font-size:14px;">A picture to a house</span></font>
+     *           </td>
+     *         </tr></tbody></table>
+     *       </center>
+     *     </span>
+     *
+     * answers `A picture to a house`, which [SetDescriptionAdder] puts on the set.
+     *
+     * ### `#cnt_description span` and not `#cnt_description`
+     *
+     * Both answer the same thing on the markup above, and they stop agreeing on the first page that puts
+     * anything else in the block:
+     *
+     *     <td …><span …>A picture to a house</span><a href="/x">read more</a></td>
+     *
+     * `#cnt_description` answers `A picture to a house read more`, since [DomParser] with a blank
+     * attribute answers [org.jsoup.nodes.Element.text], which is the text of an element *and everything
+     * under it*. `#cnt_description span` answers `A picture to a house`, because the span inside is what
+     * carries the sentence and the link beside it is not part of it.
+     *
+     * The id is what scopes the block and the span is what says which text inside it is the
+     * description, and neither is enough on its own: `span` alone would match every span on the page.
+     * This is the same decision as [buildCategoryLinkCollector] makes about `#cnt_cats a` and
+     * `#cnt_cats`, for the same reason.
+     *
+     * Nested one level further would be `#cnt_description font span`, which is narrower and pins the
+     * answer to the markup above rather than to the idea of a description inside the block: the
+     * `font` and the `bgcolor` on the cell are both something a page can drop without changing what it
+     * says.
+     *
+     * `(.+)` rather than `(.*)`, so a block that exists and is empty describes nothing rather than
+     * describing the set with an empty sentence.
+     */
+    private fun buildDescriptionBlockCollector(): Scanner {
+        val selector = "#cnt_description span"
+
+        val scraper = Scraper(
+            PassThroughParser(),
+            StructuredWorker(
+                download = false,
+                scrapers = listOf(
+                    Scraper(DomParser("(.+)", selector, ""), SetDescriptionAdder()),
+                    // the same parser over the same elements, so the text is in the answer of the run as
+                    // well as on the set
+                    Scraper(DomParser("(.+)", selector, ""), FoundElementsWorker(1))
+                )
+            )
+        )
+
+        return Scanner().apply {
+            name = "Description Block Collector"
+            // (.*) and not "testing", beside the other scanner that reads a #cnt_ block: this is not
+            // tied to a url of its own, and offering it everywhere is the smaller problem than a scanner
+            // that is never offered at all
+            regex = "(.*)"
+            example = "https://example.com/galerie.html"
             serialization = scannerService.serialize(scraper)
             valid = true
         }
