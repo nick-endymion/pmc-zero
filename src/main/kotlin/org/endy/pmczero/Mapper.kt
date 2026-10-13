@@ -83,6 +83,7 @@ fun Medium.toTO(withBessources: Boolean = true, withMset: Boolean = false): Medi
         created_at = created_at,
         updated_at = updated_at,
         mtype = mtype,
+        ranking = ranking,
         deleted = deleted,
         bessources = bessources.map { it.toTO() },
         mset = if (withMset) {
@@ -98,6 +99,7 @@ fun MediumTO.toEntity(mset: Mset? = null): Medium {
         it.id = id
         it.name = name
         it.mtype = mtype
+        it.ranking = ranking
         it.mset = mset
     }
 }

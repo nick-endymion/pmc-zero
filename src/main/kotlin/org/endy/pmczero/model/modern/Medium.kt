@@ -34,6 +34,26 @@ class Medium {
     var mtype: Int? = null
 
     /**
+     * Where this medium stands in the order of its set, a whole number, e.g. `1` for the first and
+     * `3` for the third, or null when nobody ranked it.
+     *
+     * An order the caller set rather than one worked out from the files: the media of a set are found
+     * in whatever order the filesystem, the scanner or the page hands them over, and that order is not
+     * the one somebody means when they say which picture comes first. So nothing here derives a
+     * ranking from a filename or from the [created_at] a scan stamped on it, and a medium nobody
+     * ranked has none rather than being put at the end or the front of a list.
+     *
+     * Two media of the same set may carry the same number, since the number is what the caller wrote
+     * down and it is not this column's job to renumber anything. Reading them back in an order is
+     * left to the caller as well, which is why it is a plain integer rather than a unique index:
+     * what "first" means over a whole set is a question of the caller, not of the medium.
+     *
+     * Nullable, since a medium only has a ranking once somebody has put one on it.
+     */
+    @Column(name = "ranking", nullable = true)
+    var ranking: Int? = null
+
+    /**
      * Whether this medium is marked as deleted, so the row stays but is not acted on any more.
      *
      * A mark rather than a deletion, which is why the row survives: the media of a scanned set can

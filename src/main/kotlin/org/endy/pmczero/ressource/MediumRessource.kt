@@ -75,6 +75,29 @@ class MediumRessource(
     }
 
     /**
+     * Sets the ranking of this medium, or takes it off again, answering the medium as it was stored.
+     *
+     * Where the medium stands in the order of its set, see [Medium.ranking]: `1` for the first and
+     * `3` for the third. Absent, or present without a value, the medium goes back to being unranked
+     * rather than to any default, since a medium only has a ranking once somebody has put one on it.
+     *
+     * No range is enforced. Two media of one set may carry the same number and the column does not
+     * renumber anything, so a bound of 1 to 5 belongs to the viewer that offers those keys rather
+     * than to the column, which is why a number outside it is stored as faithfully as one inside.
+     *
+     * Answers 404 when the medium does not exist.
+     *
+     * @param ranking the whole number to store, absent or empty to clear it
+     */
+    @PutMapping("/{id}/ranking")
+    fun setRanking(
+        @PathVariable id: Int,
+        @RequestParam(name = "ranking", required = false) ranking: Int?
+    ): MediumTO {
+        return mediaService.setRanking(id, ranking).toTO()
+    }
+
+    /**
      * Deletes this medium for good, together with its bessources, and moves the files behind them
      * below a `DELETED` folder under the uri of their location.
      *

@@ -22,6 +22,16 @@ data class RessourceUrlsTO(
      * request for one answering 409. That absence is a hint about the type rather than a fact about the
      * medium: one whose file has gone is missing its url for a different reason entirely.
      */
-    var mtype: Int? = null
+    var mtype: Int? = null,
+
+    /**
+     * Where this medium stands in the order of its set, see [org.endy.pmczero.model.modern.Medium.ranking],
+     * or null for a medium nobody has ranked.
+     *
+     * Carried here for the same reason as [mtype]: the viewer this listing draws is the only place a
+     * reader can rank a medium, so it has to show the ranking that is already on the row or it would
+     * ask somebody to press a number without saying what the medium is ranked as today.
+     */
+    var ranking: Int? = null
 )
 

@@ -53,6 +53,27 @@ class MediaService(
         return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
     }
 
+    /**
+     * Sets or clears [Medium.ranking] on the medium with [id].
+     *
+     * A null [ranking] takes the medium out of the order altogether, which is the same shape of
+     * operation as [setDeleted]: what it writes is one nullable column and the caller says whether
+     * there is a value or none. No range is enforced here. [Medium.ranking] is a plain integer on
+     * purpose, two media of one set may share it and the column does not renumber anything, so a
+     * bound belongs to whatever is doing the ranking rather than to the column.
+     *
+     * Re-read after the save, for the reason given on [setDeleted].
+     *
+     * @throws NotFoundException when no medium with that id exists
+     */
+    fun setRanking(id: Int, ranking: Int?): Medium {
+        val medium = findById(id)
+        medium.ranking = ranking
+        mediaRepository.save(medium)
+        // createdAt is updatable=false, so the merged instance does not carry it back
+        return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    }
+
 //    -------------
 
     fun findBesById(id: Int): Bessource {
@@ -172,7 +193,11 @@ class MediaService(
 
         // mtype passed on so a caller can tell what kind of medium this is without reading the
         // extension out of the name. Null for a row written before the column said anything.
-        return RessourceUrlsTO(medium.id, medium.name, primaryUrl, tnUrl, medium.mtype)
+        // ranking likewise, so the viewer can show the order the medium already stands in rather
+        // than ask for a number without saying what is on the row today.
+        return RessourceUrlsTO(
+            medium.id, medium.name, primaryUrl, tnUrl, medium.mtype, medium.ranking
+        )
     }
 
     fun file(id: Int, type: RessType) {
