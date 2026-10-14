@@ -43,5 +43,42 @@ interface BessourceRepository : CrudRepository<Bessource, Int> {
     @Query("select b.id from Bessource b where b.storage.id = :storageId")
     fun findIdsOfStorage(@Param("storageId") storageId: Int): List<Int>
 
+    /**
+     * the bessources of [storageId] that share their name with at least one other bessource of the
+     * same storage, of any ressource type
+     *
+     * The whole colliding group rather than the names, since what a caller does about a duplicate is
+     * done to a row: which of the two is the medium that stays. Grouping is therefore left to the
+     * names this returns rather than folded into the answer, which is also why [Bessource.medium] is
+     * fetched rather than joined: the caller needs the id of the medium behind every row it gets.
+     *
+     * A duplicate is two rows naming the same file on one storage, so a same name on a *different*
+     * storage is not one: those are two files that happen to be called the same, which is what the
+     * per storage scoping of this query is for.
+     *
+     * A null name is not a duplicate of anything. `group by` would fold every nameless row of a
+     * storage into one group and report it as a collision of a name that does not exist, so they are
+     * excluded here instead. An empty name is left in: it is a name somebody wrote down, and a row
+     * that says nothing of where its file is may well be a row that was copied from another.
+     *
+     * Ordered by name and id, so the members of a group come back next to each other and the same
+     * call twice answers the same thing.
+     */
+    @Query(
+        "select b from Bessource b join fetch b.medium m " +
+            // the same filter as the subquery below, which decides which names count: a row excluded
+            // here but counted there would be answered as a duplicate of a group it is not part of
+            "where b.storage.id = :storageId and b.name is not null " +
+            "and (m.deleted is null or m.deleted = false) " +
+            "and b.name in (" +
+            "    select b2.name from Bessource b2 join b2.medium m2" +
+            "    where b2.storage.id = :storageId and b2.name is not null" +
+            "    and (m2.deleted is null or m2.deleted = false)" +
+            "    group by b2.name having count(b2) > 1" +
+            ") " +
+            "order by b.name, b.id"
+    )
+    fun findDuplicatesOfStorage(@Param("storageId") storageId: Int): List<Bessource>
+
 }
 

@@ -2,9 +2,11 @@ package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.service.DuplicateBessourceService
 import org.endy.pmczero.service.FileInfoService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
+import org.endy.pmczero.to.DuplicateNameBessourceTO
 import org.endy.pmczero.to.FileInfoRunTO
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.StorageTO
@@ -15,7 +17,8 @@ import org.springframework.web.bind.annotation.*
 class StorageRessource(
     val storageService: StorageService,
     val msetService: MsetService,
-    val fileInfoService: FileInfoService
+    val fileInfoService: FileInfoService,
+    val duplicateBessourceService: DuplicateBessourceService
 ) {
 
     @GetMapping("/")
@@ -46,6 +49,36 @@ class StorageRessource(
     @GetMapping("/{id}/msets")
     fun getMsets(@PathVariable id: Int): List<MsetTO> {
         return msetService.findByStorageId(id).map { it.toTO() }
+    }
+
+    /**
+     * The bessources of this storage that name the same file twice, as one entry per row.
+     *
+     * Two rows of the same name on one storage are a collision: the file they point at is the same,
+     * so only one of them can be the record of it. Which one is a decision about the medium behind
+     * it, which is why every member of a group is answered rather than one of them being picked
+     * here, and why [DuplicateNameBessourceTO.mediumId] is on each entry.
+     *
+     * Its own url rather than a query on this one, since the answer is bounded by the storage rather
+     * than by the storage and what else a caller asks for at the same time.
+     *
+     * The same name on two storages is not a duplicate and is not answered here, since those are two
+     * files that happen to be called the same. A caller after the whole picture asks one storage at
+     * a time.
+     *
+     * Not the same report as `/api/file-infos/duplicates`, which groups by content hash over the
+     * whole database: that one says which files are the same bytes, this one says which two rows
+     * point at one file. A caller after either asks for its own url.
+     *
+     * Nothing is changed: this is a report, and working out what to do about a collision is made by
+     * whoever reads it.
+     *
+     * Answers 404 for an unknown storage, so a mistyped id is not mistaken for a storage without
+     * duplicates.
+     */
+    @GetMapping("/{id}/duplicate-bessources")
+    fun getDuplicateBessources(@PathVariable id: Int): List<DuplicateNameBessourceTO> {
+        return duplicateBessourceService.duplicatesIn(id)
     }
 
     /**

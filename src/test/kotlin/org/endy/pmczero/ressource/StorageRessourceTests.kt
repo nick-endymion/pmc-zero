@@ -3,9 +3,11 @@ package org.endy.pmczero.ressource
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.service.DuplicateBessourceService
 import org.endy.pmczero.service.FileInfoService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
+import org.endy.pmczero.to.DuplicateNameBessourceTO
 import org.endy.pmczero.to.FileInfoFailureTO
 import org.endy.pmczero.to.FileInfoRunTO
 import org.junit.jupiter.api.Test
@@ -16,17 +18,20 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
 /**
- * What `POST /api/storages/{id}/set-fileinfos` answers, over http.
+ * What `POST /api/storages/{id}/set-fileinfos` and `GET /api/storages/{id}/duplicate-bessources`
+ * answer, over http.
  *
- * Only the endpoint is under test: which files are missing and how they are committed is
+ * Only the endpoints are under test: which files are missing and how they are committed is
  * [FileInfoService] and its own tests, and a run of its own over a storage of real files would be
- * slower and would say less about this.
+ * slower and would say less about this. Which bessources collide is [DuplicateBessourceService] and
+ * the query under it.
  */
 @WebMvcTest(controllers = [StorageRessource::class])
 class StorageRessourceTests {
@@ -39,6 +44,9 @@ class StorageRessourceTests {
 
     @MockBean
     lateinit var fileInfoService: FileInfoService
+
+    @MockBean
+    lateinit var duplicateBessourceService: DuplicateBessourceService
 
     @Autowired
     lateinit var mvc: MockMvc
@@ -110,4 +118,75 @@ class StorageRessourceTests {
     private fun givenStorage(id: Int) {
         whenever(storageService.findById(id)).thenReturn(Storage().also { it.id = id })
     }
+
+    // -------------------------------------------------------------------------------------
+    // GET /api/storages/{id}/duplicate-bessources
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Both members of a collision, since which row is kept is the caller's decision and a list that
+     * named only one of them would not let it be made.
+     */
+    @Test
+    fun `answers both bessources of a name two of them hold`() {
+        whenever(duplicateBessourceService.duplicatesIn(1)).thenReturn(
+            listOf(
+                duplicateOf(11, "2020/a.jpg", 11),
+                duplicateOf(12, "2020/a.jpg", 12)
+            )
+        )
+
+        mvc.perform(get("/api/storages/1/duplicate-bessources"))
+            .andExpect(status().isOk)
+            .andExpect(content().contentTypeCompatibleWith("application/json"))
+            .andExpect(jsonPath("$").isArray)
+            .andExpect(jsonPath("$[0].id").value(11))
+            .andExpect(jsonPath("$[0].name").value("2020/a.jpg"))
+            .andExpect(jsonPath("$[0].mediumId").value(11))
+            .andExpect(jsonPath("$[0].duplicates").value(2))
+            .andExpect(jsonPath("$[1].id").value(12))
+            .andExpect(jsonPath("$[1].duplicates").value(2))
+    }
+
+    /**
+     * A storage nothing collides on is a successful answer and not an error: nothing has been looked
+     * at that says otherwise.
+     */
+    @Test
+    fun `answers an empty list for a storage without duplicates`() {
+        whenever(duplicateBessourceService.duplicatesIn(1)).thenReturn(emptyList())
+
+        mvc.perform(get("/api/storages/1/duplicate-bessources"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$").isEmpty)
+    }
+
+    /** The storage the url names is the one asked about, since two may hold the same name. */
+    @Test
+    fun `asks for the storage the url names`() {
+        whenever(duplicateBessourceService.duplicatesIn(7)).thenReturn(emptyList())
+
+        mvc.perform(get("/api/storages/7/duplicate-bessources")).andExpect(status().isOk)
+
+        verify(duplicateBessourceService).duplicatesIn(7)
+    }
+
+    @Test
+    fun `answers 404 for a storage that does not exist when asking for its duplicates`() {
+        whenever(duplicateBessourceService.duplicatesIn(99))
+            .thenAnswer { throw NotFoundException() }
+
+        mvc.perform(get("/api/storages/99/duplicate-bessources")).andExpect(status().isNotFound)
+    }
+
+    /** one entry as the service hands it out, so this only says what the url does with it */
+    private fun duplicateOf(id: Int, name: String, mediumId: Int) = DuplicateNameBessourceTO(
+        id = id,
+        name = name,
+        storageId = 1,
+        ressType = 0,
+        mediumId = mediumId,
+        created_at = null,
+        duplicates = 2
+    )
 }
