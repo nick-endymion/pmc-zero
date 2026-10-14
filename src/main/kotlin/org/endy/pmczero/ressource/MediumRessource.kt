@@ -1,6 +1,7 @@
 package org.endy.pmczero.ressource
 
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.service.MediaDeletionService
 import org.endy.pmczero.service.MediaService
 import org.endy.pmczero.service.ThumbnailService
@@ -27,7 +28,29 @@ class MediumRessource(
 
     @GetMapping("/{id}")
     fun getMedium(@PathVariable id: Int): MediumTO {
-        return mediaService.findById(id).toTO()
+        return mediumTO(mediaService.findById(id))
+    }
+
+    /**
+     * The medium as the api hands it out, with the urls of its files worked out.
+     *
+     * The urls come from [MediaService.ressourceUrls], the one place that knows how a
+     * bessource, its storage and a location in use add up to a url. That is the same call the
+     * per-set listing makes, so a medium reached by its own id and the same medium reached
+     * through its set are served from one rule rather than two that could drift apart.
+     *
+     * A medium whose urls cannot be worked out is still answered. It comes back with null
+     * urls rather than as an error: the medium exists and the caller asked about it, and
+     * saying so with both urls null leaves it to show what it can, where a failure here would
+     * hide a row that is there.
+     */
+    private fun mediumTO(medium: Medium): MediumTO {
+        val urls = mediaService.ressourceUrls(medium)
+
+        return medium.toTO().copy(
+            primaryUrl = urls?.primaryUrl,
+            tnUrl = urls?.tnUrl
+        )
     }
 
     /**
@@ -71,7 +94,7 @@ class MediumRessource(
         @PathVariable id: Int,
         @RequestParam(name = "deleted", required = false, defaultValue = "true") deleted: Boolean
     ): MediumTO {
-        return mediaService.setDeleted(id, deleted).toTO()
+        return mediumTO(mediaService.setDeleted(id, deleted))
     }
 
     /**
@@ -94,7 +117,7 @@ class MediumRessource(
         @PathVariable id: Int,
         @RequestParam(name = "ranking", required = false) ranking: Int?
     ): MediumTO {
-        return mediaService.setRanking(id, ranking).toTO()
+        return mediumTO(mediaService.setRanking(id, ranking))
     }
 
     /**

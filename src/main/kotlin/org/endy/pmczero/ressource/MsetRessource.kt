@@ -117,6 +117,41 @@ class MsetRessource(
         return msetService.search(searchTerm).map { it.toTO() }
     }
 
+    /**
+     * The sets carrying exactly the given tag, in id order.
+     *
+     * The tag is a whole value rather than a fragment, since the words of a tag are its own business:
+     * a search for `Heart` does not answer with the sets tagged `Hearts`. Which is also why this is
+     * its own path rather than another spelling of the search term on `GET /api/msets/`: the term is
+     * matched inside a name, and folding a tag into it would make one call answer a question about
+     * two different columns.
+     *
+     * Answers 200 with an empty list for a tag no set carries. A tag nobody has used is a tag a caller
+     * is about to use, and a 404 here would read as though the tag itself were wrong.
+     *
+     * @param tag the exact tag to look for
+     */
+    @GetMapping("/tag")
+    fun getMsetsByTag(@RequestParam tag: String): List<MsetTO> {
+        return msetService.searchByTag(tag).map { it.toTO() }
+    }
+
+    /**
+     * Every tag in use across the sets, alphabetically.
+     *
+     * The words alone rather than a count per tag, which is what a page listing them needs to draw: it
+     * shows what can be clicked, and the sets behind each are the search this page runs when one is.
+     *
+     * Distinct on the stored spelling, so `Hearts` and `hearts` are two answers, since they are two
+     * tags in [org.endy.pmczero.model.modern.Mset.tags]. See [MsetRepository.findAllTags].
+     *
+     * Answers 200 with an empty list when nothing is tagged yet.
+     */
+    @GetMapping("/tags")
+    fun getAllTags(): List<String> {
+        return msetService.allTags()
+    }
+
     @PostMapping("/")
     fun createMset(@RequestBody msetTO: MsetTO): MsetTO {
         if (msetTO.id != null) throw Exception()

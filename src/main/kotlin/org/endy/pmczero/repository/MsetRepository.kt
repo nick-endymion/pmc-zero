@@ -14,6 +14,44 @@ interface MsetRepository : CrudRepository<Mset, Int> {
     fun findAllByNameContaining(searchTerm: String) : List<Mset>
 
     /**
+     * the msets carrying exactly [tag], in id order
+     *
+     * `member` rather than a `containing` over the collection, since a tag is a whole value: the
+     * words of a tag are its own business and `Hearts` is not an answer to a search for `Heart`.
+     *
+     * Ordered by id so two calls that see the same rows answer them in the same order. Without it the
+     * database is free to answer in any order, and a caller paging through the result could see the
+     * same set twice.
+     */
+    @Query(
+        "select mset from Mset mset join mset.tags tag " +
+            "where tag = :tag order by mset.id"
+    )
+    fun findAllByTag(@Param("tag") tag: String): List<Mset>
+
+    /**
+     * every distinct tag in use, in alphabetical order
+     *
+     * Distinct on the stored word rather than on a lower-cased one, so `Hearts` and `hearts` are two
+     * answers. They are two tags in [org.endy.pmczero.model.modern.Mset.tags], which merges nothing and
+     * leaves the spelling of a tag to whoever recorded it, and folding them here would hide that the
+     * data holds both and leave a caller searching for one of them to find sets that carry the other.
+     *
+     * Asked as a query rather than as the tags of every set folded down in Kotlin, so a caller gets
+     * the words without being handed every set that has them. Ordered because a list of words to be
+     * read down has no useful order otherwise, and the database is free to answer in any other.
+     *
+     * `tags` is a collection of plain strings, so the alias of the join is the element itself and is
+     * spelled as the value rather than as a path into it: `select distinct tag`, and `tag.tag` is the
+     * dereference Hibernate rejects when it validates this query on startup.
+     *
+     * Empty rather than absent when no set carries a tag, which is the state of a database that has
+     * not been tagged yet and is a result rather than a failure.
+     */
+    @Query("select distinct tag from Mset mset join mset.tags tag order by tag")
+    fun findAllTags(): List<String>
+
+    /**
      * the msets that were imported from exactly [url], in id order
      *
      * More than one is the normal case rather than the odd one: a gallery imported twice, once with

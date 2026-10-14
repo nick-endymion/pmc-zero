@@ -49,6 +49,26 @@ class MsetService(
     }
 
     /**
+     * The sets carrying exactly [tag], in id order. See [MsetRepository.findAllByTag].
+     *
+     * Empty rather than an error for a tag no set carries, which is a result: a tag nobody has used is a
+     * tag a caller is about to use, and a 404 here would read as though the tag itself were wrong.
+     */
+    fun searchByTag(tag: String): List<Mset> {
+        return msetRepository.findAllByTag(tag)
+    }
+
+    /**
+     * Every tag in use across the sets, alphabetically. See [MsetRepository.findAllTags].
+     *
+     * Empty rather than an error when nothing is tagged yet, since a database that has no tags is a
+     * database nobody has tagged and not a missing table.
+     */
+    fun allTags(): List<String> {
+        return msetRepository.findAllTags()
+    }
+
+    /**
      * The sets that were imported from [url], in id order. See
      * [MsetRepository.findAllByUrlOrderById].
      *

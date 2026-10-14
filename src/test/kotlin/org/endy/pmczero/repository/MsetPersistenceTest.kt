@@ -506,6 +506,111 @@ class MsetPersistenceTest {
         assertEquals(listOf("Hearts"), msetRepository.findAll().single().tags)
     }
 
+    // -------------------------------------------------------------------------------------
+    // Finding sets by a tag
+    //
+    // The two queries behind the tag list on /search. They live here rather than in a mocked
+    // repository test because what they are is a question only the schema can answer: `tags` is a
+    // collection of plain strings, so a join over it binds the alias to the element itself, and an
+    // expression like `tag.tag` is a dereference Hibernate only rejects once it parses the query.
+    // A mistake there fails the whole context on startup, not one assertion.
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finds the sets carrying a tag`() {
+        givenTaggedSet("first", "Hearts")
+        givenTaggedSet("second", "Aces")
+        givenTaggedSet("third", "Hearts", "Aces")
+
+        assertEquals(
+            listOf("first", "third"),
+            msetRepository.findAllByTag("Hearts").map { it.name }
+        )
+    }
+
+    @Test
+    fun `finds a set by every one of its tags`() {
+        givenTaggedSet("Hearts gallery", "Hearts", "Aces", "matti")
+
+        assertEquals(1, msetRepository.findAllByTag("Aces").size)
+        assertEquals(1, msetRepository.findAllByTag("matti").size)
+    }
+
+    /** A tag is a whole word, so a search for part of one is not a search for it. */
+    @Test
+    fun `does not find a set by part of a tag`() {
+        givenTaggedSet("first", "Hearts")
+
+        assertEquals(emptyList<Mset>(), msetRepository.findAllByTag("Heart"))
+    }
+
+    @Test
+    fun `finds no set for a tag nobody has used`() {
+        givenTaggedSet("first", "Hearts")
+
+        assertEquals(emptyList<Mset>(), msetRepository.findAllByTag("Unused"))
+    }
+
+    @Test
+    fun `finds no set by a tag when nothing is tagged`() {
+        givenTaggedSet("plain")
+
+        assertEquals(emptyList<Mset>(), msetRepository.findAllByTag("Hearts"))
+    }
+
+    @Test
+    fun `answers the sets of a tag in id order`() {
+        givenTaggedSet("first", "Hearts")
+        givenTaggedSet("second", "Hearts")
+        givenTaggedSet("third", "Hearts")
+
+        // without the order the database is free to answer in any, and a caller paging
+        // through the result could see the same set twice
+        assertEquals(
+            listOf("first", "second", "third"),
+            msetRepository.findAllByTag("Hearts").map { it.name }
+        )
+    }
+
+    @Test
+    fun `answers every tag in use, alphabetically`() {
+        givenTaggedSet("first", "matti", "Hearts")
+        givenTaggedSet("second", "Aces", "matti")
+
+        // distinct across sets as well as within one: the words are what a page lists
+        // to be clicked, and the same word on two sets is one thing to click
+        assertEquals(listOf("Aces", "Hearts", "matti"), msetRepository.findAllTags())
+    }
+
+    @Test
+    fun `keeps two spellings of one word apart`() {
+        givenTaggedSet("first", "Hearts")
+        givenTaggedSet("second", "hearts")
+
+        // nothing merges tags, so these are two words; folding them would hide that the
+        // data holds both and leave a caller searching for one finding the sets of the
+        // other
+        assertEquals(listOf("Hearts", "hearts"), msetRepository.findAllTags())
+        assertEquals(1, msetRepository.findAllByTag("Hearts").size)
+        assertEquals(1, msetRepository.findAllByTag("hearts").size)
+    }
+
+    @Test
+    fun `answers no tag when nothing is tagged`() {
+        givenTaggedSet("plain")
+
+        // a database nobody has tagged is a result rather than a missing table
+        assertEquals(emptyList<String>(), msetRepository.findAllTags())
+    }
+
+    /** a persisted mset named [name] carrying [tags], with no medium of its own */
+    private fun givenTaggedSet(name: String, vararg tags: String): Int {
+        entityManager.persist(Mset().apply { this.name = name; this.tags = tags.toMutableList() })
+        entityManager.flush()
+        entityManager.clear()
+        return msetRepository.findAllByNameContaining(name).single().id!!
+    }
+
     @Test
     fun `deleting the location of a set leaves the set alone`() {
         givenLocation("C:\\bilder", LocationType.MAIN_FS)
