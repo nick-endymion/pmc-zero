@@ -37,6 +37,28 @@ class MsetService(
         return msetRepository.findByStorageId(storageId)
     }
 
+    /**
+     * The sets other than the one with [msetId] that hold at least one file it holds as well, in id
+     * order. See [MsetRepository.findSetsSharingFilesWith].
+     *
+     * Sets related by what they contain rather than by anything about them: two sets whose bessources
+     * name the same file on the same storage, which is what an archive copied onto a second medium or
+     * a gallery imported twice leaves behind. Which files those are is not in the answer, since the
+     * caller asked for the sets; `GET /api/storages/{id}/duplicate-bessources` is where a name held
+     * twice on one storage is answered.
+     *
+     * Empty rather than an error for a set that shares nothing, which is the normal state of a set
+     * whose gallery was imported once.
+     *
+     * @throws NotFoundException when no mset with that id exists. Read before the query rather than
+     * after it, since the query would answer an empty list for a set that is not there, and a mistyped
+     * id must not read as "this set shares nothing with anybody"
+     */
+    fun findSetsSharingFilesWith(msetId: Int): List<Mset> {
+        findById(msetId)
+        return msetRepository.findSetsSharingFilesWith(msetId)
+    }
+
     fun findById(id: Int, withMedia: Boolean = false): Mset {
         if (withMedia)
             return msetRepository.findByIdOrNullWithMedia(id) ?: throw NotFoundException()

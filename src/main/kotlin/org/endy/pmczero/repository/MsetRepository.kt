@@ -113,5 +113,60 @@ interface MsetRepository : CrudRepository<Mset, Int> {
     )
     fun findByStorageId(@Param("storageId") storageId: Int): List<Mset>
 
+    /**
+     * the sets other than the one with [msetId] that hold at least one file the set [msetId] holds as
+     * well, in id order
+     *
+     * A file being shared rather than being the same file twice: two sets point at one bessource name
+     * on one storage, which is what an archive copied onto a second medium, or a gallery imported twice
+     * and then moved, leaves behind. The sets are related by what they contain rather than by anything
+     * about them, so the way there runs set -> media -> bessource and back down into the other set.
+     *
+     * A name on a storage is what makes two bessources the same file, so both halves are compared: the
+     * same name on two storages is two files that are merely called alike, and matching on the name
+     * alone would report every set of the archive for any two of them.
+     *
+     * The ressource type takes no part in the comparison, since a name is a path below the location of
+     * a storage and a primary and a thumbnail are two rows under one path. Which of them a caller
+     * treats as the same picture is their question, not this query's.
+     *
+     * A bessource without a name is never a match: `name = name` is unknown rather than true for two
+     * nulls, so the rows that are compared have to name something. That is the wanted answer here, and
+     * it is also why the two names are compared rather than coalesced.
+     *
+     * `distinct` and the `order by`, for the reasons given on [findAllByTag]: a set sharing three files
+     * is one answer and not three, and without an order the database is free to answer in any, which a
+     * caller paging through the result could not rely on.
+     *
+     * [msetId] itself is excluded. A set shares every one of its own bessources by definition, so
+     * leaving it in would put it in the answer to its own question every time and make every caller
+     * filter it out again.
+     *
+     * The comparison is an `exists` rather than a second set joined in beside the first. A join would
+     * pair every bessource of every candidate set with every bessource of [msetId] before anything is
+     * compared, which is a table the size of the archive squared for most rows that match nothing,
+     * and HQL has no cross join of two entities to write it with besides the theta form anyway.
+     */
+    @Query(
+        "select distinct mset from Mset mset " +
+            "join mset.media medium " +
+            "join medium.bessources bessource " +
+            "where mset.id <> :msetId " +
+            // a medium marked deleted is not acted on any more, on either side: a row of one set that
+            // is not there any more does not make two sets related
+            "and (medium.deleted is null or medium.deleted = false) " +
+            "and exists (" +
+            "    select otherBessource from Mset other " +
+            "    join other.media otherMedium " +
+            "    join otherMedium.bessources otherBessource " +
+            "    where other.id = :msetId " +
+            "    and (otherMedium.deleted is null or otherMedium.deleted = false) " +
+            "    and otherBessource.name = bessource.name " +
+            "    and otherBessource.storage.id = bessource.storage.id" +
+            ") " +
+            "order by mset.id"
+    )
+    fun findSetsSharingFilesWith(@Param("msetId") msetId: Int): List<Mset>
+
 }
 

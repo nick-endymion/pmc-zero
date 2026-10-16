@@ -63,6 +63,35 @@ class MsetRessource(
     }
 
     /**
+     * The sets that hold at least one file this set holds as well, in id order.
+     *
+     * Sets related by what they contain rather than by anything about them: an archive copied onto a
+     * second medium, a gallery imported twice, a directory scanned into two sets at different times.
+     * Nothing about the sets themselves says they are related, so the only way to find them is over the
+     * files: two sets whose bessources name the same file on the same storage.
+     *
+     * A file is shared rather than duplicated, so the two sets both point at one row rather than at two
+     * rows under one name. The case where a name is held twice on one storage is
+     * `GET /api/storages/{id}/duplicate-bessources`.
+     *
+     * The set asked about is not in its own answer. It shares every one of its files with itself, so
+     * leaving it in would put it in every answer and make every caller filter it out.
+     *
+     * A name on two different storages does not relate two sets, since those are two files that are
+     * merely called alike, and a medium marked deleted does not either, on either side: its files are
+     * unknown to a scan again, so it is not holding anything as far as this goes.
+     *
+     * The media are left out, as in [getMsetsByUrl], so the answer stays a row per set.
+     *
+     * Answers an empty list for a set that shares nothing with another, which is the normal state of a
+     * gallery that was imported once. Answers 404 for an id that names no set.
+     */
+    @GetMapping("/{id}/shares-files")
+    fun getMsetsSharingFilesWith(@PathVariable id: Int): List<MsetTO> {
+        return msetService.findSetsSharingFilesWith(id).map { it.toTO() }
+    }
+
+    /**
      * The sets that were imported from [url], in id order.
      *
      * For a page that may have been scraped more than once, which is the normal case rather than the

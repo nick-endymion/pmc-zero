@@ -873,8 +873,229 @@ class MsetPersistenceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // Sets that share a file
+    // -------------------------------------------------------------------------------------
+
+    /** Two sets pointing at one name on one storage: the whole reason this query exists. */
+    @Test
+    fun `finds the set that holds a file this set holds as well`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg")
+        givenSetOf("there", storage, "a.jpg")
+
+        assertEquals(listOf("there"), sharingSetsOf(here).map { it.name })
+    }
+
+    /**
+     * One shared file out of several is enough: a set sharing one file with this one is related, and
+     * the size of the overlap is not asked for.
+     */
+    @Test
+    fun `finds a set that shares only one of several files`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", "b.jpg", "c.jpg")
+        givenSetOf("there", storage, "a.jpg", "x.jpg", "y.jpg")
+
+        assertEquals(listOf("there"), sharingSetsOf(here).map { it.name })
+    }
+
+    /** Sharing three files is still one set in the answer rather than three of it. */
+    @Test
+    fun `reports a set that shares three files once`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", "b.jpg", "c.jpg")
+        givenSetOf("there", storage, "a.jpg", "b.jpg", "c.jpg")
+
+        assertEquals(1, sharingSetsOf(here).size)
+    }
+
+    /** Sets sharing nothing are not related, however many files each of them holds. */
+    @Test
+    fun `finds no set for a set whose files no other set holds`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", "b.jpg")
+        givenSetOf("there", storage, "x.jpg", "y.jpg")
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /**
+     * A set is in its own answer by definition, since it holds every one of its files, so it is left
+     * out rather than made something every caller has to filter away.
+     */
+    @Test
+    fun `never answers a set with itself`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", "b.jpg")
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /**
+     * The same name on two storages is two files that are merely called alike, so a set of another
+     * storage is not related even when it holds the same names.
+     */
+    @Test
+    fun `finds no set for the same names on another storage`() {
+        val shelf = givenStorage("shelf")
+        val cellar = givenStorage("cellar")
+        val here = givenSetOf("here", shelf, "a.jpg")
+        givenSetOf("there", cellar, "a.jpg")
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /**
+     * One file on one storage is what relates two sets, so an overlap of two names that sit on two
+     * storages is no overlap at all.
+     */
+    @Test
+    fun `finds no set for names that are shared but not on the same storage`() {
+        val shelf = givenStorage("shelf")
+        val cellar = givenStorage("cellar")
+        val here = givenSetOf("here", shelf, "a.jpg", "b.jpg")
+        // same two names, but each one on the other storage
+        givenSetOf("there", cellar, "a.jpg", "b.jpg")
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /**
+     * A marked medium is not acted on any more, so its files are unknown to a scan again and a set is
+     * not related through one, nor is it related to one that only it would share through a marked row.
+     */
+    @Test
+    fun `finds no set through a medium marked deleted`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg")
+        givenSetOf("there", storage, "a.jpg", deletedNames = listOf("a.jpg"))
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /** and the same for the other way round, since both sides of the comparison are filtered. */
+    @Test
+    fun `finds no set whose only shared file is behind a medium marked deleted`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", deletedNames = listOf("a.jpg"))
+        givenSetOf("there", storage, "a.jpg")
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /**
+     * A set whose marked medium is the only reason two sets would be related is not found, while a set
+     * that also shares a live file still is: the mark is per medium, not per set.
+     */
+    @Test
+    fun `still finds a set that shares a live file besides the marked one`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", "b.jpg")
+        givenSetOf("there", storage, "a.jpg", "b.jpg", deletedNames = listOf("a.jpg"))
+
+        assertEquals(listOf("there"), sharingSetsOf(here).map { it.name })
+    }
+
+    /**
+     * A bessource without a name matches nothing: two null names are unknown rather than equal, so
+     * rows that say nothing of where their file is cannot relate two sets.
+     */
+    @Test
+    fun `finds no set through bessources without a name`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, null)
+        givenSetOf("there", storage, null)
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+    }
+
+    /** A set with no media at all holds nothing, so it is related to nobody. */
+    @Test
+    fun `finds no set for one without media`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg")
+        val empty = Mset().apply { name = "empty" }
+        entityManager.persist(empty)
+        entityManager.flush()
+        entityManager.clear()
+
+        assertTrue(sharingSetsOf(here).isEmpty())
+        assertTrue(sharingSetsOf(empty.id!!).isEmpty())
+    }
+
+    /** Ordered by id, so two calls that see the same rows answer them in the same order. */
+    @Test
+    fun `orders the sets that share a file by id`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg")
+        val first = givenSetOf("later", storage, "a.jpg")
+        val second = givenSetOf("later still", storage, "a.jpg")
+
+        assertTrue(here < first && first < second)
+        assertEquals(listOf("later", "later still"), sharingSetsOf(here).map { it.name })
+    }
+
+    @Test
+    fun `finds no set for an mset id that names no mset`() {
+        assertTrue(msetRepository.findSetsSharingFilesWith(4242).isEmpty())
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
+
+    /**
+     * the sets other than [msetId] that hold a file of it, as they come back out of the database
+     *
+     * the context is emptied first, so the answer is the one a caller of this gets rather than what
+     * the fixtures happened to leave in the persistence context
+     */
+    private fun sharingSetsOf(msetId: Int): List<Mset> {
+        entityManager.clear()
+        return msetRepository.findSetsSharingFilesWith(msetId)
+    }
+
+    /**
+     * a persisted mset named [name] whose media carry one bessource each, named after the bessource
+     * name given
+     *
+     * A name of null is stored as a nameless bessource rather than refused, which is what a scan of a
+     * file whose name was never recorded leaves behind.
+     */
+    private fun givenSetOf(
+        name: String,
+        storage: Storage,
+        vararg bessourceNames: String?,
+        deletedNames: List<String> = emptyList()
+    ): Int {
+        val media = bessourceNames.map { bessourceName ->
+            Medium().apply {
+                this.name = bessourceName
+                this.deleted = bessourceName in deletedNames
+            }.also { medium ->
+                medium.bessources = mutableListOf(
+                    Bessource().apply {
+                        this.name = bessourceName
+                        ressType = RessType.PRIMARY.i
+                        this.storage = storage
+                        this.medium = medium
+                    }
+                )
+            }
+        }
+
+        val mset = Mset().apply {
+            this.name = name
+            this.media = media.toMutableList()
+        }
+        media.forEach { it.mset = mset }
+
+        entityManager.persist(mset)
+        entityManager.flush()
+        entityManager.clear()
+
+        return mset.id!!
+    }
 
     /** a persisted storage, so a bessource has something to point at */
     private fun givenStorage(name: String): Storage =

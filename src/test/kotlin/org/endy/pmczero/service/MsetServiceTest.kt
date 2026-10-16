@@ -644,4 +644,65 @@ class MsetServiceTest {
             this.ressType = ressType.i
             this.storage = storage(storageId)
         }
+
+    // -------------------------------------------------------------------------------------
+    // Sets that share a file
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Which sets share a file with a given one is [MsetRepository.findSetsSharingFilesWith] and its
+     * own test over a real database, see `MsetPersistenceTest`. What is here is what the service adds
+     * around it: that the set exists before the question is asked of the database, and that its answer
+     * is handed on as it is.
+     */
+    @Test
+    fun `answers the sets the repository shares files with`() {
+        givenExistingMset(1)
+        val others = listOf(Mset().apply { id = 2; name = "there" }, Mset().apply { id = 3; name = "and there" })
+        whenever(msetRepository.findSetsSharingFilesWith(1)).thenReturn(others)
+
+        assertEquals(others, service.findSetsSharingFilesWith(1))
+    }
+
+    /**
+     * A set that shares nothing is a normal state of a gallery imported once, so it is an empty answer
+     * rather than an error.
+     */
+    @Test
+    fun `answers nothing for a set that shares nothing`() {
+        givenExistingMset(1)
+        whenever(msetRepository.findSetsSharingFilesWith(1)).thenReturn(emptyList())
+
+        assertTrue(service.findSetsSharingFilesWith(1).isEmpty())
+    }
+
+    /**
+     * The query alone would answer an empty list for an id that names no set, which a caller would
+     * read as "this set shares nothing with anybody". A mistyped id has to be a 404 instead.
+     */
+    @Test
+    fun `refuses an mset that does not exist`() {
+        whenever(msetRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.findSetsSharingFilesWith(99)
+        }
+    }
+
+    /** and it refuses it before asking about shares, not after finding that there are none. */
+    @Test
+    fun `does not look for shares of an mset that does not exist`() {
+        whenever(msetRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> { service.findSetsSharingFilesWith(99) }
+
+        verify(msetRepository, never()).findSetsSharingFilesWith(any())
+    }
+
+    /** a set that is there, since asking about the shares of one that is not is not what is tested */
+    private fun givenExistingMset(id: Int) {
+        whenever(msetRepository.findById(id)).thenReturn(
+            Optional.of(Mset().apply { this.id = id; name = "set-$id" })
+        )
+    }
 }
