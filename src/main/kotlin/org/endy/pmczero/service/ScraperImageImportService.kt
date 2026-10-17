@@ -329,6 +329,7 @@ class ScraperImageImportService(
         // parameter of this call decides how long every page of the run is waited for, and not only the
         // one it was handed
         kontext.waitForLoadEvent = waitsForLoadEvent(waitUntil, noDownload)
+           kontext.waitForLoadEvent = false;
         // read by the [org.endy.pmczero.model.scraper.SetCreator], which keeps the set of a run onto a
         // set that is there rather than building one of its own. The set itself is put on the kontext
         // before the run for it to keep: a worker is handed an element and nothing else and cannot read
