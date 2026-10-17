@@ -3,9 +3,23 @@ package org.endy.pmczero.model.scraper
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.endy.pmczero.model.ScanningKontext
+import org.endy.pmczero.service.PageThrottle
 
 /**
  * Hands its element to a list of scrapers in turn, fetching it first when asked to.
+ *
+ * ### How fast a page behind a link is read
+ *
+ * Not as fast as the connection carries it: a fetch waits out whatever is left of the configured
+ * interval since the last one began, see [PageThrottle]. A scraper that follows links reads every page
+ * behind them back to back, and a host asked for a whole gallery index at once answers with errors or
+ * blocks the address, which on an index means every page rather than one of them.
+ *
+ * The wait is before the request and only in the branch that fetches, so two things hold that a wait
+ * inside a fetcher could not: the page a scan was handed, which was rendered before the run started,
+ * costs nothing here, and a scraper over html it is given rather than asked for costs nothing at all.
+ * The interval is counted across runs rather than within one, so a scan started right after another one
+ * ended still waits out the rest of it, and the throttle is off by default.
  *
  * @param download whether this worker fetches the element itself before handing it on. False for a
  * scraper over html the caller already has, which is the case for a page that had to be rendered in a
@@ -32,12 +46,20 @@ class StructuredWorker(
         // how long it may take to read it. Which is the whole point of the nested fetch: the page behind
         // a link is read for its markup, and waiting for its images to load costs the navigation timeout
         // of a gallery with one unreachable picture in it. See [ScanningKontext.waitForLoadEvent]
-        val text = if (download)
+        val text = if (download) {
+            // the throttle first, and only here: a host asked for every page of a gallery index back to
+            // back answers with errors or blocks the address, so a page waits out whatever is left of the
+            // configured interval since the last one began, across runs and scans alike. It is a pace of
+            // its own rather than the one over the files, since a page and a picture are different
+            // requests to the same host and a deployment may want one of them held back and not the
+            // other, and it is before the request rather than after it, so a slow page does not push
+            // every page behind it further out. See [PageThrottle]
+            PageThrottle.awaitTurn()
             scanningKontext.fetcher.getAsString(
                 element,
                 waitForLoadEvent = scanningKontext.waitForLoadEvent
             )
-        else element
+        } else element
 
         for (scanner in scrapers)
             scanner.doWork(text, baseUri, scanningKontext)

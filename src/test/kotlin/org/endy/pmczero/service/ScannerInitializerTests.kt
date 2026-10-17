@@ -16,6 +16,7 @@ import org.endy.pmczero.model.scraper.SequenceWorker
 import org.endy.pmczero.model.scraper.SetCreator
 import org.endy.pmczero.model.scraper.StructuredWorker
 import org.endy.pmczero.repository.SerializedScannerRepository
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -74,6 +75,13 @@ class ScannerInitializerTests {
 
         newInitializer().run(null)
         stored = storedScanners()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        // the page throttle is process wide, so a case that turned one on would hold back every test that
+        // runs after this class
+        PageThrottle.reset()
     }
 
     /** A fresh initializer, so a test may run one more time without the one of [setUp] being reused. */
@@ -959,6 +967,74 @@ class ScannerInitializerTests {
             listOf(FoundElement(1, "http://example.org/a.html")),
             runOver("Link Collector", html)
         )
+    }
+
+    // -------------------------------------------------------------------------------------
+    // How fast the pages behind the links are read
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Two pages behind one index, which is the shape of a run that is paced: the fetch of the second one
+     * is the one that has something to wait for.
+     */
+    private fun indexWithTwoPages() =
+        """<html><body><a href="/seite1.html">1</a><a href="/seite2.html">2</a></body></html>"""
+
+    /**
+     * The wait the [PageThrottle] asks for, since the pages behind the links are fetched by a
+     * [org.endy.pmczero.model.scraper.StructuredWorker] of its own and that is the only place it can be.
+     *
+     * Two pages, so the second one is the one that has to wait out the interval: the first has nothing to
+     * wait for. A run of a whole gallery index is the case the throttle is for, since a host asked for
+     * every page of one back to back answers with errors or blocks the address.
+     */
+    @Test
+    fun `keeps the pages behind the links the configured seconds apart`() {
+        fetchedHtml = """<html><body><img src="/bilder/a.jpg"></body></html>"""
+        PageThrottle.seconds = 1
+
+        val elapsed = millisOf {
+            runOver("Gallery Index Lister", indexWithTwoPages())
+        }
+
+        assertTrue(elapsed >= 1_000, "the second page was read after ${elapsed}ms rather than after 1s")
+    }
+
+    /** The default, and what every deployment did before there was a page throttle to configure. */
+    @Test
+    fun `reads the pages behind the links as fast as before when none is configured`() {
+        fetchedHtml = """<html><body><img src="/bilder/a.jpg"></body></html>"""
+
+        val elapsed = millisOf {
+            runOver("Gallery Index Lister", indexWithTwoPages())
+        }
+
+        assertTrue(elapsed < 500, "two pages without a throttle took ${elapsed}ms")
+    }
+
+    /**
+     * A scraper that is handed the page rather than asked for it fetches nothing, so there is nothing to
+     * pace: the throttle belongs to the branch that fetches and to no other.
+     */
+    @Test
+    fun `does not wait for a scraper that is handed its page`() {
+        PageThrottle.seconds = 1
+
+        val elapsed = millisOf {
+            runOver("Image Lister", """<html><body><img src="/bilder/a.jpg"></body></html>""")
+        }
+
+        assertTrue(elapsed < 500, "a scraper over html it was given waited ${elapsed}ms")
+    }
+
+    /**
+     * The wall clock of how long [block] took, so a case reads as "this took at least a second" rather
+     * than as the arithmetic around two [System.nanoTime] readings.
+     */
+    private inline fun millisOf(block: () -> Unit): Long {
+        val start = System.nanoTime()
+        block()
+        return (System.nanoTime() - start) / 1_000_000
     }
 
     // -------------------------------------------------------------------------------------
