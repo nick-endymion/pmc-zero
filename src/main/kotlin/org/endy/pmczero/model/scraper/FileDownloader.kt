@@ -7,6 +7,7 @@ import org.endy.pmczero.model.FailedDownload
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.ScanFailure
 import org.endy.pmczero.model.ScanningKontext
+import org.endy.pmczero.service.DownloadThrottle
 import org.endy.pmczero.service.FailedDownloads
 import java.io.File
 
@@ -61,6 +62,19 @@ import java.io.File
  * is one that was not to be fetched at all, and a file that is already there is one that does not need
  * fetching. What is kept is a download that was tried and could not be done.
  *
+ * ### How fast a gallery is fetched
+ *
+ * Not as fast as the connection carries it: before a download is started this waits for whatever is
+ * left of the configured interval since the last one began, see [DownloadThrottle]. A gallery of two
+ * hundred images is two hundred requests back to back otherwise, which is what gets a host to answer
+ * with errors or to block the address.
+ *
+ * The wait is before the request and only here, so two things hold that a wait inside a fetcher could
+ * not: a slow image does not add its own download time to every file behind it, and a file that is
+ * not downloaded at all, because it is excluded or already there, costs nothing. The interval is
+ * counted across runs rather than within one, so a scan started right after another one ended still
+ * waits out the rest of it, and the throttle is off by default.
+ *
  * @throws NotAccessibleException when the location is not a file system location, when the path of
  * the element would escape it, or when the download itself fails
  */
@@ -97,6 +111,14 @@ class FileDownloader : Worker() {
         // no proxy by default: a scan runs against one host, and the page holding the elements was
         // fetched over plain http for a scan that reads it that way
         //
+        // the throttle first, and only here: a host that is asked for two hundred images back to back
+        // answers with errors or blocks the address, so a download waits out whatever is left of the
+        // configured interval since the last one began, across runs and scans alike. The two paths
+        // above returned already, so a file that is not fetched at all costs no wait, and the wait is
+        // before the request rather than after it, so a slow image does not push every file behind it
+        // further out
+        DownloadThrottle.awaitTurn()
+
         // kept for another try before it is thrown, since a download that failed is otherwise gone:
         // the kontext reports it and then the run is over, and the url of a 200 image that timed out
         // is nowhere to be found again. The two paths that returned above are not failures and are not

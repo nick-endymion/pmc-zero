@@ -6,8 +6,10 @@ import org.endy.pmczero.model.ScanningKontext
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Mset
 import org.endy.pmczero.model.modern.Storage
+import org.endy.pmczero.service.DownloadThrottle
 import org.endy.pmczero.service.FailedDownloads
 import org.endy.pmczero.service.Fetcher
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -41,6 +43,14 @@ class FileDownloaderTests {
         worker = FileDownloader()
         location = givenLocation(tempDir.absolutePath, LocationType.MAIN_FS)
         FailedDownloads.clear()
+        // the throttle is process wide, so a case that left one on would hold back every test that
+        // runs after this class
+        DownloadThrottle.reset()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        DownloadThrottle.reset()
     }
 
     // -------------------------------------------------------------------------------------
@@ -620,8 +630,101 @@ class FileDownloaderTests {
     }
 
     // -------------------------------------------------------------------------------------
+    // How fast a gallery is fetched
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The default: a scan that configures nothing downloads as fast as it always did, which is what
+     * every scan did before there was anything to configure.
+     */
+    @Test
+    fun `downloads as fast as before when no throttle is configured`() {
+        val kontext = kontextFor(location, "2020")
+
+        val elapsed = millisOf {
+            worker.applya("http://example.org/one/a.jpg", kontext)
+            worker.applya("http://example.org/two/b.jpg", kontext)
+        }
+
+        assertEquals(2, fetcher.downloads.size)
+        assertTrue(elapsed < 500, "two downloads without a throttle took ${elapsed}ms")
+    }
+
+    /**
+     * Two hundred images back to back is what gets a host to answer with errors or to block the
+     * address, so the second file of a gallery waits out the configured interval.
+     */
+    @Test
+    fun `keeps the downloads of a run the configured seconds apart`() {
+        DownloadThrottle.seconds = 1
+        val kontext = kontextFor(location, "2020")
+
+        val elapsed = millisOf {
+            worker.applya("http://example.org/one/a.jpg", kontext)
+            worker.applya("http://example.org/two/b.jpg", kontext)
+        }
+
+        assertTrue(elapsed >= 1_000, "the two downloads were ${elapsed}ms apart rather than 1s")
+        assertEquals(2, fetcher.downloads.size, "both files were written in the end")
+    }
+
+    /**
+     * Across runs, which is what the throttle is for: a run that is started right after the last file
+     * of the previous one waits out the rest of the interval, instead of hitting the host flat out all
+     * over again the moment the previous run is over.
+     *
+     * Nothing of the first run is kept for the second, not even this worker, since every run brings a
+     * [FileDownloader] of its own. Only the moment the last download began is, which is why the wait
+     * is there at all.
+     */
+    @Test
+    fun `keeps the first download of the next run apart from the last of the previous one`() {
+        DownloadThrottle.seconds = 1
+        worker.applya("http://example.org/one/a.jpg", kontextFor(location, "2020"))
+
+        val elapsed = millisOf {
+            FileDownloader().applya("http://example.org/two/b.jpg", kontextFor(location, "2021"))
+        }
+
+        assertTrue(elapsed >= 1_000, "the first download of the next run waited ${elapsed}ms rather than 1s")
+        assertEquals(2, fetcher.downloads.size)
+    }
+
+    /**
+     * The wait is where a download begins, so nothing that is not downloaded costs one. A run over a
+     * gallery whose files are all there yet, or over a scan that was told to leave them, is not a run
+     * that is slower than it has to be.
+     */
+    @Test
+    fun `waits for nothing when the scan downloads nothing`() {
+        DownloadThrottle.seconds = 1
+        File(tempDir, "2020/a.jpg").apply {
+            parentFile.mkdirs()
+            writeText("from an earlier import")
+        }
+
+        val elapsed = millisOf {
+            worker.applya("http://example.org/a.jpg", kontextFor(location, "2020"))
+            worker.applya("http://example.org/a.jpg", kontextFor(location, "2020").also { it.skipDownloads = true })
+        }
+
+        assertTrue(fetcher.downloads.isEmpty(), "nothing was fetched")
+        assertTrue(elapsed < 500, "downloads that never happened took ${elapsed}ms")
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
+
+    /**
+     * The wall clock of how long [block] took, so a case reads as "these two downloads were a second
+     * apart" rather than as the arithmetic around two [System.nanoTime] readings.
+     */
+    private inline fun millisOf(block: () -> Unit): Long {
+        val start = System.nanoTime()
+        block()
+        return (System.nanoTime() - start) / 1_000_000
+    }
 
     private fun kontextFor(
         location: Location,
