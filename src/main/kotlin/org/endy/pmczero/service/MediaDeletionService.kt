@@ -45,6 +45,9 @@ private const val DELETED_FOLDER = "DELETED"
  * an HTTP location names something that cannot be moved here, and one whose file is gone has
  * nothing to move. Neither stops the deletion: the row goes either way, because the point of the
  * call is to remove the record, and a file that cannot be found is not a reason to keep a stale one.
+ *
+ * Also [deleteMarkedMediaOfMset], which is the same thing over every marked medium of a set, for the
+ * deletion of a whole set.
  */
 @Service
 class MediaDeletionService(
@@ -123,6 +126,35 @@ class MediaDeletionService(
             skippedFiles = plan.skipped + (plan.moves.size - moved)
         )
     }
+
+    /**
+     * Deletes every medium of the set with [msetId] that is marked deleted, one after the other, and
+     * answers what each of them did.
+     *
+     * For the deletion of a whole set: the media of a set go with it, and their files have to be moved
+     * below the [DELETED_FOLDER] before that, since a set deletion cascades to the bessources as well
+     * and a name that is gone from the database is a file that can no longer be found. The marked
+     * media are the ones somebody asked to have moved, which is what makes this a deletion *including
+     * the files tagged for it* rather than the plain [org.endy.pmczero.service.MsetService.delete],
+     * where the files stay where they are.
+     *
+     * A medium that is not marked is not touched at all and is not in the answer: it is removed as a
+     * row along with the set and its files are left alone, which is what a set deletion does on its own.
+     * The set itself is left alone as well, the row is [org.endy.pmczero.service.MsetService]'s to
+     * delete, and it is the caller that puts the two in the order they need.
+     *
+     * A medium that cannot be deleted stops the ones after it, since [deleteMarkedMedium] refuses on a
+     * collision and the answer would otherwise be missing that one without saying so. What has already
+     * been moved stays where it was moved to: a move is not transactional, so rolling this back puts the
+     * rows back and leaves the files below [DELETED_FOLDER], which is the same worst case a single
+     * [deleteMarkedMedium] has.
+     *
+     * @throws org.endy.pmczero.exception.NotAccessibleException when a file to be moved is already there
+     * under its new name
+     */
+    @Transactional
+    fun deleteMarkedMediaOfMset(msetId: Int): List<MediumDeletionTO> =
+        mediaRepository.findAllMarkedOfMset(msetId).map { deleteMarkedMedium(it.id!!) }
 
     /** What [plan] resolved: the files to move, and the count of ones it left out. */
     private data class Plan(val moves: List<Move>, val skipped: Int)

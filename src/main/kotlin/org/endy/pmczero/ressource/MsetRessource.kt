@@ -7,6 +7,7 @@ import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.ScannerService
 import org.endy.pmczero.service.ThumbnailService
+import org.endy.pmczero.to.MsetDeletionTO
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.MsetThumbnailsTO
 import org.endy.pmczero.to.RessourceUrlsTO
@@ -200,6 +201,30 @@ class MsetRessource(
     @DeleteMapping("/{id}")
     fun deleteMset(@PathVariable id: Int) {
         return msetService.delete(id)
+    }
+
+    /**
+     * Deletes this mset as `DELETE /api/msets/{id}` does, and moves the files of every medium of it
+     * that is marked deleted below the `DELETED` folder of their location before the set goes.
+     *
+     * The files have to be moved first, since deleting a set cascades to the bessources of its media
+     * and a name that is gone from the database is a file that can no longer be found.
+     *
+     * Only the media that carry the mark, see [org.endy.pmczero.model.modern.Medium.deleted]: a
+     * medium nobody marked goes with the set as a record and its files stay where they are, which is
+     * what a plain set deletion does and what marking is for. The files are moved rather than erased,
+     * so a deletion that was a mistake can still be undone by hand as long as nobody has cleaned the
+     * folder up. See [org.endy.pmczero.service.MediaDeletionService].
+     *
+     * Answers what happened to each medium that was marked, and over all of them how many files were
+     * moved and how many were left alone.
+     *
+     * Answers 404 when the mset does not exist, and 409 when one of the files to be moved is already
+     * there under its new name, in which case no medium is deleted and the set stays.
+     */
+    @DeleteMapping("/{id}/includingFilesTagged")
+    fun deleteMsetIncludingFilesTagged(@PathVariable id: Int): MsetDeletionTO {
+        return msetService.deleteIncludingMarkedFiles(id)
     }
 
 //

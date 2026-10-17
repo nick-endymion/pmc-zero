@@ -29,7 +29,8 @@ import java.util.Optional
 import javax.persistence.EntityManager
 
 /**
- * Unit tests for [MediaDeletionService.deleteMarkedMedium].
+ * Unit tests for [MediaDeletionService.deleteMarkedMedium] and
+ * [MediaDeletionService.deleteMarkedMediaOfMset], which is the same over every marked medium of a set.
  *
  * Real files are written into a temp directory and a real [StorageService] over a mocked repository
  * backs the storage lookup, because the behaviour under test is a file on disk being moved: the path
@@ -379,8 +380,120 @@ class MediaDeletionServiceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // Every marked medium of a set
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * The set itself is not this service's business: its row is deleted by MsetService, which is also
+     * what puts the media deletion in front of it.
+     */
+    @Test
+    fun `deletes every marked medium of the set`() {
+        val first = givenMedium(10, "first", primaryName = "a.jpg")
+        val second = givenMedium(11, "second", primaryName = "b.jpg")
+        File(mainFs, "a.jpg").createNewFile()
+        File(mainFs, "b.jpg").createNewFile()
+        givenMarkedMediaOfMset(1, first, second)
+
+        service.deleteMarkedMediaOfMset(1)
+
+        verify(mediaRepository).delete(first)
+        verify(mediaRepository).delete(second)
+        assertTrue(File(mainFs, "DELETED/a.jpg").isFile)
+        assertTrue(File(mainFs, "DELETED/b.jpg").isFile)
+    }
+
+    @Test
+    fun `answers what each marked medium of the set did`() {
+        // the second points at a file that is not there, so it is deleted without anything moved
+        val first = givenMedium(10, "first", primaryName = "a.jpg")
+        val second = givenMedium(11, "second", primaryName = "gone.jpg")
+        File(mainFs, "a.jpg").createNewFile()
+        givenMarkedMediaOfMset(1, first, second)
+
+        val result = service.deleteMarkedMediaOfMset(1)
+
+        assertEquals(listOf(10, 11), result.map { it.mediumId })
+        assertEquals(1, result[0].movedFiles)
+        assertEquals(0, result[1].movedFiles)
+        assertEquals(1, result[1].skippedFiles)
+    }
+
+    /** The set the repository reports as holding one marked medium, which is who asks for this. */
+    @Test
+    fun `asks the repository for the marked media of that one set`() {
+        val medium = givenMedium(10, "first")
+        givenMarkedMediaOfMset(3, medium)
+
+        service.deleteMarkedMediaOfMset(3)
+
+        verify(mediaRepository).findAllMarkedOfMset(3)
+    }
+
+    /**
+     * A set whose media were never marked is the normal case rather than an error: the caller deletes
+     * the set, which takes the media with it, and no file of theirs is moved.
+     */
+    @Test
+    fun `answers nothing for a set with no marked media`() {
+        givenMarkedMediaOfMset(1)
+
+        assertTrue(service.deleteMarkedMediaOfMset(1).isEmpty())
+    }
+
+    /** One collision stops the ones after it rather than leaving the answer silently short of one. */
+    @Test
+    fun `stops at a medium that cannot be deleted`() {
+        val first = givenMedium(10, "first", primaryName = "a.jpg")
+        val second = givenMedium(11, "second", primaryName = "b.jpg")
+        val third = givenMedium(12, "third", primaryName = "c.jpg")
+        listOf("a.jpg", "b.jpg", "c.jpg").forEach { File(mainFs, it).createNewFile() }
+        // b.jpg is already where the move wants it, so the medium behind it cannot be deleted
+        File(mainFs, "DELETED").mkdirs()
+        File(mainFs, "DELETED/b.jpg").createNewFile()
+        givenMarkedMediaOfMset(1, first, second, third)
+
+        assertThrows<NotAccessibleException> {
+            service.deleteMarkedMediaOfMset(1)
+        }
+
+        verify(mediaRepository, never()).delete(third)
+        assertTrue(File(mainFs, "c.jpg").isFile)
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
+
+    /**
+     * a medium stored under [id] with a primary bessource named [primaryName], marked deleted unless
+     * told otherwise, and known to the repository the way [deleteMarkedMedium] reads it
+     */
+    private fun givenMedium(
+        id: Int,
+        name: String,
+        deleted: Boolean? = true,
+        primaryName: String? = "shot-$id.jpg",
+        tnName: String? = null
+    ): Medium {
+        val medium = Medium().apply {
+            this.id = id
+            this.name = name
+            this.deleted = deleted
+        }
+        medium.bessources = listOfNotNull(
+            primaryName?.let { bessource(it, RessType.PRIMARY) },
+            tnName?.let { bessource(it, RessType.TN) }
+        ).toMutableList()
+
+        whenever(mediaRepository.findById(id)).thenReturn(Optional.of(medium))
+        return medium
+    }
+
+    /** the media the repository reports as the marked ones of the set with that id */
+    private fun givenMarkedMediaOfMset(msetId: Int, vararg media: Medium) {
+        whenever(mediaRepository.findAllMarkedOfMset(msetId)).thenReturn(media.toList())
+    }
 
     /** a storage with a MAIN_FS and a TN_FS location pointing into the temp dir */
     private fun givenStorage(withoutFsLocations: Boolean = false) {

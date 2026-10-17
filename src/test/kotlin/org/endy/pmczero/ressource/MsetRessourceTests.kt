@@ -6,7 +6,11 @@ import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.ScannerService
 import org.endy.pmczero.service.ThumbnailService
+import org.endy.pmczero.to.MediumDeletionTO
+import org.endy.pmczero.to.MsetDeletionTO
 import org.junit.jupiter.api.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
@@ -14,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.boot.test.mock.mockito.MockBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
@@ -109,4 +114,70 @@ class MsetRessourceTests {
 
     /** one set as the service hands it out, so this only says what the url does with it */
     private fun mset(id: Int, name: String) = Mset().apply { this.id = id; this.name = name }
+
+    /**
+     * `DELETE /api/msets/{id}/includingFilesTagged`, over http.
+     *
+     * Only the endpoint: which media of a set carry the mark and what happens to their files is
+     * `MsetService` and `MediaDeletionService`, which are tested on their own.
+     */
+    @Test
+    fun `answers what the deletion of the set with its marked files did`() {
+        whenever(msetService.deleteIncludingMarkedFiles(1)).thenReturn(
+            MsetDeletionTO(
+                msetId = 1,
+                name = "set-1",
+                media = listOf(
+                    MediumDeletionTO(mediumId = 10, name = "first", movedFiles = 2, skippedFiles = 0),
+                    MediumDeletionTO(mediumId = 11, name = "second", movedFiles = 1, skippedFiles = 1)
+                )
+            )
+        )
+
+        mvc.perform(delete("/api/msets/1/includingFilesTagged"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.msetId").value(1))
+            .andExpect(jsonPath("$.name").value("set-1"))
+            // the totals as well as the per medium entries, which is what a summary of the call needs
+            .andExpect(jsonPath("$.deletedMedia").value(2))
+            .andExpect(jsonPath("$.movedFiles").value(3))
+            .andExpect(jsonPath("$.skippedFiles").value(1))
+            .andExpect(jsonPath("$.media[0].mediumId").value(10))
+            .andExpect(jsonPath("$.media[1].skippedFiles").value(1))
+    }
+
+    /** A set nobody marked anything in: deleted as usual, with nothing of its files moved. */
+    @Test
+    fun `answers a set with no marked media`() {
+        whenever(msetService.deleteIncludingMarkedFiles(1))
+            .thenReturn(MsetDeletionTO(msetId = 1, name = "set-1", media = emptyList()))
+
+        mvc.perform(delete("/api/msets/1/includingFilesTagged"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.media").isEmpty)
+            .andExpect(jsonPath("$.movedFiles").value(0))
+    }
+
+    @Test
+    fun `answers 404 for a set that does not exist`() {
+        whenever(msetService.deleteIncludingMarkedFiles(99))
+            .thenAnswer { throw NotFoundException() }
+
+        mvc.perform(delete("/api/msets/99/includingFilesTagged"))
+            .andExpect(status().isNotFound)
+    }
+
+    /**
+     * The two are different calls: deleting a set on its own leaves the files where they are, so one
+     * must not be answered by the other.
+     */
+    @Test
+    fun `does not delete the set without its marked files`() {
+        whenever(msetService.deleteIncludingMarkedFiles(1))
+            .thenReturn(MsetDeletionTO(msetId = 1, name = "set-1", media = emptyList()))
+
+        mvc.perform(delete("/api/msets/1/includingFilesTagged")).andExpect(status().isOk)
+
+        verify(msetService, never()).delete(any())
+    }
 }

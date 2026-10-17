@@ -1041,6 +1041,101 @@ class MsetPersistenceTest {
     }
 
     // -------------------------------------------------------------------------------------
+    // The marked media of a set
+    //
+    // What a deletion of a whole set walks before it deletes the set, so the query belongs over a
+    // real database: what marks a medium and what does not is a column, and a mistake here hands a
+    // deletion the wrong rows to act on.
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `finds the media of a set that are marked deleted`() {
+        val storage = givenStorage("shelf")
+        val msetId = givenSetOf("here", storage, "a.jpg", "b.jpg", "c.jpg", deletedNames = listOf("a.jpg", "c.jpg"))
+
+        assertEquals(listOf("a.jpg", "c.jpg"), markedNamesOf(msetId))
+    }
+
+    /** A medium nobody marked is not one to move files for, so it is not in the answer. */
+    @Test
+    fun `finds no media of a set where none is marked`() {
+        val storage = givenStorage("shelf")
+        val msetId = givenSetOf("here", storage, "a.jpg", "b.jpg")
+
+        assertTrue(markedNamesOf(msetId).isEmpty())
+    }
+
+    /**
+     * The column is nullable and the rows migrated before it existed carry no value at all, which is
+     * not a mark: it is the same state `deleteMarkedMedium` refuses to act on.
+     */
+    @Test
+    fun `takes a medium whose flag was never set for unmarked`() {
+        val storage = givenStorage("shelf")
+        val msetId = givenSetOf("here", storage, "a.jpg", "b.jpg")
+        entityManager.entityManager.createNativeQuery("update a_media set deleted = null")
+            .executeUpdate()
+        entityManager.flush()
+        entityManager.clear()
+
+        assertTrue(markedNamesOf(msetId).isEmpty())
+    }
+
+    /** The media of another set are that set's business, whichever way their marks are set. */
+    @Test
+    fun `leaves the media of another set alone`() {
+        val storage = givenStorage("shelf")
+        val here = givenSetOf("here", storage, "a.jpg", deletedNames = listOf("a.jpg"))
+        val there = givenSetOf("there", storage, "b.jpg", deletedNames = listOf("b.jpg"))
+
+        assertEquals(listOf("a.jpg"), markedNamesOf(here))
+        assertEquals(listOf("b.jpg"), markedNamesOf(there))
+    }
+
+    /** A set with nothing marked is the normal state, and it is an empty answer rather than an error. */
+    @Test
+    fun `finds no media for a set without any`() {
+        entityManager.persist(Mset().apply { name = "empty" })
+        entityManager.flush()
+        entityManager.clear()
+
+        assertTrue(markedNamesOf(msetRepository.findAll().single().id!!).isEmpty())
+    }
+
+    /** Ordered by id, so two calls that see the same rows delete and move in the same order. */
+    @Test
+    fun `answers the marked media of a set in id order`() {
+        val storage = givenStorage("shelf")
+        val msetId = givenSetOf(
+            "here", storage, "a.jpg", "b.jpg", "c.jpg",
+            deletedNames = listOf("c.jpg", "a.jpg")
+        )
+        entityManager.clear()
+
+        val ids = mediaRepository.findAllMarkedOfMset(msetId).map { it.id!! }
+
+        assertEquals(ids.sorted(), ids)
+        assertEquals(2, ids.size)
+    }
+
+    /** An id that names no set holds no marked media, which the caller has already answered with 404. */
+    @Test
+    fun `finds no marked media for an mset id that names no mset`() {
+        assertTrue(mediaRepository.findAllMarkedOfMset(4242).isEmpty())
+    }
+
+    /**
+     * the marked media of a set as they come back out of the database, by name
+     *
+     * the context is emptied first, so the answer is the one a caller of this gets rather than what
+     * the fixtures happened to leave in the persistence context
+     */
+    private fun markedNamesOf(msetId: Int): List<String?> {
+        entityManager.clear()
+        return mediaRepository.findAllMarkedOfMset(msetId).map { it.name }
+    }
+
+    // -------------------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------------------
 

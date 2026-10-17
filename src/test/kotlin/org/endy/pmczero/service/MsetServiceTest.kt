@@ -1,5 +1,6 @@
 package org.endy.pmczero.service
 
+import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
@@ -13,6 +14,7 @@ import org.endy.pmczero.repository.LocationRepository
 import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.MsetRepository
 import org.endy.pmczero.repository.StorageRepository
+import org.endy.pmczero.to.MediumDeletionTO
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -23,9 +25,11 @@ import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.verifyNoInteractions
 import org.mockito.kotlin.whenever
 import java.util.Optional
 
@@ -41,6 +45,9 @@ class MsetServiceTest {
     private val locationRepository: LocationRepository = mock()
     private val storageRepository: StorageRepository = mock()
 
+    /** mocked, since which files a deletion moves is MediaDeletionService's and is tested there */
+    private val mediaDeletionService: MediaDeletionService = mock()
+
     private lateinit var service: MsetService
 
     /** mocked, since the scan behind an expansion is LocationService's and is tested there */
@@ -54,7 +61,8 @@ class MsetServiceTest {
         val realLocationService = LocationService(locationRepository, StorageService(storageRepository), bessourceRepository)
         val mediaService = MediaService(mediaRepository, bessourceRepository, realLocationService)
         service = MsetService(
-            mediaRepository, msetRepository, mediaService, StorageService(storageRepository), locationService
+            mediaRepository, msetRepository, mediaService, StorageService(storageRepository),
+            locationService, mediaDeletionService
         )
 
         }
@@ -703,6 +711,130 @@ class MsetServiceTest {
     private fun givenExistingMset(id: Int) {
         whenever(msetRepository.findById(id)).thenReturn(
             Optional.of(Mset().apply { this.id = id; name = "set-$id" })
+        )
+    }
+
+    // -------------------------------------------------------------------------------------
+    // Deleting a set together with the files that were tagged for it
+    //
+    // Which files a deletion moves is MediaDeletionService's and is covered by its own test, over a
+    // real file system. What belongs here is the order of the two steps and the answer the set adds.
+    // -------------------------------------------------------------------------------------
+
+    @Test
+    fun `deletes the set`() {
+        givenExistingMset(1)
+        givenMarkedMediaDeleted()
+
+        service.deleteIncludingMarkedFiles(1)
+
+        verify(msetRepository).delete(any<Mset>())
+    }
+
+    /**
+     * The files go first, because deleting a set cascades to the bessources of its media and a name
+     * that is gone from the database is a file that can no longer be found.
+     */
+    @Test
+    fun `moves the files of the marked media before the set is deleted`() {
+        givenExistingMset(1)
+        givenMarkedMediaDeleted()
+
+        service.deleteIncludingMarkedFiles(1)
+
+        val order = inOrder(mediaDeletionService, msetRepository)
+        order.verify(mediaDeletionService).deleteMarkedMediaOfMset(1)
+        order.verify(msetRepository).delete(any<Mset>())
+    }
+
+    @Test
+    fun `asks for the marked media of the set the url names`() {
+        givenExistingMset(7)
+        givenMarkedMediaDeleted(msetId = 7)
+
+        service.deleteIncludingMarkedFiles(7)
+
+        verify(mediaDeletionService).deleteMarkedMediaOfMset(7)
+    }
+
+    /**
+     * A medium nobody marked is not one to move files for, and the deletion of the set takes its row
+     * along with the others: the mark is what asks for the files, see Medium.deleted.
+     */
+    @Test
+    fun `deletes the set without moving files when none of its media is marked`() {
+        givenExistingMset(1)
+        whenever(mediaDeletionService.deleteMarkedMediaOfMset(1)).thenReturn(emptyList())
+
+        val result = service.deleteIncludingMarkedFiles(1)
+
+        assertTrue(result.media.isEmpty())
+        verify(msetRepository).delete(any<Mset>())
+    }
+
+    @Test
+    fun `answers the set that was deleted`() {
+        givenExistingMset(1)
+        givenMarkedMediaDeleted()
+
+        val result = service.deleteIncludingMarkedFiles(1)
+
+        assertEquals(1, result.msetId)
+        assertEquals("set-1", result.name)
+    }
+
+    @Test
+    fun `answers what happened to the marked media`() {
+        givenExistingMset(1)
+        givenMarkedMediaDeleted()
+
+        val result = service.deleteIncludingMarkedFiles(1)
+
+        assertEquals(listOf(10, 11), result.media.map { it.mediumId })
+    }
+
+    @Test
+    fun `refuses to delete a set whose marked media could not be deleted`() {
+        givenExistingMset(1)
+        whenever(mediaDeletionService.deleteMarkedMediaOfMset(1))
+            .thenAnswer { throw NotAccessibleException("cannot delete medium 10: DELETED/a.jpg is already there") }
+
+        assertThrows<NotAccessibleException> {
+            service.deleteIncludingMarkedFiles(1)
+        }
+        // the set stays, so nothing of it is half deleted
+        verify(msetRepository, never()).delete(any<Mset>())
+    }
+
+    /**
+     * An id that names no set must not have files moved for it: the set is read before anything is
+     * deleted, so this is a 404 rather than a set of media that were marked for a set nobody has.
+     */
+    @Test
+    fun `refuses to delete marked files of an mset that does not exist`() {
+        whenever(msetRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> {
+            service.deleteIncludingMarkedFiles(99)
+        }
+    }
+
+    @Test
+    fun `moves no file for an mset that does not exist`() {
+        whenever(msetRepository.findById(99)).thenReturn(Optional.empty())
+
+        assertThrows<NotFoundException> { service.deleteIncludingMarkedFiles(99) }
+
+        verifyNoInteractions(mediaDeletionService)
+    }
+
+    /** the marked media of a set going away, answered the way the real service answers them */
+    private fun givenMarkedMediaDeleted(msetId: Int = 1) {
+        whenever(mediaDeletionService.deleteMarkedMediaOfMset(msetId)).thenReturn(
+            listOf(
+                MediumDeletionTO(mediumId = 10, name = "first", movedFiles = 2, skippedFiles = 0),
+                MediumDeletionTO(mediumId = 11, name = "second", movedFiles = 1, skippedFiles = 1)
+            )
         )
     }
 }

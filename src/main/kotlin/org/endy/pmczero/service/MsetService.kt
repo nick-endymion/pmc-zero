@@ -9,6 +9,7 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.endy.pmczero.mapper.toScanTO
 import org.endy.pmczero.model.modern.Mset
+import org.endy.pmczero.to.MsetDeletionTO
 import org.endy.pmczero.to.MsetScanTO
 import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.transaction.annotation.Transactional
@@ -19,7 +20,8 @@ class MsetService(
     private val msetRepository: MsetRepository,
     private val mediaService: MediaService,
     private val storageService: StorageService,
-    private val locationService: LocationService
+    private val locationService: LocationService,
+    private val mediaDeletionService: MediaDeletionService
 ) {
 
     /**
@@ -198,10 +200,49 @@ class MsetService(
      *
      * A medium that carries bookmarks is the one exception: [Medium.bookmarks] has no cascade, so
      * the delete of such a set is refused by the database and rolled back as a whole.
+     *
+     * The files of the media are left where they are. [deleteIncludingMarkedFiles] is the one that
+     * moves the files of the media somebody marked deleted.
      */
     @Transactional
     fun delete(id: Int) {
         msetRepository.delete(findById(id))
+    }
+
+    /**
+     * Deletes the mset as [delete] does, and before that the files of every one of its media that is
+     * marked deleted, moving them below the `DELETED` folder of their location, answering what each
+     * of them did.
+     *
+     * The two steps in that order, and it is not an arbitrary one: deleting the set cascades to the
+     * bessources of its media, and a name that is gone from the database is a file that can no longer
+     * be found, so the files have to be moved while the bessources still say where they are.
+     *
+     * Only the marked media are treated this way. A media that was not marked goes with the set as a
+     * row and its files stay where they are, which is what somebody who never tagged them asked for.
+     *
+     * The set is read before anything is deleted rather than afterwards, so an id that names no set
+     * is a 404 without a file having been moved for it.
+     *
+     * A medium that carries bookmarks is still refused, see [delete]: the delete of the set rolls
+     * back, and with it the rows of the media that were deleted, while the files that had already
+     * been moved stay below the `DELETED` folder. That is the price of a file move not being
+     * transactional, the same one [MediaDeletionService.deleteMarkedMedium] pays.
+     *
+     * @throws NotFoundException when no mset with that id exists
+     * @throws org.endy.pmczero.exception.NotAccessibleException when a file to be moved is already
+     * there under its new name
+     */
+    @Transactional
+    fun deleteIncludingMarkedFiles(id: Int): MsetDeletionTO {
+        val mset = findById(id)
+        val marked = mediaDeletionService.deleteMarkedMediaOfMset(id)
+        // read again rather than deleting the instance above: the media collection of a set is lazy
+        // and is loaded when the cascade walks it, which is after the deletions above, so it holds the
+        // rows that are left rather than the ones that were already removed
+        delete(id)
+
+        return MsetDeletionTO(msetId = id, name = mset.name, media = marked)
     }
 
     fun ressourcesInUse(id: Int): List<RessourceUrlsTO> {
