@@ -189,7 +189,7 @@ class SetDescriptionAdderTests {
     }
 
     private val fetcher = object : Fetcher {
-        override fun getAsString(urlString: String, withProxy: Boolean): String = ""
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean): String = ""
         override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {}
         override fun downloadTo(urlString: String, target: File, withProxy: Boolean): File = target
     }

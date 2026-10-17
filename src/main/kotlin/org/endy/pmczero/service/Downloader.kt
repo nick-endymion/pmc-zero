@@ -19,7 +19,13 @@ class Downloader : Fetcher {
 
     companion object Default : Downloader()
 
-    override fun getAsString(urlString: String, withProxy: Boolean): String {
+    /**
+     * [waitForLoadEvent] is ignored, and there is nothing to honour it with: a server sends the html of
+     * a page and no images with it, so there is no load event to wait for and no gallery of two
+     * hundred pictures to sit in front of the answer. The document is there as soon as the response
+     * has been read. Only [BrowserFetcher] renders a page, and only there is it a question.
+     */
+    override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean): String {
 
         if (map[urlString] != null) {
             return map[urlString]!!

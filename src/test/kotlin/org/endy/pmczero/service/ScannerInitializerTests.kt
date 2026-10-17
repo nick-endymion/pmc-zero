@@ -319,7 +319,7 @@ class ScannerInitializerTests {
     @Test
     fun `reads the href rather than the text of the link`() {
         val html = """<html><body>
-            <a class="blk_galleries expp" href="/gallery/6577307">Galerieübersicht</a>
+            <a class="blk_galleries expp" href="/gallery/6577307">GalerieÃ¼bersicht</a>
             </body></html>""".trimIndent()
 
         assertEquals(
@@ -515,7 +515,7 @@ class ScannerInitializerTests {
     fun `collects the href of the last link rather than its text`() {
         val html = """<html><body>
             <a href="/one.html">One</a>
-            <a href="/last.html">Zurück zur Übersicht</a>
+            <a href="/last.html">ZurÃ¼ck zur Ãœbersicht</a>
             </body></html>""".trimIndent()
 
         assertEquals(
@@ -1046,7 +1046,7 @@ class ScannerInitializerTests {
 
     /** A fetcher that answers [fetchedHtml] and writes what it downloads. */
     private val fetcher: Fetcher = object : Fetcher {
-        override fun getAsString(urlString: String, withProxy: Boolean) = fetchedHtml
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean) = fetchedHtml
         override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {}
         override fun downloadTo(urlString: String, target: File, withProxy: Boolean): File {
             target.parentFile?.mkdirs()

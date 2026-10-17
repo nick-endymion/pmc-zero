@@ -25,8 +25,22 @@ interface Fetcher {
      * @param withProxy whether to go through the proxy. Honoured by [Downloader], which has one per
      * call; [BrowserFetcher] ignores it and uses the browser it was configured with, because a
      * proxy is a property of a browser rather than of a single request.
+     * @param waitForLoadEvent whether a page is waited for until everything it names has come back,
+     * which is what the load event is. False answers as soon as the html is parsed and the deferred
+     * scripts have run, which is the whole question for a caller that is after the urls on a page
+     * rather than after its pictures: the load event counts the images of a gallery, so a page of
+     * two hundred of them holds the answer up until all two hundred are in, and one unreachable
+     * picture holds it up for the whole navigation timeout. See [BrowserFetcher.render]
+     *
+     * True, so that a caller saying nothing about it gets what every call got before there was
+     * anything to say. Only a browser has a load event to wait for at all: [Downloader] asks a server
+     * for a document and there is nothing beyond the response, so it answers as soon as it has that.
      */
-    fun getAsString(urlString: String, withProxy: Boolean = true): String
+    fun getAsString(
+        urlString: String,
+        withProxy: Boolean = true,
+        waitForLoadEvent: Boolean = true
+    ): String
 
     /**
      * Downloads [urlString] into [directory], naming the file after the last segment of the url.

@@ -173,6 +173,15 @@ class ScannerRessource(
      * until all two hundred are in. `domcontentloaded` is the one for a caller that wants the markup
      * and not the wait: the html is parsed and the deferred scripts have run, and no picture is
      * waited for. See [org.endy.pmczero.service.BrowserFetcher.render]
+     *
+     * It covers the whole run and not only this page: a stored scraper that follows a link, i.e. one
+     * with a [org.endy.pmczero.model.scraper.StructuredWorker] of `download = true` below the first,
+     * such as `Gallery Index Lister`, has every page behind those links waited for the same way.
+     * Without it, a run that fetches the files waits for the load event on each of them, which is a
+     * page of two hundred images held up until all two hundred have come back, and one unreachable
+     * picture holding it up for the whole navigation timeout. With `noDownload` the files are not
+     * fetched at all, so nothing is waited for past the markup on either. See
+     * [org.endy.pmczero.model.ScanningKontext.waitForLoadEvent]
      * @param msetId records this run on the set with that id rather than on a set of its own, for a
      * page that is not a set of its own: the second page of a gallery, or a second supplier of the
      * same set. The set is read with the media it holds and kept, so the media of this run are added to

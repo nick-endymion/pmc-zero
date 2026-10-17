@@ -175,7 +175,7 @@ class FailedDownloadsTests {
 
     /** only ever a fetcher here: nothing in this suite downloads anything */
     private class FailingFetcher : Fetcher {
-        override fun getAsString(urlString: String, withProxy: Boolean): String = ""
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean): String = ""
         override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {
             throw NotAccessibleException("nothing downloads in this suite")
         }

@@ -786,7 +786,7 @@ class FileDownloaderTests {
         /** makes every download fail, to check that a failure is not swallowed */
         var failing = false
 
-        override fun getAsString(urlString: String, withProxy: Boolean): String {
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean): String {
             reads.add(urlString)
             return ""
         }

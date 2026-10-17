@@ -258,7 +258,7 @@ class FailedDownloadServiceTests {
         /** makes only these fail, for a run that is partly hopeless */
         var failingFor = emptySet<String>()
 
-        override fun getAsString(urlString: String, withProxy: Boolean): String = ""
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean): String = ""
 
         override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {
             downloadTo(urlString, File(directory, "downloaded"))

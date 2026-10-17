@@ -28,7 +28,16 @@ class StructuredWorker(
         // handed an element passes it on.
         val baseUri = if (download) getBusUri(element) else scanningKontext.baseUri
 
-        val text = if (download) scanningKontext.fetcher.getAsString(element) else element
+        // handed on from the kontext, since a worker is given an element and nothing else and cannot ask
+        // how long it may take to read it. Which is the whole point of the nested fetch: the page behind
+        // a link is read for its markup, and waiting for its images to load costs the navigation timeout
+        // of a gallery with one unreachable picture in it. See [ScanningKontext.waitForLoadEvent]
+        val text = if (download)
+            scanningKontext.fetcher.getAsString(
+                element,
+                waitForLoadEvent = scanningKontext.waitForLoadEvent
+            )
+        else element
 
         for (scanner in scrapers)
             scanner.doWork(text, baseUri, scanningKontext)

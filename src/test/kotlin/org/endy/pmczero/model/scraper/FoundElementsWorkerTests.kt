@@ -229,7 +229,7 @@ class FoundElementsWorkerTests {
     }
 
     private val fetcher: Fetcher = object : Fetcher {
-        override fun getAsString(urlString: String, withProxy: Boolean) = ""
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean) = ""
         override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {}
         override fun downloadTo(urlString: String, target: File, withProxy: Boolean): File = target
     }

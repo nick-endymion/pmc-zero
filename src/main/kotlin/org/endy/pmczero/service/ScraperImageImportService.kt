@@ -4,6 +4,7 @@ import com.microsoft.playwright.options.WaitForSelectorState
 import com.microsoft.playwright.options.WaitUntilState
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.mapper.toTO
+import org.endy.pmczero.model.ScanningKontext
 import org.endy.pmczero.model.modern.Location
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromString
@@ -185,8 +186,8 @@ class ScraperImageImportService(
      * under a name of its own, which is what this did before there was a choice. False, the default,
      * leaves the file alone, records the medium under the name that file already has and reports the
      * file it did not fetch. See [org.endy.pmczero.model.ScanningKontext.alwaysNewDownload]
-     * @param waitUntil how far to wait for the page before its dom is read, null for the load event.
-     * See [importWith]
+     * @param waitUntil how far to wait for the page before its dom is read, null for the load event. See
+     * [importWith], which is where the states and the pages they cover are written down
      * @param msetId the set to record this run on, rather than a set of its own. See [importWith]
      * @throws org.endy.pmczero.exception.NotFoundException when no scanner has that id
      * @throws NotAccessibleException when the stored scanner is not a scraper this application knows,
@@ -260,13 +261,19 @@ class ScraperImageImportService(
      * @param noDownload true runs the whole import and fetches none of the files, see
      * [org.endy.pmczero.model.ScanningKontext.skipDownloads]. Every element the downloader was asked
      * for is reported in [org.endy.pmczero.to.ImageImportTO.failures] with the reason it was left
-     * alone, so the answer is the same shape as one where the downloads failed
+     * alone, so the answer is the same shape as one where the downloads failed. It also decides how
+     * long the pages the run fetches itself are waited for, see [waitUntil] and
+     * [ScanningKontext.waitForLoadEvent]
      * @param alwaysNewDownload true fetches a file again even when the location already holds it,
      * under a name of its own. See [org.endy.pmczero.model.ScanningKontext.alwaysNewDownload]
      * @param waitUntil how far to wait for the page before its dom is read, null for the load event.
-     * [org.endy.pmczero.service.BrowserFetcher.render] is where the states are worth reading about;
-     * the one for this call is `domcontentloaded` when the files are not to be fetched here, since
-     * the load event counts the images of the page and a draft has no use for that wait
+     * [org.endy.pmczero.service.BrowserFetcher.render] is where the states are worth reading about.
+     * It covers the whole run and not only the page the caller named: the pages a
+     * [org.endy.pmczero.model.scraper.StructuredWorker] with `download = true` follows a link into are
+     * waited for the same way, since `domcontentloaded` is a caller saying it does not want the pictures
+     * of a page waited for and that is as true of the page behind a link as of the one in hand. With
+     * nothing named, a run that fetches the files waits for the load event and one that only records
+     * ([noDownload]) does not. See [ScanningKontext.waitForLoadEvent]
      * @param msetId the set to record this run on, rather than a set of its own: the second page of a
      * gallery, a second supplier of the same set. The set is read here, with the media it holds, and put
      * on the [org.endy.pmczero.model.ScanningKontext] for the
@@ -317,6 +324,11 @@ class ScraperImageImportService(
         // than after, since the [org.endy.pmczero.model.scraper.FileDownloader] reads it per element
         kontext.skipDownloads = noDownload
         kontext.alwaysNewDownload = alwaysNewDownload
+        // for the pages the run fetches itself, i.e. the ones a [org.endy.pmczero.model.scraper.StructuredWorker]
+        // with `download = true` follows a link into. Set here rather than left at its default so that one
+        // parameter of this call decides how long every page of the run is waited for, and not only the
+        // one it was handed
+        kontext.waitForLoadEvent = waitsForLoadEvent(waitUntil, noDownload)
         // read by the [org.endy.pmczero.model.scraper.SetCreator], which keeps the set of a run onto a
         // set that is there rather than building one of its own. The set itself is put on the kontext
         // before the run for it to keep: a worker is handed an element and nothing else and cannot read
@@ -377,6 +389,27 @@ class ScraperImageImportService(
     }
 
     /**
+     * Whether the pages a run fetches for itself are waited for to their load event, see
+     * [ScanningKontext.waitForLoadEvent].
+     *
+     * A [waitUntil] the caller named decides it, so that one parameter of a call covers every page of
+     * the run rather than the one it was handed: `domcontentloaded` and `networkidle` are both a caller
+     * saying it does not want the pictures of a page waited for, and that is as true of the page behind
+     * a link as of the one in hand. `networkidle` is the longer wait of the two, so it is not a caller
+     * asking for more of either.
+     *
+     * With nothing named it follows what the run does with the files. A run that fetches them wants the
+     * load event, since a page that appends its gallery once its images are in has not shown it at
+     * `domcontentloaded` and only the load event waits for that on its own. A run that only records
+     * ([noDownload]) has no use for a browser to have pulled every picture of every page down first, so
+     * it does not wait: that wait costs the whole navigation timeout as soon as one picture is slow or
+     * unreachable, and the [org.endy.pmczero.model.scraper.RecoveryWorker] around the worker then drops
+     * that page rather than reporting the one picture that never came back.
+     */
+    private fun waitsForLoadEvent(waitUntil: WaitUntilState?, noDownload: Boolean): Boolean =
+        if (waitUntil != null) waitUntil == WaitUntilState.LOAD else !noDownload
+
+    /**
      * The scraper this import runs: the page title as the name of the set, and every image the
      * [DomParser] finds recorded as a medium and downloaded.
      *
@@ -430,6 +463,14 @@ class ScraperImageImportService(
      * Every link is followed to its end, so this costs a render per page the index links to. It is
      * still nothing like an import, which would fetch every single image on top of that.
      *
+     * Those pages are read for their markup alone, so they are not waited for past it: nothing here
+     * fetches a file of any of them, and waiting for a browser to have pulled all of their pictures
+     * down first costs the whole navigation timeout as soon as one picture of a gallery of two hundred
+     * is slow or unreachable. A page that then cannot be read is named in
+     * [org.endy.pmczero.to.ImageListTO.failures] rather than silently answering without it. The page
+     * in hand is rendered with the waits the caller gave for it, since that one is the caller's page.
+     * See [ScanningKontext.waitForLoadEvent]
+     *
      * @param linkClass the css class of the links to follow, e.g. `gallery-link` on an index that
      * wraps each entry of the gallery in one. Blank follows every `a[href]` of the page, which on a
      * real site is every navigation link on it, so this is worth passing whenever the page offers a
@@ -460,6 +501,12 @@ class ScraperImageImportService(
             browserFetcher,
             ""
         )
+
+        // the pages behind the links are read for their markup and for nothing else: this fetches no
+        // file of any of them, so waiting for a browser to have pulled all of their pictures down first
+        // is the whole navigation timeout waiting for one unreachable picture of a gallery of two
+        // hundred. The page in hand was rendered above with the waits the caller gave for it
+        kontext.waitForLoadEvent = false
 
         level2ScraperOf(linkClass, pattern).doWork(html, baseUriOf(url), kontext)
 
@@ -515,6 +562,10 @@ class ScraperImageImportService(
             browserFetcher,
             ""
         )
+
+        // nothing is fetched on either level here, so no page of the run is waited for past its markup.
+        // See the note on [listLevel2]
+        kontext.waitForLoadEvent = false
 
         listScraperOf(pattern).doWork(html, baseUriOf(url), kontext)
 

@@ -241,7 +241,7 @@ class TagAdderTests {
 
     /** Nothing is fetched, so this one writes nothing and would fail if anything tried. */
     private val fetcher: Fetcher = object : Fetcher {
-        override fun getAsString(urlString: String, withProxy: Boolean) =
+        override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean) =
             throw UnsupportedOperationException("a tag adder fetches nothing")
 
         override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) =

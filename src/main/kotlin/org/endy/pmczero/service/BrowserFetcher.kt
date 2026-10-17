@@ -209,8 +209,22 @@ class BrowserFetcher @Autowired constructor(
             ?: emptyList()
     }
 
-    override fun getAsString(urlString: String, withProxy: Boolean): String =
-        render(urlString)
+    /**
+     * [render] with the wait the caller asked for, since this is the one call of it a scraper cannot
+     * pass a parameter to: a [org.endy.pmczero.model.scraper.StructuredWorker] with `download = true`
+     * is handed a url and has to read it, and the only thing it can say about how long that may take is
+     * what [org.endy.pmczero.model.ScanningKontext.waitForLoadEvent] holds.
+ *
+ * The two states are spelled out rather than left to the playwright default, so what a run waits for
+ * is what this says it waits for rather than a default nobody has to agree with: `LOAD` is the load
+ * event and counts the images of the page, `DOMCONTENTLOADED` is the html and the first round of
+ * scripts and counts none of them.
+ */
+override fun getAsString(urlString: String, withProxy: Boolean, waitForLoadEvent: Boolean): String =
+        render(
+            urlString,
+            waitUntil = if (waitForLoadEvent) WaitUntilState.LOAD else WaitUntilState.DOMCONTENTLOADED
+        )
 
     override fun downLoadToFile(urlString: String, directory: String, withProxy: Boolean) {
         downloadTo(urlString, File(directory, fileNameOf(urlString)))

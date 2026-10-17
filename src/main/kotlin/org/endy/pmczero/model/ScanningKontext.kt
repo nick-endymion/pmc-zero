@@ -134,5 +134,32 @@ data class ScanningKontext(
      * Part of the kontext because a [org.endy.pmczero.model.scraper.Worker] is handed an element and
      * nothing else, so a worker cannot be told anything the scan does not know.
      */
-    var msetId: Int? = null
+    var msetId: Int? = null,
+    /**
+     * Whether a page the pipeline fetches for itself is waited for until everything it names has come
+     * back, which is what the load event is and what counts the images of a gallery.
+     *
+     * False answers as soon as the html is parsed and the deferred scripts have run, which is what a
+     * page behind a link is read for: the images of such a page are fetched by the
+     * [org.endy.pmczero.model.scraper.FileDownloader] of the run or not at all, never by the browser
+     * on the way past, so waiting for them buys nothing and costs the whole navigation timeout as soon
+     * as one picture of the page is slow or unreachable. The pipeline then reads no dom at all, and a
+     * [org.endy.pmczero.model.scraper.RecoveryWorker] around the worker drops that page rather than
+     * reporting the one picture that never came back.
+     *
+     * True by default, so a run that says nothing waits as it always did: a page that appends its
+     * gallery once its images are in has not shown it at `domcontentloaded`, and the load event is the
+     * only thing that waits for that on its own.
+     *
+     * About the pages the pipeline fetches, not about the page the caller handed the scraper: that one
+     * is rendered by the service before the run starts, with the waits that caller gave for it. See
+     * [org.endy.pmczero.service.ScraperImageImportService.importWith] and
+     * [org.endy.pmczero.service.Fetcher.getAsString].
+     *
+     * Part of the kontext because it is a property of the run rather than of the worker: the same
+     * stored scraper serves an import that fetches every file of a gallery and a draft that records
+     * what its pages hold, and only the first of the two has any use for a browser to have pulled
+     * every picture down first.
+     */
+    var waitForLoadEvent: Boolean = true
 )

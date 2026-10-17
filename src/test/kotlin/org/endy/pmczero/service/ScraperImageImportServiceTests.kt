@@ -259,7 +259,7 @@ class ScraperImageImportServiceTests {
     private fun givenIndexWithLinkedPages(vararg pages: Pair<String, String>) {
         givenPage(indexPage)
 
-        whenever(browserFetcher.getAsString(any(), any())).thenAnswer { invocation ->
+        whenever(browserFetcher.getAsString(any(), any(), any())).thenAnswer { invocation ->
             val wanted = invocation.getArgument<String>(0)
             pages.firstOrNull { wanted.endsWith(it.first) }?.second
                 ?: throw NotAccessibleException("$wanted answered 404 Not Found")
@@ -299,9 +299,9 @@ class ScraperImageImportServiceTests {
         service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
 
         // eq on the url rather than a raw value: a raw argument cannot be mixed with a matcher, and the
-        // proxy flag has to be a matcher to keep the two in step
-        verify(browserFetcher).getAsString(eq("http://example.org/seite1.html"), any())
-        verify(browserFetcher).getAsString(eq("http://example.org/seite2.html"), any())
+        // proxy flag and the wait have to be matchers to keep the three in step
+        verify(browserFetcher).getAsString(eq("http://example.org/seite1.html"), any(), any())
+        verify(browserFetcher).getAsString(eq("http://example.org/seite2.html"), any(), any())
     }
 
     /** The whole point of this endpoint: nothing is downloaded, only pages are read. */
@@ -345,7 +345,7 @@ class ScraperImageImportServiceTests {
             </body></html>
             """.trimIndent()
         )
-        whenever(browserFetcher.getAsString(any(), any())).thenAnswer { invocation ->
+        whenever(browserFetcher.getAsString(any(), any(), any())).thenAnswer { invocation ->
             when (val wanted = invocation.getArgument<String>(0)) {
                 "http://example.org/seite1.html" -> seite1
                 else -> throw NotAccessibleException("$wanted answered 404 Not Found")
@@ -361,14 +361,14 @@ class ScraperImageImportServiceTests {
             ),
             result.elements
         )
-        verify(browserFetcher, never()).getAsString(eq("http://example.org/impressum.html"), any())
+        verify(browserFetcher, never()).getAsString(eq("http://example.org/impressum.html"), any(), any())
     }
 
     /** Without a class every link is followed, which on a real page is every navigation link on it. */
     @Test
     fun `follows every link when no class is given`() {
         givenPage("""<html><body><a href="/seite1.html">x</a></body></html>""")
-        whenever(browserFetcher.getAsString(any(), any())).thenReturn(seite1)
+        whenever(browserFetcher.getAsString(any(), any(), any())).thenReturn(seite1)
 
         val result = service.listLevel2(url = "http://example.org/index.html")
 
@@ -395,7 +395,7 @@ class ScraperImageImportServiceTests {
     @Test
     fun `reports a broken link and keeps the pages that worked`() {
         givenPage(indexPage)
-        whenever(browserFetcher.getAsString(any(), any())).thenAnswer { invocation ->
+        whenever(browserFetcher.getAsString(any(), any(), any())).thenAnswer { invocation ->
             when (val wanted = invocation.getArgument<String>(0)) {
                 "http://example.org/seite1.html" -> seite1
                 else -> throw NotAccessibleException("$wanted answered 404 Not Found")
@@ -420,7 +420,7 @@ class ScraperImageImportServiceTests {
     @Test
     fun `does not call a page without images a failure`() {
         givenPage(indexPage)
-        whenever(browserFetcher.getAsString(any(), any())).thenReturn("<html><body>leer</body></html>")
+        whenever(browserFetcher.getAsString(any(), any(), any())).thenReturn("<html><body>leer</body></html>")
 
         val result = service.listLevel2(url = "http://example.org/index.html", linkClass = "galerie")
 
@@ -2161,7 +2161,7 @@ class ScraperImageImportServiceTests {
 
         verify(browserFetcher).render("http://example.org/galerie.html", "app-images", 7, null, null)
         // and the workers are handed that html rather than fetching the url again
-        verify(browserFetcher, never()).getAsString(any(), any())
+        verify(browserFetcher, never()).getAsString(any(), any(), any())
     }
 
     @Test
