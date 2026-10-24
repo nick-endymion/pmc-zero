@@ -1204,7 +1204,7 @@ class MsetPersistenceTest {
     private fun givenLocation(uri: String, locationType: LocationType): Location =
         Location().apply {
             this.uri = uri
-            this.locationType = locationType.i
+            this.locationType = locationType.idx
             inuse = 1
             this.storage = Storage().apply { name = "storage" }
         }.also {

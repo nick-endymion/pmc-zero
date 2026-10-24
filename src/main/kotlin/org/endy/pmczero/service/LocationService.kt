@@ -5,6 +5,7 @@ import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.RessType
+import org.endy.pmczero.model.Scheme
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
@@ -49,25 +50,22 @@ class LocationService(
      * Derives the physical location of every given [bessources], assigns the matching
      * [LocationType] and fills in the url.
      *
-     * @param generateThumbnail when true (default) and no bessource of [RessType.TN] is given, a
+     * @param provideThumbnailsDynamically when true (default) and no bessource of [RessType.TN] is given, a
      * thumbnailed bessource is derived from the [RessType.PRIMARY] one and appended. Callers that
      * resolve a single bessource pass false, otherwise a missing TN location would fail the whole call.
      */
     fun providePhysicalRessources(
         bessources: List<BessourceTO>,
-        representationTyp: String,
-        generateThumbnail: Boolean = true
+        scheme: Scheme = Scheme.HTTP,
+        provideThumbnailsDynamically: Boolean = true
     ): List<BessourceTO> {
 
-        val (mainLocationType, tnLocationType) = when (representationTyp) {
-            "HTTP" -> LocationType.MAIN_HTTP to LocationType.TN_HTTP
-            "FILE" -> LocationType.MAIN_FS to LocationType.TN_FS
-            else -> throw NotFoundException()
-        }
+        // the main type is declared before the tn type of the same scheme
+        val (mainLocationType, tnLocationType) = LocationType.values().filter { it.scheme == scheme }
 
         var allBessources = bessources
 
-        if (generateThumbnail && allBessources.find { it.ressType == RessType.TN.i } == null) {
+        if (provideThumbnailsDynamically && allBessources.find { it.ressType == RessType.TN.i } == null) {
             val primary = allBessources.first { it.ressType == RessType.PRIMARY.i }
             allBessources = allBessources.plus(
                 BessourceTO(
@@ -100,7 +98,7 @@ class LocationService(
         val storageId = bessource.storageId ?: return null
         val locationType = bessource.locationType ?: return null
         val storage = storageService.findById(storageId)
-        val location = storage.locationInUse(locationType.i)
+        val location = storage.locationInUse(locationType.idx)
         if (location == null) return null
         return url(bessource, location)
     }
@@ -399,7 +397,7 @@ class LocationService(
 
     /** the accessible folder of an FS location, null for an HTTP location or an unusable path */
     private fun accessibleFolderOrNull(location: Location): File? {
-        if (location.locationType != LocationType.MAIN_FS.i && location.locationType != LocationType.TN_FS.i)
+        if (location.locationType != LocationType.MAIN_FS.idx && location.locationType != LocationType.TN_FS.idx)
             return null
         val folder = location.uri?.let { File(it) } ?: return null
         return if (folder.exists() && folder.canRead() && folder.canWrite()) folder else null

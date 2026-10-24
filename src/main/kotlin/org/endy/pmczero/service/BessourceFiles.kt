@@ -67,7 +67,7 @@ class BessourceFiles(private val storageService: StorageService) {
      */
     fun mainFileOf(storageId: Int, relative: String?): File? {
         val storage = storageService.findById(storageId, withLocations = true)
-        val location = locationOf(storage, LocationType.MAIN_FS.i) ?: return null
+        val location = locationOf(storage, LocationType.MAIN_FS.idx) ?: return null
 
         return fileIn(location, relative)?.takeIf { it.isFile }
     }
@@ -82,8 +82,8 @@ class BessourceFiles(private val storageService: StorageService) {
      */
     private fun locationOf(bessource: Bessource): Location? {
         val wanted = when (bessource.ressType) {
-            RessType.PRIMARY.i -> LocationType.MAIN_FS.i
-            RessType.TN.i -> LocationType.TN_FS.i
+            RessType.PRIMARY.i -> LocationType.MAIN_FS.idx
+            RessType.TN.i -> LocationType.TN_FS.idx
             else -> return null
         }
 

@@ -381,7 +381,7 @@ class SequenceWorkerTests {
         id = 1
         name = "bilder"
         uri = tempDir.absolutePath
-        locationType = LocationType.MAIN_FS.i
+        locationType = LocationType.MAIN_FS.idx
         inuse = 1
         this.storage = Storage()
     }
@@ -391,7 +391,7 @@ class SequenceWorkerTests {
         id = 2
         name = "http"
         uri = "http://example.org/bilder"
-        locationType = LocationType.MAIN_HTTP.i
+        locationType = LocationType.MAIN_HTTP.idx
         inuse = 1
         this.storage = Storage()
     }

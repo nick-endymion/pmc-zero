@@ -27,7 +27,6 @@ import org.springframework.transaction.TransactionDefinition
 import org.springframework.transaction.support.SimpleTransactionStatus
 import java.io.File
 import java.security.MessageDigest
-import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Optional
 import kotlin.test.assertEquals
@@ -545,8 +544,8 @@ class FileInfoServiceTests {
                 it.id = 1
                 it.name = "regal"
                 it.locations = listOfNotNull(
-                    locationOf(main, LocationType.MAIN_FS.i, 1),
-                    tn?.let { tnFolder -> locationOf(tnFolder, LocationType.TN_FS.i, 2) }
+                    locationOf(main, LocationType.MAIN_FS.idx, 1),
+                    tn?.let { tnFolder -> locationOf(tnFolder, LocationType.TN_FS.idx, 2) }
                 )
             }
         )
@@ -556,7 +555,7 @@ class FileInfoServiceTests {
     private fun storageOf(folder: File) = Storage().also {
         it.id = 1
         it.name = "regal"
-        it.locations = listOfNotNull(locationOf(folder, LocationType.MAIN_FS.i, 1))
+        it.locations = listOfNotNull(locationOf(folder, LocationType.MAIN_FS.idx, 1))
     }
 
     private fun locationOf(folder: File, locationType: Int, id: Int) = Location().also {

@@ -79,9 +79,9 @@ class ThumbnailService(
         val storageId = storage.id
             ?: throw NotAccessibleException("medium $id sits on a storage without id")
 
-        val mainFs = storage.locationInUse(LocationType.MAIN_FS.i)
+        val mainFs = storage.locationInUse(LocationType.MAIN_FS.idx)
             ?: throw NotAccessibleException("storage $storageId has no MAIN_FS location in use")
-        val tnFs = storage.locationInUse(LocationType.TN_FS.i)
+        val tnFs = storage.locationInUse(LocationType.TN_FS.idx)
             ?: throw NotAccessibleException("storage $storageId has no TN_FS location in use")
 
         // resolved once, so the source path and the thumbnail path are built from the same name

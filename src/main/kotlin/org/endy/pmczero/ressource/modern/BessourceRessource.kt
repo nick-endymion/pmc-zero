@@ -31,20 +31,14 @@ class BessourceRessource(
     private val bessourceFiles: BessourceFiles
 ) {
 
-//    @GetMapping("/mfiles/to")
-//    fun getMfilesTO(): Iterable<MfileTO> {
-////        return mfilesRepository.getWithfolder().map { m -> m.toTO() }
-//        return mfilesRepository.findAll().map { m -> m.toTO() }
-//    }
-
-//    @GetMapping("/mfiles/{id}")
-//    fun getMfile(@PathVariable id: Int): MfilesEntity? {
-//        return mfilesRepository.findByIdOrNull(id)
-//    }
-
     @GetMapping("/medium/{id}/url")
     fun getMfilePic(@PathVariable id: Int): String {
         return mediaService.url(id,RessType.PRIMARY)
+    }
+
+    @GetMapping("/medium/{id}/tn/url")
+    fun afa(@PathVariable id: Int): String {
+        return mediaService.url(id, RessType.TN)
     }
 
     @GetMapping("/medium/{id}/binary")
@@ -53,10 +47,6 @@ class BessourceRessource(
         return RedirectView( mediaService.url(id,RessType.PRIMARY))
     }
 
-    @GetMapping("/medium/{id}/tn/url")
-    fun afa(@PathVariable id: Int): String {
-        return mediaService.url(id, RessType.TN)
-    }
 
     /**
      * The file below the MAIN_FS location of [storageId] that the rest of the url names, as the bytes
@@ -112,21 +102,6 @@ class BessourceRessource(
             .body(FileSystemResource(file))
     }
 
-    /**
-     * The name asked for: what stands behind `/main/{storageId}/` in the url, decoded.
-     *
-     * Read off the request uri rather than off the matched pattern, since this application matches
-     * urls with the ant matcher, which hands the rest of a path to nobody. `requestURI` rather than
-     * `servletPath` or `pathInfo`, since which of those two holds the path is left to the container:
-     * the uri is the one that is the same either way. It is not decoded by the container either, so
-     * it is decoded here once.
-     *
-     * The context path is taken off first, so an application deployed below one serves the same urls.
-     *
-     * Blank for a url that carries nothing after the storage, and blank for one that cannot be decoded
-     * at all, e.g. a name ending in a `%`. Both answer nothing to look for rather than throwing, since a
-     * name is whatever the client wrote.
-     */
     private fun nameOf(storageId: Int, request: HttpServletRequest): String {
         val path = request.requestURI.removePrefix(request.contextPath)
         val name = path.substringAfter("/main/$storageId/", missingDelimiterValue = "")
@@ -138,8 +113,4 @@ class BessourceRessource(
         }
     }
 
-//    @GetMapping("/medium/{id}/image")
-//    fun getMediumPic(@PathVariable id: Int): String {
-//        return mediaService.urlByMediumId(id,RessType.PIC)
-//    }
 }

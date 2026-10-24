@@ -460,7 +460,7 @@ class MediaAdderTests {
         this.id = id
         name = "bilder-$id"
         uri = folder.absolutePath
-        locationType = LocationType.MAIN_FS.i
+        locationType = LocationType.MAIN_FS.idx
         inuse = 1
         this.storage = Storage()
     }
@@ -469,7 +469,7 @@ class MediaAdderTests {
         id = 1
         name = uri
         this.uri = uri
-        locationType = LocationType.MAIN_HTTP.i
+        locationType = LocationType.MAIN_HTTP.idx
         inuse = 1
         this.storage = Storage()
     }

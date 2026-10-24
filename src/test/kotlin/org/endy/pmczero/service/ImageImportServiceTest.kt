@@ -55,7 +55,7 @@ class ImageImportServiceTest {
             it.id = 1
             it.name = "pictures"
             it.uri = locationFolder.path
-            it.locationType = LocationType.MAIN_FS.i
+            it.locationType = LocationType.MAIN_FS.idx
             it.storage = Storage().also { storage -> storage.id = 5 }
         }
 
@@ -212,7 +212,7 @@ class ImageImportServiceTest {
 
     @Test
     fun `refuses a location that cannot hold files`() {
-        location.locationType = LocationType.MAIN_HTTP.i
+        location.locationType = LocationType.MAIN_HTTP.idx
         givenPage("https://example.org/a.jpg")
 
         val failure = assertThrows<NotAccessibleException> {

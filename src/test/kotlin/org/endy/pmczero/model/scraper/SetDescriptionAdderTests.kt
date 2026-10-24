@@ -183,7 +183,7 @@ class SetDescriptionAdderTests {
         id = 1
         name = "bilder"
         uri = File(System.getProperty("java.io.tmpdir"), "pmczero-description").absolutePath
-        locationType = LocationType.MAIN_FS.i
+        locationType = LocationType.MAIN_FS.idx
         inuse = 1
         this.storage = Storage()
     }

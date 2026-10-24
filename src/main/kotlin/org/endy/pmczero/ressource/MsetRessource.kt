@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/msets")
 class MsetRessource(
     val msetService: MsetService,
-    val scannerService: ScannerService,
     val locationService: LocationService,
     val thumbnailService: ThumbnailService
 ) {

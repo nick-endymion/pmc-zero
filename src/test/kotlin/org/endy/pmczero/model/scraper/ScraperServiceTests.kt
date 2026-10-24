@@ -494,7 +494,7 @@ class ScraperServiceTests {
         it.id = id
         it.name = "Bilder-$id"
         it.uri = folder.absolutePath
-        it.locationType = LocationType.MAIN_FS.i
+        it.locationType = LocationType.MAIN_FS.idx
         it.inuse = 1
         it.storage = Storage()
     }

@@ -742,7 +742,7 @@ class FileDownloaderTests {
     private fun givenLocation(uri: String, locationType: LocationType) = Location().apply {
         this.uri = uri
         name = uri
-        this.locationType = locationType.i
+        this.locationType = locationType.idx
         inuse = 1
         this.storage = Storage()
     }

@@ -10,7 +10,6 @@ import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.repository.StorageRepository
-import org.springframework.data.repository.findByIdOrNull
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -515,7 +514,7 @@ class MediaDeletionServiceTest {
     private fun location(uri: String, locationType: LocationType): Location = Location().apply {
         name = uri
         this.uri = uri
-        this.locationType = locationType.i
+        this.locationType = locationType.idx
         inuse = 1
     }
 

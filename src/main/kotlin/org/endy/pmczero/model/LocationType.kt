@@ -1,10 +1,10 @@
 package org.endy.pmczero.model
 
-enum class LocationType(val i: Int) {
+enum class LocationType(val idx: Int, val scheme: Scheme) {
 
-    MAIN_HTTP(1),
-    MAIN_FS(2),
-    TN_HTTP(3),
-    TN_FS(4)
+    MAIN_HTTP(1, Scheme.HTTP),
+    MAIN_FS(2, Scheme.FS),
+    TN_HTTP(3, Scheme.HTTP),
+    TN_FS(4, Scheme.FS)
 
 }

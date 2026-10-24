@@ -235,7 +235,7 @@ internal object ScanPath {
     }
 
     private fun Location.isFileSystem(): Boolean =
-        locationType == LocationType.MAIN_FS.i || locationType == LocationType.TN_FS.i
+        locationType == LocationType.MAIN_FS.idx || locationType == LocationType.TN_FS.idx
 
     /**
      * The part of [element] below the uri of [location], i.e.

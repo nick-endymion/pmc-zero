@@ -14,7 +14,6 @@ import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.to.ImageImportFailureTO
 import org.endy.pmczero.to.ImageImportTO
-import org.endy.pmczero.to.MediumTO
 import org.springframework.stereotype.Service
 import java.io.File
 import java.net.URLDecoder
@@ -222,7 +221,7 @@ class ImageImportService(
     private fun writableLocation(locationId: Int): Location {
         val location = locationService.findById(locationId)
 
-        if (location.locationType != LocationType.MAIN_FS.i)
+        if (location.locationType != LocationType.MAIN_FS.idx)
             throw NotAccessibleException(
                 "location $locationId is of type ${location.locationType} and so cannot receive " +
                     "downloaded files; a MAIN_FS location is needed"

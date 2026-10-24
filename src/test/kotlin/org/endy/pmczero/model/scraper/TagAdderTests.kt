@@ -234,7 +234,7 @@ class TagAdderTests {
         id = 1
         name = "bilder"
         uri = "C:/tmp/bilder"
-        locationType = LocationType.MAIN_FS.i
+        locationType = LocationType.MAIN_FS.idx
         inuse = 1
         this.storage = Storage()
     }

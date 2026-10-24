@@ -150,7 +150,7 @@ class FileDownloader : Worker() {
     private fun writableFolderOf(scanningKontext: ScanningKontext): File {
         val location = scanningKontext.location
 
-        if (location.locationType != LocationType.MAIN_FS.i && location.locationType != LocationType.TN_FS.i)
+        if (location.locationType != LocationType.MAIN_FS.idx && location.locationType != LocationType.TN_FS.idx)
             throw NotAccessibleException(
                 "location ${location.id} is of type ${location.locationType} and so cannot receive " +
                     "downloaded files; a file system location is needed"

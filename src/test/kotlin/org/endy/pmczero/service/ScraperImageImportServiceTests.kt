@@ -85,7 +85,7 @@ class ScraperImageImportServiceTests {
             it.id = 7
             it.name = "Bilder"
             it.uri = tempDir.absolutePath
-            it.locationType = LocationType.MAIN_FS.i
+            it.locationType = LocationType.MAIN_FS.idx
             it.inuse = 1
             it.storage = Storage().also { storage -> storage.id = 3 }
         }

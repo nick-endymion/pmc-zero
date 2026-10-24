@@ -609,7 +609,7 @@ class MsetServiceTest {
     ): Location = Location().apply {
         name = uri
         this.uri = uri
-        this.locationType = locationType.i
+        this.locationType = locationType.idx
         this.inuse = inuse
         this.extension = extension
     }

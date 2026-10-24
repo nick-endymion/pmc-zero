@@ -284,8 +284,8 @@ class BessourceFilesTests {
                 it.id = 1
                 it.name = "regal"
                 it.locations = listOfNotNull(
-                    location(main, LocationType.MAIN_FS.i, 1),
-                    tn?.let { location(it, LocationType.TN_FS.i, 2) }
+                    location(main, LocationType.MAIN_FS.idx, 1),
+                    tn?.let { location(it, LocationType.TN_FS.idx, 2) }
                 )
             }
         )
@@ -297,7 +297,7 @@ class BessourceFilesTests {
             Storage().also {
                 it.id = 1
                 it.name = "regal"
-                it.locations = listOf(location(unused, LocationType.MAIN_FS.i, 1).also { l -> l.inuse = 0 })
+                it.locations = listOf(location(unused, LocationType.MAIN_FS.idx, 1).also { l -> l.inuse = 0 })
             }
         )
     }
@@ -308,7 +308,7 @@ class BessourceFilesTests {
             Storage().also {
                 it.id = 1
                 it.name = "regal"
-                it.locations = listOf(location(tnFs, LocationType.TN_FS.i, 2))
+                it.locations = listOf(location(tnFs, LocationType.TN_FS.idx, 2))
             }
         )
     }

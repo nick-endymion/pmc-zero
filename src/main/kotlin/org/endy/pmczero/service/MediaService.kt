@@ -4,6 +4,7 @@ import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.RessType
+import org.endy.pmczero.model.Scheme
 import org.endy.pmczero.model.modern.Bessource
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.repository.BessourceRepository
@@ -76,10 +77,6 @@ class MediaService(
 
 //    -------------
 
-    fun findBesById(id: Int): Bessource {
-        return bessourceRepository.findByIdOrNull(id) ?: throw NotFoundException()
-    }
-
     fun url(id: Int, ressType: RessType): String {
         val medium = findById(id)
         return url(medium, ressType)
@@ -142,7 +139,7 @@ class MediaService(
             bessources.forEach { it.locationType = forcedLocationType }
 
         // only for TN, where a missing thumbnailed bessource is derived from the primary one
-        val provided = providePhysicalRessources(bessources, generateThumbnail = ressType == RessType.TN)
+        val provided = providePhysicalRessources(bessources, provideThumbnailsDynamically = ressType == RessType.TN)
             ?: return null
 
         return provided.firstOrNull { it.ressType == ressType.i }?.url
@@ -153,9 +150,9 @@ class MediaService(
      */
     private fun providePhysicalRessources(
         bessources: List<BessourceTO>,
-        generateThumbnail: Boolean
+        provideThumbnailsDynamically: Boolean = true
     ): List<BessourceTO>? = try {
-        locationService.providePhysicalRessources(bessources, "HTTP", generateThumbnail)
+        locationService.providePhysicalRessources(bessources, provideThumbnailsDynamically = provideThumbnailsDynamically)
     } catch (e: NotFoundException) {  // missing storage or location
         null
     }
@@ -186,7 +183,7 @@ class MediaService(
 
         if (bessources.none { it.ressType == RessType.PRIMARY.i }) return null
 
-        val provided = providePhysicalRessources(bessources, generateThumbnail = true) ?: return null
+        val provided = providePhysicalRessources(bessources) ?: return null
 
         val primaryUrl = provided.firstOrNull { it.ressType == RessType.PRIMARY.i }?.url
         val tnUrl = provided.firstOrNull { it.ressType == RessType.TN.i }?.url

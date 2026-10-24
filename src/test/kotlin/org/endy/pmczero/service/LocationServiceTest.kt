@@ -6,6 +6,7 @@ import org.endy.pmczero.mapper.toTOwithMedia
 import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.Mtype
 import org.endy.pmczero.model.RessType
+import org.endy.pmczero.model.Scheme
 import org.endy.pmczero.model.modern.Location
 import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.model.modern.Mset
@@ -81,7 +82,7 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals(LocationType.MAIN_HTTP, result[0].locationType)
         assertEquals("http://example.org/main/doc.pdf", result[0].url)
@@ -92,7 +93,7 @@ class LocationServiceTest {
         givenStorage(httpStorage())
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(tn), Scheme.HTTP)
 
         assertEquals(1, result.size)
         assertEquals(LocationType.TN_HTTP, result[0].locationType)
@@ -105,7 +106,7 @@ class LocationServiceTest {
         val primary = bessource("a.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("a_thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals(2, result.size)
         assertEquals(listOf("a.pdf", "a_thumb.jpg"), result.map { it.name })
@@ -128,7 +129,7 @@ class LocationServiceTest {
         // PIC bessource: location type is given, so ressType is never inspected
         val pic = bessource("p.jpg", RessType.PIC, storageId = 1, locationType = LocationType.TN_HTTP)
 
-        val result = service.providePhysicalRessources(listOf(tn, pic), "HTTP")
+        val result = service.providePhysicalRessources(listOf(tn, pic), Scheme.HTTP)
 
         assertEquals(LocationType.TN_HTTP, result[1].locationType)
         assertEquals("http://example.org/tn/p.jpg", result[1].url)
@@ -140,21 +141,21 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         verifyNoInteractions(locationRepository)
     }
 
     // -------------------------------------------------------------------------------------
-    // FILE representation
+    // FS representation
     // -------------------------------------------------------------------------------------
 
     @Test
-    fun `FILE assigns TN_FS to a thumbnailed bessource without location type`() {
+    fun `FS assigns TN_FS to a thumbnailed bessource without location type`() {
         givenStorage(fileStorage())
         val tn = bessource("thumb.png", RessType.TN, storageId = 2)
 
-        val result = service.providePhysicalRessources(listOf(tn), "FILE")
+        val result = service.providePhysicalRessources(listOf(tn), Scheme.FS)
 
         assertEquals(1, result.size)
         assertEquals(LocationType.TN_FS, result[0].locationType)
@@ -162,33 +163,33 @@ class LocationServiceTest {
     }
 
     @Test
-    fun `FILE assigns MAIN_FS to a primary bessource without location type`() {
+    fun `FS assigns MAIN_FS to a primary bessource without location type`() {
         givenStorage(fileStorage())
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 2)
         val tn = bessource("thumb.png", RessType.TN, storageId = 2)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "FILE")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.FS)
 
         assertEquals(LocationType.MAIN_FS, result[0].locationType)
         assertEquals("/srv/media/doc.pdf", result[0].url)
     }
 
     @Test
-    fun `FILE resolves an explicitly assigned TN_FS location`() {
+    fun `FS resolves an explicitly assigned TN_FS location`() {
         givenStorage(fileStorage())
         val tn = bessource("thumb.png", RessType.TN, storageId = 2, locationType = LocationType.TN_FS)
 
-        val result = service.providePhysicalRessources(listOf(tn), "FILE")
+        val result = service.providePhysicalRessources(listOf(tn), Scheme.FS)
 
         assertEquals("/srv/media-tn/thumb.png", result[0].url)
     }
 
     @Test
-    fun `FILE resolves a primary bessource with an explicitly assigned MAIN_FS location`() {
+    fun `FS resolves a primary bessource with an explicitly assigned MAIN_FS location`() {
         givenStorage(fileStorage())
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 2, locationType = LocationType.MAIN_FS)
 
-        val result = service.providePhysicalRessources(listOf(primary), "FILE")
+        val result = service.providePhysicalRessources(listOf(primary), Scheme.FS)
 
         // no TN in the input, so one is generated and resolved against the TN_FS location
         assertEquals(2, result.size)
@@ -201,31 +202,13 @@ class LocationServiceTest {
     // -------------------------------------------------------------------------------------
 
     @Test
-    fun `throws NotFoundException for an unknown representation type`() {
-        val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
-
-        assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary), "FTP")
-        }
-    }
-
-    @Test
-    fun `representation type is matched case sensitively`() {
-        val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
-
-        assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary), "http")
-        }
-    }
-
-    @Test
     fun `throws NotFoundException for a resource type that has no location mapping`() {
         givenStorage(httpStorage())
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val pic = bessource("p.jpg", RessType.PIC, storageId = 1)
 
         assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary, pic), "HTTP")
+            service.providePhysicalRessources(listOf(primary, pic), Scheme.HTTP)
         }
     }
 
@@ -236,7 +219,7 @@ class LocationServiceTest {
         val unknown = bessource("x.bin", null, storageId = 1)
 
         assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary, unknown), "HTTP")
+            service.providePhysicalRessources(listOf(primary, unknown), Scheme.HTTP)
         }
     }
 
@@ -250,7 +233,7 @@ class LocationServiceTest {
         val primary = bessource("a.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("a_thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals(2, result.size)
         assertEquals(1, result.count { it.ressType == RessType.TN.i })
@@ -261,7 +244,7 @@ class LocationServiceTest {
         givenStorage(httpStorage())
         val primary = bessource("a.pdf", RessType.PRIMARY, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary), Scheme.HTTP)
 
         assertEquals(2, result.size)
         assertEquals(RessType.TN.i, result[1].ressType)
@@ -279,7 +262,7 @@ class LocationServiceTest {
         val primary = bessource("a.pdf", RessType.PRIMARY, storageId = 1)
         val pic = bessource("a.jpg", RessType.PIC, storageId = 1, locationType = LocationType.MAIN_HTTP)
 
-        val result = service.providePhysicalRessources(listOf(primary, pic), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, pic), Scheme.HTTP)
 
         assertEquals(listOf(RessType.PRIMARY.i, RessType.PIC.i, RessType.TN.i), result.map { it.ressType })
         assertEquals(
@@ -300,7 +283,7 @@ class LocationServiceTest {
             location("http://storage-2/tn", LocationType.TN_HTTP)))
         val primary = bessource("a.pdf", RessType.PRIMARY, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary), Scheme.HTTP)
 
         assertEquals(1, result[1].storageId)
         assertEquals("http://storage-1/tn/a.pdf", result[1].url)
@@ -319,7 +302,7 @@ class LocationServiceTest {
         val second = bessource("b.pdf", RessType.PRIMARY, storageId = 2)
         val tn = bessource("a_thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(first, second, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(first, second, tn), Scheme.HTTP)
 
         assertEquals(
             listOf(
@@ -345,7 +328,7 @@ class LocationServiceTest {
         val tn = bessource("a_thumb.jpg", RessType.TN, storageId = 42)
 
         assertThrows<NotFoundException> {
-            service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+            service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
         }
     }
 
@@ -355,7 +338,7 @@ class LocationServiceTest {
         givenStorage(storage(1, location("http://example.org/main", LocationType.MAIN_HTTP)))
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(tn), Scheme.HTTP)
 
         // a null url rather than an exception: the bessource is still a legitimate one, only its
         // location is not configured, so a caller reads the null and leaves it out
@@ -376,7 +359,7 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals("http://example.org/main/doc.pdf", result[0].url)
     }
@@ -387,7 +370,7 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertNull(result[0].url)
         assertNull(result[1].url)
@@ -398,7 +381,7 @@ class LocationServiceTest {
         givenStorage(httpStorage())
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = null, locationType = LocationType.MAIN_HTTP)
 
-        val result = service.providePhysicalRessources(listOf(primary), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary), Scheme.HTTP)
 
         assertNull(result[0].url)
         // the location type is still derived, only the url needs the storage
@@ -411,14 +394,14 @@ class LocationServiceTest {
         val pic = bessource("p.jpg", RessType.PIC, storageId = 1, locationType = LocationType.MAIN_HTTP)
 
         assertThrows<NoSuchElementException> {
-            service.providePhysicalRessources(listOf(pic), "HTTP")
+            service.providePhysicalRessources(listOf(pic), Scheme.HTTP)
         }
     }
 
     @Test
     fun `throws NoSuchElementException for an empty list of bessources`() {
         assertThrows<NoSuchElementException> {
-            service.providePhysicalRessources(emptyList(), "HTTP")
+            service.providePhysicalRessources(emptyList(), Scheme.HTTP)
         }
     }
 
@@ -432,7 +415,7 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals("http://example.org/main/doc.jpg", result[0].url)
     }
@@ -443,7 +426,7 @@ class LocationServiceTest {
         val primary = bessource("doc", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals("http://example.org/main/doc.jpg", result[0].url)
     }
@@ -454,7 +437,7 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertEquals("http://example.org/main/doc.pdf", result[0].url)
     }
@@ -484,7 +467,7 @@ class LocationServiceTest {
         val primary = bessource("doc.pdf", RessType.PRIMARY, storageId = 1)
         val tn = bessource("thumb.jpg", RessType.TN, storageId = 1)
 
-        val result = service.providePhysicalRessources(listOf(primary, tn), "HTTP")
+        val result = service.providePhysicalRessources(listOf(primary, tn), Scheme.HTTP)
 
         assertSame(primary, result[0])
         assertSame(tn, result[1])
@@ -499,8 +482,8 @@ class LocationServiceTest {
         val tn = bessource("a_thumb.jpg", RessType.TN, storageId = 1)
         val input = listOf(primary, tn)
 
-        val first = service.providePhysicalRessources(input, "HTTP")
-        val second = service.providePhysicalRessources(input, "HTTP")
+        val first = service.providePhysicalRessources(input, Scheme.HTTP)
+        val second = service.providePhysicalRessources(input, Scheme.HTTP)
 
         assertEquals(first.map { it.url }, second.map { it.url })
         assertEquals(first.map { it.locationType }, second.map { it.locationType })
@@ -513,7 +496,7 @@ class LocationServiceTest {
         val primary = bessource("a.pdf", RessType.PRIMARY, storageId = 1)
         val input = listOf(primary)
 
-        val result = service.providePhysicalRessources(input, "HTTP")
+        val result = service.providePhysicalRessources(input, Scheme.HTTP)
 
         assertEquals(1, input.size)
         assertEquals(2, result.size)
@@ -1779,7 +1762,7 @@ class LocationServiceTest {
     ): Location = Location().apply {
         name = uri
         this.uri = uri
-        this.locationType = locationType.i
+        this.locationType = locationType.idx
         this.inuse = inuse
         this.extension = extension
     }
@@ -1801,7 +1784,7 @@ class LocationServiceTest {
             id = nextLocationId++
             name = uri
             this.uri = uri
-            this.locationType = locationType.i
+            this.locationType = locationType.idx
             inuse = 1
         }.also { whenever(locationRepository.findById(it.id!!)).thenReturn(Optional.of(it)) }
 

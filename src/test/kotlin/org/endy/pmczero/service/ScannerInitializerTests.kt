@@ -24,13 +24,11 @@ import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.atLeastOnce
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -1112,7 +1110,7 @@ class ScannerInitializerTests {
         id = 1
         name = "bilder"
         uri = folder.absolutePath
-        locationType = LocationType.MAIN_FS.i
+        locationType = LocationType.MAIN_FS.idx
         inuse = 1
         this.storage = Storage()
     }
