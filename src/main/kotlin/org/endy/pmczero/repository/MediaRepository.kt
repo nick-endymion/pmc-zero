@@ -33,4 +33,18 @@ interface MediaRepository : CrudRepository<Medium, Int> {
     )
     fun findAllMarkedOfMset(@Param("msetId") msetId: Int): List<Medium>
 
+    /**
+     * the media carrying [ranking], in id order
+     *
+     * Ranked media across all sets, since a ranking is a number a caller put on a row and not
+     * something that is unique within a set. Ordered by id so two calls that see the same rows
+     * answer them in the same order.
+     */
+    @Query(
+        "select medium from Medium medium " +
+            "where medium.ranking = :ranking " +
+            "order by medium.id"
+    )
+    fun findByRanking(@Param("ranking") ranking: Int): List<Medium>
+
 }

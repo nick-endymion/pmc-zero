@@ -32,6 +32,21 @@ class MediumRessource(
     }
 
     /**
+     * The media carrying [ranking], in id order, across all sets.
+     *
+     * A ranking is a number a caller put on a row, see [Medium.ranking], so two media of different
+     * sets may carry the same one and the answer is a list rather than a single medium. An unused
+     * ranking is answered with an empty list rather than a 404.
+     *
+     * Each medium carries its bessources with location type and url filled in, like the media of a
+     * set do, so a caller can act on the files without asking for every medium on its own.
+     */
+    @GetMapping
+    fun getMediaByRanking(@RequestParam(name = "ranking") ranking: Int): List<MediumTO> {
+        return mediaService.findByRanking(ranking).map { mediumTO(it) }
+    }
+
+    /**
      * The medium as the api hands it out, with the urls of its files worked out.
      *
      * The urls come from [MediaService.ressourceUrls], the one place that knows how a
@@ -46,10 +61,12 @@ class MediumRessource(
      */
     private fun mediumTO(medium: Medium): MediumTO {
         val urls = mediaService.ressourceUrls(medium)
+        val to = medium.toTO()
 
-        return medium.toTO().copy(
+        return to.copy(
             primaryUrl = urls?.primaryUrl,
-            tnUrl = urls?.tnUrl
+            tnUrl = urls?.tnUrl,
+            bessources = mediaService.providePhysicalBessources(to.bessources)
         )
     }
 

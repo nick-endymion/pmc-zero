@@ -3,10 +3,14 @@ package org.endy.pmczero.ressource
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.mapper.toTOwithMedia
+import org.endy.pmczero.model.LocationType
+import org.endy.pmczero.model.RessType
+import org.endy.pmczero.model.Scheme
 import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.ScannerService
 import org.endy.pmczero.service.ThumbnailService
+import org.endy.pmczero.to.BessourceTO
 import org.endy.pmczero.to.MsetDeletionTO
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.MsetThumbnailsTO
@@ -57,9 +61,35 @@ class MsetRessource(
         return msetService.findBelow(id).toTO()
     }
 
+    /**
+     * The set with its media, each carrying the bessources of the medium.
+     *
+     * Every bessource is handed out with its [BessourceTO.locationType] and [BessourceTO.url] filled
+     * in, resolved the way [LocationService.providePhysicalRessources] resolves them: PRIMARY against
+     * the main location, TN against the thumbnailed one, and the remaining ressource types (PIC, URL,
+     * FOLDER) against the main location, which is where they are stored. A bessource whose location is
+     * missing or not in use keeps a null url rather than failing the answer.
+     */
     @GetMapping("/{id}/media")
     fun getMsetWithMedia(@PathVariable id: Int): MsetTO {
-        return msetService.findById(id).toTOwithMedia(true)
+        val mset = msetService.findById(id).toTOwithMedia(true)
+
+        mset.media.orEmpty().forEach { medium ->
+            val bessources = medium.bessources
+
+            // the remaining ressource types have no location type of their own, they live in the
+            // main location, the same way MediaService resolves them
+            bessources.filter { it.ressType != RessType.PRIMARY.i && it.ressType != RessType.TN.i }
+                .forEach { it.locationType = LocationType.MAIN_HTTP }
+
+            medium.bessources = locationService.providePhysicalRessources(
+                bessources,
+                Scheme.HTTP,
+                provideThumbnailsDynamically = true
+            )
+        }
+
+        return mset
     }
 
     /**

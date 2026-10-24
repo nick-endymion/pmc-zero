@@ -188,6 +188,8 @@ class MediaService(
         val primaryUrl = provided.firstOrNull { it.ressType == RessType.PRIMARY.i }?.url
         val tnUrl = provided.firstOrNull { it.ressType == RessType.TN.i }?.url
 
+        if (primaryUrl == null || tnUrl == null) return null
+
         // mtype passed on so a caller can tell what kind of medium this is without reading the
         // extension out of the name. Null for a row written before the column said anything.
         // ranking likewise, so the viewer can show the order the medium already stands in rather
@@ -203,6 +205,46 @@ class MediaService(
 
     fun mediumById(id: Int): Medium {
         return mediaRepository.findByIdOrNull(id) ?: throw NotFoundException()
+    }
+
+    /**
+     * The media carrying [ranking], in id order, across all sets.
+     *
+     * See [org.endy.pmczero.model.modern.Medium.ranking]: a ranking is a number a caller put on a
+     * row, so two media of different sets may share one.
+     */
+    fun findByRanking(ranking: Int): List<Medium> = mediaRepository.findByRanking(ranking)
+
+    /**
+     * [bessources] with their location type and url filled in, the way
+     * [LocationService.providePhysicalRessources] resolves them, and completed with a derived
+     * thumbnailed bessource when the medium has a primary one but no stored thumbnail.
+     *
+     * A thumbnail is derived from the primary bessource exactly as the media of a set are served, so
+     * a caller sees the same bessources whichever endpoint it asks. The remaining ressource types
+     * (PIC, URL, FOLDER) have no location type of their own and are resolved against the main
+     * location, the same way [url] resolves them.
+     *
+     * A bessource whose storage or location is missing keeps a null url instead of failing the whole
+     * answer, so a medium that cannot be fully resolved is still handed out.
+     */
+    fun providePhysicalBessources(bessources: List<BessourceTO>): List<BessourceTO> {
+        bessources.filter { it.ressType != RessType.PRIMARY.i && it.ressType != RessType.TN.i }
+            .forEach { it.locationType = LocationType.MAIN_HTTP }
+
+        // only a primary bessource has something to derive a thumbnail from
+        val deriveThumbnail = bessources.any { it.ressType == RessType.PRIMARY.i } &&
+                bessources.none { it.ressType == RessType.TN.i }
+
+        return try {
+            locationService.providePhysicalRessources(
+                bessources,
+                Scheme.HTTP,
+                provideThumbnailsDynamically = deriveThumbnail
+            )
+        } catch (e: NotFoundException) {  // missing storage
+            bessources
+        }
     }
 
     fun urlByMediumId(id: Int, type: RessType): String {
