@@ -2,14 +2,16 @@ package org.endy.pmczero.ressource
 
 import org.endy.pmczero.exception.NotAccessibleException
 import org.endy.pmczero.exception.NotFoundException
+import org.endy.pmczero.model.LocationType
 import org.endy.pmczero.model.modern.Storage
 import org.endy.pmczero.service.DuplicateBessourceService
 import org.endy.pmczero.service.FileInfoService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
-import org.endy.pmczero.to.DuplicateNameBessourceTO
+import org.endy.pmczero.to.BessourceTO
 import org.endy.pmczero.to.FileInfoFailureTO
 import org.endy.pmczero.to.FileInfoRunTO
+import org.endy.pmczero.to.MediumTO
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyNoInteractions
@@ -124,16 +126,13 @@ class StorageRessourceTests {
     // -------------------------------------------------------------------------------------
 
     /**
-     * Both members of a collision, since which row is kept is the caller's decision and a list that
-     * named only one of them would not let it be made.
+     * The media behind the collision, each with its bessources, since a medium is what the caller
+     * decides about and the bessources are what says which file is in conflict.
      */
     @Test
-    fun `answers both bessources of a name two of them hold`() {
+    fun `answers the media behind the duplicate bessources with their bessources`() {
         whenever(duplicateBessourceService.duplicatesIn(1)).thenReturn(
-            listOf(
-                duplicateOf(11, "2020/a.jpg", 11),
-                duplicateOf(12, "2020/a.jpg", 12)
-            )
+            listOf(duplicateOf(11, "2020/a.jpg"))
         )
 
         mvc.perform(get("/api/storages/1/duplicate-bessources"))
@@ -142,10 +141,9 @@ class StorageRessourceTests {
             .andExpect(jsonPath("$").isArray)
             .andExpect(jsonPath("$[0].id").value(11))
             .andExpect(jsonPath("$[0].name").value("2020/a.jpg"))
-            .andExpect(jsonPath("$[0].mediumId").value(11))
-            .andExpect(jsonPath("$[0].duplicates").value(2))
-            .andExpect(jsonPath("$[1].id").value(12))
-            .andExpect(jsonPath("$[1].duplicates").value(2))
+            .andExpect(jsonPath("$[0].bessources[0].name").value("2020/a.jpg"))
+            .andExpect(jsonPath("$[0].bessources[0].locationType").value("MAIN_HTTP"))
+            .andExpect(jsonPath("$[0].bessources[0].url").value("http://example.org/main/2020/a.jpg"))
     }
 
     /**
@@ -180,13 +178,18 @@ class StorageRessourceTests {
     }
 
     /** one entry as the service hands it out, so this only says what the url does with it */
-    private fun duplicateOf(id: Int, name: String, mediumId: Int) = DuplicateNameBessourceTO(
-        id = id,
+    private fun duplicateOf(mediumId: Int, name: String) = MediumTO(
+        id = mediumId,
         name = name,
-        storageId = 1,
-        ressType = 0,
-        mediumId = mediumId,
-        created_at = null,
-        duplicates = 2
+        bessources = listOf(
+            BessourceTO(
+                id = 1,
+                name = name,
+                ressType = 0,
+                storageId = 1,
+                locationType = LocationType.MAIN_HTTP,
+                url = "http://example.org/main/$name"
+            )
+        )
     )
 }

@@ -117,28 +117,6 @@ fun Bessource.toTO(withImage: Boolean = false): BessourceTO {
     )
 }
 
-/**
- * The bessource as one member of a name collision, see [DuplicateNameBessourceTO].
- *
- * [duplicates] is passed in rather than worked out here: it is the size of the group, which is a
- * property of the whole storage and not of one row, so the caller that asked for the group is the
- * one that has it.
- *
- * Reads `storage.id`, which is why the medium is fetched along with the bessource rather than left
- * lazy, see [org.endy.pmczero.repository.BessourceRepository.findDuplicatesOfStorage].
- */
-fun Bessource.toDuplicateNameTO(duplicates: Int): DuplicateNameBessourceTO {
-    return DuplicateNameBessourceTO(
-        id = id,
-        name = name,
-        storageId = storage.id,
-        ressType = ressType,
-        mediumId = medium?.id,
-        created_at = created_at,
-        duplicates = duplicates
-    )
-}
-
 fun Bookmark.toTO(): BookmarkTO {
     return BookmarkTO(
         id = id,

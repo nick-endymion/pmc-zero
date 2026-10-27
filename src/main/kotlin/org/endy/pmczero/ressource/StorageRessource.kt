@@ -6,8 +6,8 @@ import org.endy.pmczero.service.DuplicateBessourceService
 import org.endy.pmczero.service.FileInfoService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
-import org.endy.pmczero.to.DuplicateNameBessourceTO
 import org.endy.pmczero.to.FileInfoRunTO
+import org.endy.pmczero.to.MediumTO
 import org.endy.pmczero.to.MsetTO
 import org.endy.pmczero.to.StorageTO
 import org.springframework.web.bind.annotation.*
@@ -52,12 +52,14 @@ class StorageRessource(
     }
 
     /**
-     * The bessources of this storage that name the same file twice, as one entry per row.
+     * The media of this storage that hold a bessource naming the same file as another bessource of
+     * the same storage, once per medium.
      *
      * Two rows of the same name on one storage are a collision: the file they point at is the same,
      * so only one of them can be the record of it. Which one is a decision about the medium behind
-     * it, which is why every member of a group is answered rather than one of them being picked
-     * here, and why [DuplicateNameBessourceTO.mediumId] is on each entry.
+     * it, which is why the media are answered rather than one row being picked here. Every medium
+     * comes with all of its bessources, with location type and url filled in, so a caller can see
+     * the whole row behind the collision without asking for it on its own.
      *
      * Its own url rather than a query on this one, since the answer is bounded by the storage rather
      * than by the storage and what else a caller asks for at the same time.
@@ -77,7 +79,7 @@ class StorageRessource(
      * duplicates.
      */
     @GetMapping("/{id}/duplicate-bessources")
-    fun getDuplicateBessources(@PathVariable id: Int): List<DuplicateNameBessourceTO> {
+    fun getDuplicateBessources(@PathVariable id: Int): List<MediumTO> {
         return duplicateBessourceService.duplicatesIn(id)
     }
 

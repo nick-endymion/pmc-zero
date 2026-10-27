@@ -10,6 +10,7 @@ import org.endy.pmczero.model.modern.Medium
 import org.endy.pmczero.repository.BessourceRepository
 import org.endy.pmczero.repository.MediaRepository
 import org.endy.pmczero.to.BessourceTO
+import org.endy.pmczero.to.MediumTO
 import org.endy.pmczero.to.RessourceUrlsTO
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
@@ -214,6 +215,24 @@ class MediaService(
      * row, so two media of different sets may share one.
      */
     fun findByRanking(ranking: Int): List<Medium> = mediaRepository.findByRanking(ranking)
+
+    /**
+     * The medium as the api hands it out, with the urls of its files and all its bessources filled in.
+     *
+     * A medium whose urls cannot be worked out is still answered, with null urls rather than as an
+     * error: the medium exists and the caller asked about it, and saying so with both urls null leaves
+     * it to show what it can, where a failure here would hide a row that is there.
+     */
+    fun mediumTO(medium: Medium): MediumTO {
+        val urls = ressourceUrls(medium)
+        val to = medium.toTO()
+
+        return to.copy(
+            primaryUrl = urls?.primaryUrl,
+            tnUrl = urls?.tnUrl,
+            bessources = providePhysicalBessources(to.bessources)
+        )
+    }
 
     /**
      * [bessources] with their location type and url filled in, the way
