@@ -11,6 +11,6 @@ class DomLastElememenParser(
     val attribute: String
 ) : Parser() {
 
-    override fun findElements(text: String, baseUri: String): List<String> =
-        DomParser(regex, tag, attribute).elementsIn(text, baseUri).takeLast(1)
+    override fun findElements(text: List<String>, baseUri: String): List<String> =
+        DomParser(regex, tag, attribute).elementsIn(text.first(), baseUri).takeLast(1)
 }

@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 @SerialName("regex")
 class RegexParser(val regex: String) : Parser() {
 
-    override fun findElements(text: String, baseUri: String): List<String> {
-        val result = regex.toRegex().findAll(text)
+    override fun findElements(text: List<String>, baseUri: String): List<String> {
+        val result = regex.toRegex().findAll(text.first())
         return result.map {
             it.groupValues[1]
         }.filter { it != "" }.toList()

@@ -13,6 +13,9 @@ import kotlinx.serialization.Serializable
  * a link to each. [DomParser] and [RegexParser] can only answer what is written down; this answers
  * the urls that are not, which is why it takes a number and not a regex.
  *
+ * The text it is handed is the first of the list every [Parser] is handed, and the answers come out
+ * of that one, the same reading the parsers of this package do.
+ *
  * The first answer is [text] as it is, and that is why [n] counts all of them and not the numbered
  * ones: `NumberedParser(1)` is the one answer a [PassThroughParser] gives, and `NumberedParser(5)`
  * is `text` plus four numbered behind it. An [n] of 0 or less answers nothing, which is what
@@ -35,6 +38,6 @@ import kotlinx.serialization.Serializable
 @SerialName("numbered")
 class NumberedParser(val n: Int) : Parser() {
 
-    override fun findElements(text: String, baseUri: String): List<String> =
-        (0 until n).map { if (it == 0) text else "$text#$it" }
+    override fun findElements(text: List<String>, baseUri: String): List<String> =
+        (0 until n).map { if (it == 0) text.first() else "${text.first()}#$it" }
 }

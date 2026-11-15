@@ -12,7 +12,7 @@ class ParserTests {
         val text = "<html><title>TEST</title></html>"
         val domParser = DomParser("(.*)", "title", "")
 
-        val elements = domParser.getElements(text, "http://test.com")
+        val elements = domParser.getElements(listOf(text), "http://test.com")
 
         assertEquals(1, elements.size)
         assertEquals("TEST", elements[0])
@@ -25,7 +25,7 @@ class ParserTests {
 
         val domParser = DomParser("(.*)", "a[href]", "abs:href")
 
-        val elements = domParser.getElements(text, "http://test.com/afad/aaa/")
+        val elements = domParser.getElements(listOf(text), "http://test.com/afad/aaa/")
 
         assertEquals(1, elements.size)
         assertEquals("http://test.com/afad/aaa/where", elements[0])
@@ -43,7 +43,7 @@ class ParserTests {
         """.trimIndent()
 
         val elements = DomParser("(.*)", "a", "abs:href")
-            .getElements(text, "http://test.com/")
+            .getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("http://test.com/one", "http://test.com/two", "http://test.com/three"), elements)
     }
@@ -59,7 +59,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomParser("(.*\\.jpg)", "img", "src").getElements(text, "http://test.com/")
+        val elements = DomParser("(.*\\.jpg)", "img", "src").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("cat.jpg"), elements)
     }
@@ -71,7 +71,7 @@ class ParserTests {
         // caller wanting only real urls has to ask for a non-empty match.
         val text = "<html><body><a href='a.html'>with</a><a>without</a></body></html>"
 
-        val elements = DomParser("(.+)", "a", "href").getElements(text, "http://test.com/")
+        val elements = DomParser("(.+)", "a", "href").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("a.html"), elements)
     }
@@ -86,7 +86,7 @@ class ParserTests {
         val text = """<html><a rel="history" href="#15"><img src="x.jpg"></a></html>"""
 
         val elements = DomParser("(.*)", "a[href]", "abs:href")
-            .getElements(text, "http://example.org/user/12345/index.php")
+            .getElements(listOf(text), "http://example.org/user/12345/index.php")
 
         assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
     }
@@ -101,7 +101,7 @@ class ParserTests {
         val text = """<html><a rel="history" href="#15"><img src="x.jpg"></a></html>"""
 
         val elements = DomParser("(.*)", "a[href]", "href")
-            .getElements(text, "http://example.org/user/12345/index.php")
+            .getElements(listOf(text), "http://example.org/user/12345/index.php")
 
         assertEquals(listOf("#15"), elements)
     }
@@ -122,7 +122,7 @@ class ParserTests {
         """.trimIndent()
 
         val elements = DomParser("(.*)", "a[href]:last-child", "abs:href")
-            .getElements(text, "http://example.org/start.html")
+            .getElements(listOf(text), "http://example.org/start.html")
 
         assertEquals(
             listOf(
@@ -153,7 +153,7 @@ class ParserTests {
         """.trimIndent()
 
         val elements = DomParser("(.*)", "a.expp[rel=history]:last-child", "abs:href")
-            .getElements(text, "http://example.org/user/12345/index.php")
+            .getElements(listOf(text), "http://example.org/user/12345/index.php")
 
         assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
     }
@@ -173,9 +173,9 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val last = DomLastElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+        val last = DomLastElememenParser("(.*)", "a[href]", "abs:href").getElements(listOf(text), "http://example.org/")
 
-        val all = DomParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+        val all = DomParser("(.*)", "a[href]", "abs:href").getElements(listOf(text), "http://example.org/")
 
         assertEquals(listOf("http://example.org/three.html"), last)
         assertEquals(all.last(), last.single(), "the last of what the DomParser answered")
@@ -199,7 +199,7 @@ class ParserTests {
         """.trimIndent()
 
         val elements = DomLastElememenParser("(.*)", "a[href]", "abs:href")
-            .getElements(text, "http://example.org/")
+            .getElements(listOf(text), "http://example.org/")
 
         assertEquals(listOf("http://example.org/kontakt.html"), elements)
     }
@@ -216,7 +216,7 @@ class ParserTests {
         """.trimIndent()
 
         val elements = DomLastElememenParser("(.*)", "a.expp[rel=history]", "abs:href")
-            .getElements(text, "http://example.org/user/12345/index.php")
+            .getElements(listOf(text), "http://example.org/user/12345/index.php")
 
         assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
     }
@@ -234,7 +234,7 @@ class ParserTests {
         """.trimIndent()
 
         val elements = DomLastElememenParser("(.+\\.jpg)", "a[href]", "abs:href")
-            .getElements(text, "http://example.org/")
+            .getElements(listOf(text), "http://example.org/")
 
         assertEquals(listOf("http://example.org/three.jpg"), elements)
     }
@@ -243,7 +243,7 @@ class ParserTests {
     fun `DomElememenParser answers nothing from a page without a match`() {
 
         val elements = DomLastElememenParser("(.*)", "img[src]", "abs:src")
-            .getElements("<html><body>no images</body></html>", "http://example.org/")
+            .getElements(listOf("<html><body>no images</body></html>"), "http://example.org/")
 
         assertTrue(elements.isEmpty())
     }
@@ -254,7 +254,7 @@ class ParserTests {
 
         val text = """<html><body><a href="/only.html">Only</a></body></html>"""
 
-        val elements = DomLastElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+        val elements = DomLastElememenParser("(.*)", "a[href]", "abs:href").getElements(listOf(text), "http://example.org/")
 
         assertEquals(listOf("http://example.org/only.html"), elements)
     }
@@ -262,7 +262,7 @@ class ParserTests {
     @Test
     fun `DomParser returns nothing when the tag is absent`() {
 
-        val elements = DomParser("(.*)", "img", "src").getElements("<html><body>no images</body></html>", "http://test.com/")
+        val elements = DomParser("(.*)", "img", "src").getElements(listOf("<html><body>no images</body></html>"), "http://test.com/")
 
         assertTrue(elements.isEmpty())
     }
@@ -272,7 +272,7 @@ class ParserTests {
 
         val text = "<html><body><p>  hello \n\n  world  </p></body></html>"
 
-        val elements = DomParser("(.*)", "p", "").getElements(text, "http://test.com/")
+        val elements = DomParser("(.*)", "p", "").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("hello world"), elements)
     }
@@ -282,7 +282,7 @@ class ParserTests {
 
         val text = """<img src="a.png"><img src="b.png">"""
 
-        val elements = RegexParser("""src="(.*?)"""").getElements(text, "http://test.com/")
+        val elements = RegexParser("""src="(.*?)"""").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("a.png", "b.png"), elements)
     }
@@ -290,7 +290,7 @@ class ParserTests {
     @Test
     fun `RegexParser returns nothing when the pattern does not occur`() {
 
-        val elements = RegexParser("""src="(.*?)"""").getElements("<html>plain</html>", "http://test.com/")
+        val elements = RegexParser("""src="(.*?)"""").getElements(listOf("<html>plain</html>"), "http://test.com/")
 
         assertTrue(elements.isEmpty())
     }
@@ -300,7 +300,7 @@ class ParserTests {
 
         val text = "<html><body>anything goes</body></html>"
 
-        val elements = PassThroughParser().getElements(text, "http://test.com/")
+        val elements = PassThroughParser().getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf(text), elements)
     }
@@ -311,8 +311,8 @@ class ParserTests {
         val text = "<html><body><a href='x.html'>link</a></body></html>"
         val baseUri = "http://test.com/"
 
-        assertEquals(listOf("x.html"), RegexParser("""href='(.*?)'""").getElements(text, baseUri))
-        assertEquals(listOf(text), PassThroughParser().getElements(text, baseUri))
+        assertEquals(listOf("x.html"), RegexParser("""href='(.*?)'""").getElements(listOf(text), baseUri))
+        assertEquals(listOf(text), PassThroughParser().getElements(listOf(text), baseUri))
     }
 
     // -------------------------------------------------------------------------------------
@@ -332,7 +332,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomParser("(.+)", "img", "abs:src").getElements(text, "http://test.com/")
+        val elements = DomParser("(.+)", "img", "abs:src").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("http://test.com/bilder/a.jpg"), elements)
     }
@@ -349,7 +349,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomParser("(.*)", "a", "abs:href").getElements(text, "http://test.com/")
+        val elements = DomParser("(.*)", "a", "abs:href").getElements(listOf(text), "http://test.com/")
 
         assertEquals(
             listOf("http://test.com/one", "http://test.com/two", "http://test.com/three"),
@@ -367,7 +367,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomParser("(.+)", ".caption", "").getElements(text, "http://test.com/")
+        val elements = DomParser("(.+)", ".caption", "").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("Gallery"), elements)
     }
@@ -385,7 +385,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomParser("(.*)", "a", "href").getElements(text, "http://test.com/")
+        val elements = DomParser("(.*)", "a", "href").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("/gallery/1", "http://test.com/gallery/1"), elements)
     }
@@ -396,7 +396,7 @@ class ParserTests {
         val text = "<html><body><a>one</a><a>two</a><a>three</a></body></html>"
 
         // no attribute on any of them, so all three read as the empty string
-        val elements = DomParser("(.*)", "a", "href").getElements(text, "http://test.com/")
+        val elements = DomParser("(.*)", "a", "href").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf(""), elements)
     }
@@ -405,7 +405,7 @@ class ParserTests {
     fun `RegexParser says a match the text holds twice once`() {
         val text = """<img src="a.png"><img src="a.png"><img src="b.png">"""
 
-        val elements = RegexParser("""src="(.*?)"""").getElements(text, "http://test.com/")
+        val elements = RegexParser("""src="(.*?)"""").getElements(listOf(text), "http://test.com/")
 
         assertEquals(listOf("a.png", "b.png"), elements)
     }
@@ -415,7 +415,7 @@ class ParserTests {
     fun `PassThroughParser says the text once`() {
         val text = "<html><body><a href='x.html'>x.html</a>anything goes</body></html>"
 
-        assertEquals(listOf(text), PassThroughParser().getElements(text, "http://test.com/"))
+        assertEquals(listOf(text), PassThroughParser().getElements(listOf(text), "http://test.com/"))
     }
 
     /**
@@ -441,7 +441,7 @@ class ParserTests {
         )
 
         for (parser in parsers) {
-            val elements = parser.getElements(withTheAnswerTwice, "http://test.com/")
+            val elements = parser.getElements(listOf(withTheAnswerTwice), "http://test.com/")
 
             assertEquals(
                 elements.distinct(),
@@ -449,5 +449,36 @@ class ParserTests {
                 "${parser::class.simpleName} answered $elements"
             )
         }
+    }
+
+    /** One text in, the text out: the pass-through case of the numbered answer. */
+    @Test
+    fun `SpecialFabParser answers the one text of a list of one`() {
+
+        val text = "<html><body>anything goes</body></html>"
+
+        val elements = SpecialFabParser().getElements(listOf(text), "http://test.com/")
+
+        assertEquals(listOf(text), elements)
+    }
+
+    /**
+     * One answer per text the list holds, and every answer out of the first of them: the first
+     * answer is the text itself, the ones behind it are the text with the number joined on. What
+     * the texts behind the first hold is not read, the same first-text reading every parser of
+     * this package does.
+     */
+    @Test
+    fun `SpecialFabParser answers the first text once per text the list holds`() {
+
+        val elements = SpecialFabParser().getElements(listOf("a", "b", "c"), "http://test.com/")
+
+        assertEquals(listOf("a", "a#1", "a#2"), elements)
+    }
+
+    @Test
+    fun `SpecialFabParser answers nothing for an empty list`() {
+
+        assertTrue(SpecialFabParser().getElements(emptyList(), "http://test.com/").isEmpty())
     }
 }

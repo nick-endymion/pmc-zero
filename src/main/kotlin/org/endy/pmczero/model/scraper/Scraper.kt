@@ -18,7 +18,7 @@ class Scraper(
         scanningKontext.baseUri = baseUri
 
         try {
-            for (element in parser.getElements(text, baseUri)) {
+            for (element in parser.getElements(listOf(text), baseUri)) {
                 worker.applya(element, scanningKontext)
             }
         } finally {

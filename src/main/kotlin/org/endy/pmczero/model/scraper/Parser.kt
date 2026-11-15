@@ -29,15 +29,24 @@ sealed class Parser {
     /**
      * What this finds in [text], with the answers that say the same thing twice said once.
      *
-     * A page repeats itself: the same image in the teaser and in the gallery, the same link in the
-     * header and in the footer, the same url twice because a page lists a gallery in two blocks. A
-     * worker acts on one element at a time and has nothing to say about having seen it already, so
-     * two findings that are the same string produce a second medium for the same file, a second
-     * download of it, and a second line in a result that says nothing was different about it. Which of
-     * those a caller wants is not for each of them to decide, so it is decided once, here.
+     * [text] is the list of what is asked about, one entry per page, block or fragment, and this
+     * hands it to [findElements] as it is and takes the duplicates out of what comes back. Whether
+     * the list is answered as a whole or one entry of it is the parser's own business, and the
+     * parsers of this package answer one entry of it: they read the first and answer what they
+     * always answered for one text. The list is the shape a parser to come reads whole, and the
+     * shape [Scraper] and a chain of parsers already hand in — one entry answers what [getElements]
+     * has always answered.
      *
-     * The first of a run of equal answers is the one kept, since a parser answers in document order
-     * and the order is what a worker hands to [ScanPath.freeFileNameOf] to name things by.
+     * The texts repeat themselves: the same image in the teaser and in the gallery, the same link in
+     * the header and in the footer, the same url twice because a page lists a gallery in two blocks.
+     * A worker acts on one element at a time and has nothing to say about having seen it already, so
+     * two findings that are the same string produce a second medium for the same file, a second
+     * download of it, and a second line in a result that says nothing was different about it. Which
+     * of those a caller wants is not for each of them to decide, so it is decided once, here, over
+     * the whole answer and not once per text it came out of.
+     *
+     * The first of a run of equal answers is the one kept, since a parser answers in the order it
+     * finds, and the order is what a worker hands to [ScanPath.freeFileNameOf] to name things by.
      *
      * Equal means equal as a string and nothing more. A parser answers strings and not urls, so
      * `/gallery/1` and `http://example.org/gallery/1` are two answers here even where they are one
@@ -47,16 +56,24 @@ sealed class Parser {
      * Not across parsers either: two parsers of one scraper are two questions about a page and are
      * answered independently, which is what lets [org.endy.pmczero.model.FoundElement] tell a level 1
      * finding apart from the level 2 finding of the same url.
+     *
+     * An empty list is asked about nothing and answers nothing, so [findElements] is never handed
+     * one through here and no implementation has to ask what the first of nothing is.
      */
-    fun getElements(text: String, baseUri: String): List<String> =
-        findElements(text, baseUri).distinct()
+    fun getElements(text: List<String>, baseUri: String): List<String> =
+        if (text.isEmpty()) emptyList() else findElements(text, baseUri).distinct()
 
     /**
-     * What a parser of this kind finds, in the order the page has it and with its duplicates still in.
+     * What a parser of this kind finds in [text], in the order it finds it and with its duplicates
+     * still in.
      *
      * The raw half of [getElements], which is what every implementation answers and what takes the
      * duplicates out once for all of them: a parser added later cannot forget to, since forgetting is
      * not something the compiler can be asked about.
+     *
+     * The parsers of this package read the first entry of [text] and answer that one, the same
+     * elements they answered when the argument was one text. The list is what a parser that wants
+     * the texts together has them by.
      */
-    protected abstract fun findElements(text: String, baseUri: String): List<String>
+    protected abstract fun findElements(text: List<String>, baseUri: String): List<String>
 }

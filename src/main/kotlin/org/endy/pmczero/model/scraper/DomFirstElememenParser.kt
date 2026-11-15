@@ -66,6 +66,6 @@ class DomFirstElememenParser(
      *
      * Built per call, which is one small object next to parsing and selecting over a whole page.
      */
-    override fun findElements(text: String, baseUri: String): List<String> =
-        DomParser(regex, tag, attribute).elementsIn(text, baseUri).take(1)
+    override fun findElements(text: List<String>, baseUri: String): List<String> =
+        DomParser(regex, tag, attribute).elementsIn(text.first(), baseUri).take(1)
 }

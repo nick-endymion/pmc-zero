@@ -9,8 +9,8 @@ import org.jsoup.select.Elements
 @SerialName("dom")
 class DomParser(val regex: String, val tag: String, val attribute: String) : Parser() {
 
-    override fun findElements(text: String, baseUri: String): List<String> = //TODO via Jsoup
-        elementsIn(text, baseUri)
+    override fun findElements(text: List<String>, baseUri: String): List<String> = //TODO via Jsoup
+        elementsIn(text.first(), baseUri)
 
     /**
      * What [tag] and [attribute] hold on [text], with the ones [regex] does not match dropped.

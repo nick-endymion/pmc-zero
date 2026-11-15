@@ -30,9 +30,10 @@ class SerializationTests {
             RegexParser("(.*fa.*)"),
             PassThroughParser(),
             SequenceParser(listOf(DomParser("(.*)", "img", "abs:src"), RegexParser("(.*fa.*)"))),
-            NumberedParser(5)
+            NumberedParser(5),
+            SpecialFabParser()
         )
-        val serialNames = listOf("dom", "domLastElement", "domFirstElement", "regex", "passThrough", "sequence", "numbered")
+        val serialNames = listOf("dom", "domLastElement", "domFirstElement", "regex", "passThrough", "sequence", "numbered", "specialFab")
 
         for ((parser, serialName) in parsers.zip(serialNames)) {
 
@@ -71,6 +72,7 @@ class SerializationTests {
                     assertIs<SequenceParser>(decoded).parsers.map { it::class }
                 )
                 is NumberedParser -> assertEquals(parser.n, assertIs<NumberedParser>(decoded).n)
+                is SpecialFabParser -> assertIs<SpecialFabParser>(decoded)
             }
         }
     }
@@ -121,8 +123,10 @@ class SerializationTests {
         assertEquals(
             listOf("http://example.org/index.php#15"),
             parser.getElements(
-                """<a class="expp" rel="history" href="#14">14</a>
-                   <a class="expp" rel="history" href="#15">15</a>""",
+                listOf(
+                    """<a class="expp" rel="history" href="#14">14</a>
+                       <a class="expp" rel="history" href="#15">15</a>"""
+                ),
                 "http://example.org/index.php"
             )
         )

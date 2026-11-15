@@ -33,16 +33,19 @@ import kotlinx.serialization.Serializable
  *
  * Each step runs through [Parser.getElements] and not through `findElements`, and that is not
  * shorthand: `findElements` is `protected`, and a [Parser] cannot call it on another parser at all,
- * so `getElements` is the only way in. It takes the duplicates out at every step, which is what the
- * chain wants — two galleries that hold the same image are two elements the second parser runs on
+ * so `getElements` is the only way in. The elements are handed on one at a time, each as a list of
+ * one, since a parser of this package answers the first text of the list it is handed — a whole
+ * step handed over at once would come back as the answer for its first element, one gallery of a
+ * page of galleries. One at a time is what the duplicates out of [Parser.getElements] want as
+ * well: two galleries that hold the same image are two elements the second parser runs on
  * separately, and without the duplicates out at the step where they were found the same url comes
  * out of the chain once per gallery instead of once per page.
  *
- * An empty list answers the page itself, which is what [PassThroughParser] answers: a chain of no
- * steps is a pass-through, so the empty case is not a case of its own but the one parser that is
- * already there. The same holds one step up — [Parser.getElements] takes the duplicates out of the
- * chain's answer, the same as it does for any parser, so a chain and a single parser of one scraper
- * are deduped alike.
+ * An empty chain answers what it was handed, which for a [Scraper] is the page itself — what
+ * [PassThroughParser] answers: a chain of no steps is a pass-through, so the empty case is not a
+ * case of its own but the one parser that is already there. The same holds one step up —
+ * [Parser.getElements] takes the duplicates out of the chain's answer, the same as it does for any
+ * parser, so a chain and a single parser of one scraper are deduped alike.
  *
  * @param parsers what the elements are handed to, in the order they are handed on
  */
@@ -50,10 +53,10 @@ import kotlinx.serialization.Serializable
 @SerialName("sequence")
 class SequenceParser(val parsers: List<Parser>) : Parser() {
 
-    override fun findElements(text: String, baseUri: String): List<String> {
-        var elements = listOf(text)
+    override fun findElements(text: List<String>, baseUri: String): List<String> {
+        var elements = text
         for (parser in parsers) {
-            elements = elements.flatMap { parser.getElements(it, baseUri) }
+            elements =  parser.getElements(elements, baseUri)
         }
         return elements
     }
