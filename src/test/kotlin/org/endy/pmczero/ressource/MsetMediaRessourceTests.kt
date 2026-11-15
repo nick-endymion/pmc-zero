@@ -14,6 +14,8 @@ import org.endy.pmczero.service.LocationService
 import org.endy.pmczero.service.MsetService
 import org.endy.pmczero.service.StorageService
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -99,6 +101,76 @@ class MsetMediaRessourceTests {
         assertEquals("http://example.org/tn/a.pdf", bessources[1].url)
     }
 
+    /**
+     * A medium that has no bessource at all is answered rather than failing the whole set.
+     *
+     * Such a medium exists: a set scanned from a page holds one medium per picture plus one for
+     * the page itself, and that one has no file of its own. Resolving it asks for a thumbnail that
+     * cannot be derived, since there is no primary bessource to derive it from.
+     */
+    @Test
+    fun `answers a medium that has no bessource at all`() {
+        whenever(msetService.findById(1)).thenReturn(msetOf(medium()))
+
+        val media = ressource.getMsetWithMedia(1).media!!
+
+        assertEquals(1, media.size)
+        assertTrue(media.single().bessources.isEmpty())
+    }
+
+    /** A medium whose bessources carry no primary one keeps the bessources it has. */
+    @Test
+    fun `answers a medium whose bessources carry no primary one`() {
+        val storage = httpStorage()
+        givenStorage(storage)
+        whenever(msetService.findById(1)).thenReturn(msetOf(medium(storage, tn("a_thumb.jpg"))))
+
+        val bessources = ressource.getMsetWithMedia(1).media!!.single().bessources
+
+        // no thumbnail is derived, since there is no primary bessource to derive it from
+        assertEquals(1, bessources.size)
+        assertEquals(LocationType.TN_HTTP, bessources.single().locationType)
+        assertEquals("http://example.org/tn/a_thumb.jpg", bessources.single().url)
+    }
+
+    /**
+     * A medium whose storage is gone is answered with a null url rather than failing the set.
+     *
+     * The bessource points at a storage that does not exist any more, so no url can be built for
+     * it. That is a property of that one medium, not of the set, so the other media of the set
+     * must still be answered.
+     */
+    @Test
+    fun `answers a medium whose storage is gone`() {
+        // a storage that is not registered, so looking it up fails
+        val gone = Storage().apply { id = 99; name = "gone" }
+        whenever(msetService.findById(1)).thenReturn(msetOf(medium(gone, primary("a.pdf"))))
+
+        val bessources = ressource.getMsetWithMedia(1).media!!.single().bessources
+
+        assertEquals(1, bessources.size)
+        assertNull(bessources.single().url)
+    }
+
+    /** One medium that cannot be resolved does not hide the media that can. */
+    @Test
+    fun `answers the other media when one of them has no bessource`() {
+        val storage = httpStorage()
+        givenStorage(storage)
+        whenever(msetService.findById(1)).thenReturn(
+            msetOf(
+                medium(storage, primary("a.pdf")),
+                medium()
+            )
+        )
+
+        val bessources = ressource.getMsetWithMedia(1).media!!.flatMap { it.bessources }
+
+        assertEquals(2, bessources.size)
+        assertEquals("http://example.org/main/a.pdf", bessources[0].url)
+        assertEquals("http://example.org/tn/a.pdf", bessources[1].url)
+    }
+
     private fun httpStorage(): Storage = Storage().apply {
         id = 1
         name = "storage-1"
@@ -115,18 +187,22 @@ class MsetMediaRessourceTests {
         inuse = 1
     }
 
-    private fun mset(storage: Storage, vararg bessources: Bessource): Mset {
-        bessources.forEach { it.storage = storage }
-        val medium = Medium().apply {
-            id = 5
-            name = "a.pdf"
-            this.bessources = bessources.toMutableList()
-        }
-        return Mset().apply {
-            id = 1
-            name = "set-1"
-            media = mutableListOf(medium)
-        }
+    private fun mset(storage: Storage, vararg bessources: Bessource): Mset =
+        msetOf(medium(storage, *bessources))
+
+    /** A set holding exactly the given media, so a test can name one medium rather than build one. */
+    private fun msetOf(vararg media: Medium): Mset = Mset().apply {
+        id = 1
+        name = "set-1"
+        this.media = media.toMutableList()
+    }
+
+    /** A medium carrying the given bessources, each of them on [storage]. */
+    private fun medium(storage: Storage? = null, vararg bessources: Bessource): Medium = Medium().apply {
+        id = 5
+        name = "a.pdf"
+        if (storage != null) bessources.forEach { it.storage = storage }
+        this.bessources = bessources.toMutableList()
     }
 
     private fun primary(name: String): Bessource = bessource(name, RessType.PRIMARY)

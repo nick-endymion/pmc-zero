@@ -1,5 +1,6 @@
 package org.endy.pmczero.ressource
 
+import org.endy.pmczero.exception.NotFoundException
 import org.endy.pmczero.mapper.toEntity
 import org.endy.pmczero.mapper.toTO
 import org.endy.pmczero.mapper.toTOwithMedia
@@ -69,6 +70,11 @@ class MsetRessource(
      * the main location, TN against the thumbnailed one, and the remaining ressource types (PIC, URL,
      * FOLDER) against the main location, which is where they are stored. A bessource whose location is
      * missing or not in use keeps a null url rather than failing the answer.
+     *
+     * A medium that cannot be resolved does not fail the answer either, so that one unusable row
+     * does not hide the media that are there. A medium without a primary bessource has no thumbnail
+     * to derive, and one whose storage is gone has no url to build; both are handed out as they are,
+     * the same way [org.endy.pmczero.service.MediaService.providePhysicalBessources] hands them out.
      */
     @GetMapping("/{id}/media")
     fun getMsetWithMedia(@PathVariable id: Int): MsetTO {
@@ -82,11 +88,22 @@ class MsetRessource(
             bessources.filter { it.ressType != RessType.PRIMARY.i && it.ressType != RessType.TN.i }
                 .forEach { it.locationType = LocationType.MAIN_HTTP }
 
-            medium.bessources = locationService.providePhysicalRessources(
-                bessources,
-                Scheme.HTTP,
-                provideThumbnailsDynamically = true
-            )
+            // a thumbnail is derived from the primary bessource, so it can only be derived where
+            // there is one: a medium without a primary bessource keeps the bessources it has
+            val deriveThumbnail = bessources.any { it.ressType == RessType.PRIMARY.i } &&
+                    bessources.none { it.ressType == RessType.TN.i }
+
+            medium.bessources = try {
+                locationService.providePhysicalRessources(
+                    bessources,
+                    Scheme.HTTP,
+                    provideThumbnailsDynamically = deriveThumbnail
+                )
+            } catch (e: NotFoundException) {
+                // the storage of a bessource is gone: the medium stays, its bessources keep the
+                // location type they were given and get no url
+                bessources
+            }
         }
 
         return mset
