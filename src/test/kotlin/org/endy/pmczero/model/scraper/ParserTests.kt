@@ -173,7 +173,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val last = DomElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+        val last = DomLastElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
 
         val all = DomParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
 
@@ -198,7 +198,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomElememenParser("(.*)", "a[href]", "abs:href")
+        val elements = DomLastElememenParser("(.*)", "a[href]", "abs:href")
             .getElements(text, "http://example.org/")
 
         assertEquals(listOf("http://example.org/kontakt.html"), elements)
@@ -215,7 +215,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomElememenParser("(.*)", "a.expp[rel=history]", "abs:href")
+        val elements = DomLastElememenParser("(.*)", "a.expp[rel=history]", "abs:href")
             .getElements(text, "http://example.org/user/12345/index.php")
 
         assertEquals(listOf("http://example.org/user/12345/index.php#15"), elements)
@@ -233,7 +233,7 @@ class ParserTests {
             </body></html>
         """.trimIndent()
 
-        val elements = DomElememenParser("(.+\\.jpg)", "a[href]", "abs:href")
+        val elements = DomLastElememenParser("(.+\\.jpg)", "a[href]", "abs:href")
             .getElements(text, "http://example.org/")
 
         assertEquals(listOf("http://example.org/three.jpg"), elements)
@@ -242,7 +242,7 @@ class ParserTests {
     @Test
     fun `DomElememenParser answers nothing from a page without a match`() {
 
-        val elements = DomElememenParser("(.*)", "img[src]", "abs:src")
+        val elements = DomLastElememenParser("(.*)", "img[src]", "abs:src")
             .getElements("<html><body>no images</body></html>", "http://example.org/")
 
         assertTrue(elements.isEmpty())
@@ -254,7 +254,7 @@ class ParserTests {
 
         val text = """<html><body><a href="/only.html">Only</a></body></html>"""
 
-        val elements = DomElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
+        val elements = DomLastElememenParser("(.*)", "a[href]", "abs:href").getElements(text, "http://example.org/")
 
         assertEquals(listOf("http://example.org/only.html"), elements)
     }

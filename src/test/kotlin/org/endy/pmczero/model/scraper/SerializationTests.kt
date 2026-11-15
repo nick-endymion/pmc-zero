@@ -25,11 +25,14 @@ class SerializationTests {
 
         val parsers: List<Parser> = listOf(
             DomParser("(.*)", "img", "abs:src"),
-            DomElememenParser("(.*)", "a[href]", "abs:href"),
+            DomLastElememenParser("(.*)", "a[href]", "abs:href"),
+            DomFirstElememenParser("(.*)", "a[href]", "abs:href"),
             RegexParser("(.*fa.*)"),
-            PassThroughParser()
+            PassThroughParser(),
+            SequenceParser(listOf(DomParser("(.*)", "img", "abs:src"), RegexParser("(.*fa.*)"))),
+            NumberedParser(5)
         )
-        val serialNames = listOf("dom", "domLastElement", "regex", "passThrough")
+        val serialNames = listOf("dom", "domLastElement", "domFirstElement", "regex", "passThrough", "sequence", "numbered")
 
         for ((parser, serialName) in parsers.zip(serialNames)) {
 
@@ -49,14 +52,25 @@ class SerializationTests {
                     assertEquals(parser.tag, d.tag)
                     assertEquals(parser.attribute, d.attribute)
                 }
-                is DomElememenParser -> {
-                    val d = assertIs<DomElememenParser>(decoded)
+                is DomLastElememenParser -> {
+                    val d = assertIs<DomLastElememenParser>(decoded)
+                    assertEquals(parser.regex, d.regex)
+                    assertEquals(parser.tag, d.tag)
+                    assertEquals(parser.attribute, d.attribute)
+                }
+                is DomFirstElememenParser -> {
+                    val d = assertIs<DomFirstElememenParser>(decoded)
                     assertEquals(parser.regex, d.regex)
                     assertEquals(parser.tag, d.tag)
                     assertEquals(parser.attribute, d.attribute)
                 }
                 is RegexParser -> assertEquals(parser.regex, assertIs<RegexParser>(decoded).regex)
                 is PassThroughParser -> assertIs<PassThroughParser>(decoded)
+                is SequenceParser -> assertEquals(
+                    parser.parsers.map { it::class },
+                    assertIs<SequenceParser>(decoded).parsers.map { it::class }
+                )
+                is NumberedParser -> assertEquals(parser.n, assertIs<NumberedParser>(decoded).n)
             }
         }
     }
@@ -75,7 +89,7 @@ class SerializationTests {
     fun `a stored last element parser carries its three fields and nothing else`() {
 
         val json = Json.encodeToString(
-            Scraper(DomElememenParser("(.*)", "a.expp[rel=history]", "abs:href"), FoundElementsWorker(1))
+            Scraper(DomLastElememenParser("(.*)", "a.expp[rel=history]", "abs:href"), FoundElementsWorker(1))
         )
 
         assertEquals(
@@ -95,14 +109,14 @@ class SerializationTests {
     fun `a stored scraper keeps the parser that answers the last element`() {
 
         val json = Json.encodeToString(
-            Scraper(DomElememenParser("(.*)", "a.expp[rel=history]", "abs:href"), FoundElementsWorker(1))
+            Scraper(DomLastElememenParser("(.*)", "a.expp[rel=history]", "abs:href"), FoundElementsWorker(1))
         )
 
         assertTrue(json.contains(""""type":"domLastElement""""), "domLastElement expected in $json")
 
         val decoded = Json.decodeFromString<Scraper>(json).parser
 
-        val parser = assertIs<DomElememenParser>(decoded)
+        val parser = assertIs<DomLastElememenParser>(decoded)
         assertEquals("a.expp[rel=history]", parser.tag)
         assertEquals(
             listOf("http://example.org/index.php#15"),

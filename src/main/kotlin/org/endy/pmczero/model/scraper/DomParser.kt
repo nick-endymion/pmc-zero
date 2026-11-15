@@ -15,7 +15,7 @@ class DomParser(val regex: String, val tag: String, val attribute: String) : Par
     /**
      * What [tag] and [attribute] hold on [text], with the ones [regex] does not match dropped.
      *
-     * The parsing itself, without the duplicates out, so that [DomElememenParser] can read the same
+     * The parsing itself, without the duplicates out, so that [DomLastElememenParser] can read the same
      * elements and keep only the last of them rather than write this a second time. `internal` rather
      * than private, which is what a second class in this package needs.
      */
