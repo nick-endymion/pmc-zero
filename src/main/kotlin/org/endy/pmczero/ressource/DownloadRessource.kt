@@ -42,6 +42,7 @@ class DownloadRessource(private val failedDownloadService: FailedDownloadService
      * has failed since it was started and nothing older. Restarting it forgets the failures of the runs
      * before, which are still reported in the result of those runs.
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/retry-failed")
     fun retryFailedDownloads(): FailedDownloadRunTO {
         return failedDownloadService.retryAll()

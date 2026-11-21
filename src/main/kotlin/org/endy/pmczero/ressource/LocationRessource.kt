@@ -34,6 +34,7 @@ class LocationRessource(
      * Checks that the folder the FS urls of this location are generated into is accessible on the
      * file system. Answers false for HTTP locations, which have no file system path.
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/{id}/fs-accessible")
     fun isFileSystemAccessible(@PathVariable("id") id: Int): Boolean {
         return locationService.isFileSystemAccessible(id)
@@ -148,6 +149,7 @@ class LocationRessource(
         return msetService.expandMset(msetId, id, subpath)
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/default")
     fun blabla(@RequestBody location: Location): Location {
         return locationService.createDefaultLocationWithStorage(location.uri!!)

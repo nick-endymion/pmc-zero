@@ -59,6 +59,7 @@ class MediumRessource(
      *
      * @param force regenerate the thumbnail even when one is already there
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/{id}/thumbnail")
     fun createThumbnail(
         @PathVariable id: Int,

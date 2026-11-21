@@ -31,16 +31,19 @@ class BessourceRessource(
     private val bessourceFiles: BessourceFiles
 ) {
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/medium/{id}/url")
     fun getMfilePic(@PathVariable id: Int): String {
         return mediaService.url(id,RessType.PRIMARY)
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/medium/{id}/tn/url")
     fun afa(@PathVariable id: Int): String {
         return mediaService.url(id, RessType.TN)
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/medium/{id}/binary")
     fun showMfilePic(@PathVariable id: Int): RedirectView
     {

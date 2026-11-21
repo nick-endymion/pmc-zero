@@ -60,6 +60,7 @@ class ScannerRessource(
     fun copyScanner(@PathVariable id: Int, @RequestParam(required = false) name: String?): ScannerTO =
         scannerService.copy(id, name).toTO()
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @DeleteMapping("/{id}")
     fun deleteserializedScanner(@PathVariable id: Int) {
         return scannerService.delete(id)
@@ -76,6 +77,7 @@ class ScannerRessource(
         return scannerService.findByUrl(searchTerm).map { it.toTO() }
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/{id}/scan")
     fun scan(@PathVariable id: Int, @RequestParam url: String): ScanningResultTO {
         val mset = scannerService.scan(id, url)
@@ -222,6 +224,7 @@ class ScannerRessource(
         msetId = msetId
     )
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/{id}/scan")
     fun scan(@RequestBody sts: SourceToScanTO): ScanningResultTO {
         if (sts.scannerId == null) throw Exception()

@@ -21,6 +21,7 @@ class MfileRessource(
 //        return mfilesRepository.findAll()
 //    }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/mfiles/to")
     fun getMfilesTO(): Iterable<MfileTO> {
 //        return mfilesRepository.getWithfolder().map { m -> m.toTO() }
@@ -32,11 +33,13 @@ class MfileRessource(
 //        return mfilesRepository.findByIdOrNull(id)
 //    }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/x/mfiles/{id}/pic")
     fun getMfilePic(@PathVariable id: Int): String {
         return mfileService.url(id,RessType.PIC)
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/x/medium/{id}/image")
     fun getMediumPic(@PathVariable id: Int): String {
         return mfileService.urlByMediumId(id,RessType.PIC)

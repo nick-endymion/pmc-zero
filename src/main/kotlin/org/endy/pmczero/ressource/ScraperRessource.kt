@@ -123,6 +123,7 @@ class ScraperRessource(
      * the html is parsed and the deferred scripts have run, and no picture is waited for. See
      * [org.endy.pmczero.service.BrowserFetcher.render] for what the states are worth
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/render")
     fun render(
         @RequestParam url: String,
@@ -162,6 +163,7 @@ class ScraperRessource(
      * @param skipExisting leave files alone that are in the location already, so a second run over
      * the same gallery costs one query instead of another few hundred downloads
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/images")
     fun importImages(
         @RequestParam url: String,
@@ -233,6 +235,7 @@ class ScraperRessource(
      * @param persist false answers the draft without writing the media to the database. The files are
      * written either way
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/scraper-import")
     fun importWithSerializedScraper(
         @RequestParam url: String,
@@ -305,6 +308,7 @@ class ScraperRessource(
      * @param scrollTimes how often the page is scrolled before its images are collected, since a
      * lazily loading gallery appends them while scrolling
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/scraper-image-list-level2")
     fun listScraperImagesLevel2(
         @RequestParam url: String,
@@ -322,6 +326,7 @@ class ScraperRessource(
         waitForSelectorState = waitStateOf(waitForSelectorState)
     )
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/scraper-image-list")
     fun listScraperImages(
         @RequestParam url: String,
@@ -337,6 +342,7 @@ class ScraperRessource(
         waitForSelectorState = waitStateOf(waitForSelectorState)
     )
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/scraper-images")
     fun importImagesWithScraper(
         @RequestParam url: String,
@@ -379,6 +385,7 @@ class ScraperRessource(
      * [render]; `domcontentloaded` is the one for a draft, since a draft fetches nothing and so has
      * no use for a wait on the pictures
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/draft")
     fun draft(
         @RequestParam url: String,

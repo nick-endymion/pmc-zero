@@ -159,6 +159,7 @@ class MsetRessource(
         return msetService.findByUrl(url).map { it.toTO() }
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/{id}/ressources-urls")
     fun getMsetWithMediax(@PathVariable id: Int): List<RessourceUrlsTO> {
         return msetService.ressourcesInUse(id)
@@ -228,6 +229,7 @@ class MsetRessource(
         return msetService.allTags()
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/")
     fun createMset(@RequestBody msetTO: MsetTO): MsetTO {
         if (msetTO.id != null) throw Exception()
@@ -268,6 +270,7 @@ class MsetRessource(
      * Answers 404 when the mset does not exist, and 409 when one of the files to be moved is already
      * there under its new name, in which case no medium is deleted and the set stays.
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @DeleteMapping("/{id}/includingFilesTagged")
     fun deleteMsetIncludingFilesTagged(@PathVariable id: Int): MsetDeletionTO {
         return msetService.deleteIncludingMarkedFiles(id)

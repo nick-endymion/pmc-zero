@@ -44,6 +44,7 @@ class FileInfoRessource(private val fileInfoService: FileInfoService) {
      * Answers an empty list for an archive with no duplicates, which is a successful answer rather than
      * an error: nothing has been looked at that says otherwise.
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/duplicates")
     fun duplicates(): List<FileInfoDuplicateTO> {
         return fileInfoService.duplicates()

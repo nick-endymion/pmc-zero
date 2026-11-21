@@ -31,6 +31,7 @@ class StorageRessource(
         return storageService.findById(id).toTO(true)
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/{id}/locations")
     fun getStorageWithLocations(@PathVariable id: Int): StorageTO {
         return storageService.findById(id, withLocations = true).toTO(withLocations = true)
@@ -103,6 +104,7 @@ class StorageRessource(
      * Answers 404 for an unknown storage, so a mistyped id is not mistaken for a storage with nothing
      * to record.
      */
+    @Deprecated("Not used by the PMC-UI frontend")
     @PostMapping("/{id}/set-fileinfos")
     fun setFileInfos(@PathVariable id: Int): FileInfoRunTO {
         // so an unknown storage is a 404 rather than a run over nothing that reports success
@@ -126,6 +128,7 @@ class StorageRessource(
         return storageService.findById(id).toTO()
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @DeleteMapping("/{id}")
     fun deleteStorage(@PathVariable id: Int) {
         return storageService.delete(id)

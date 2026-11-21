@@ -10,6 +10,7 @@ import java.util.regex.Pattern
 @RestController
 class FilesystemScannerRessource(val fss: FileSystemScanner) {
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/scan-fs")
     fun getFolders(@RequestParam folder: String, @RequestParam maxDepth: Int): List<String> {
         var scanconfig = ScanConfiguration(Pattern.compile(".*"), 0, maxDepth, false, true)
@@ -17,6 +18,7 @@ class FilesystemScannerRessource(val fss: FileSystemScanner) {
         return result2
     }
 
+    @Deprecated("Not used by the PMC-UI frontend")
     @GetMapping("/scan-fs2")
     fun getFolders2(@RequestParam folder: String, @RequestParam maxDepth: Int, @RequestParam level: Int): Map<String, List<String>> {
         var scanconfig = ScanConfiguration(Pattern.compile(".*"), 1, maxDepth, false, true)
